@@ -36,23 +36,26 @@ namespace Gapo.Optimiser.UI
             using (var p = Theme.Round(r, radius)) using (var br = new LinearGradientBrush(r, a, b, angle)) g.FillPath(br, p);
         }
 
-        public static SizeF Measure(Graphics g, string text, Font f, float maxWidth = 0)
-        {
-            using (var sf = Format(false))
-                return maxWidth > 0 ? g.MeasureString(text, f, (int)Math.Ceiling(maxWidth), sf) : g.MeasureString(text, f, PointF.Empty, sf);
-        }
+        // Shared, allocation-free text formats (the UI thread is the only user).
+        static readonly StringFormat Plain = MakeFormat(StringAlignment.Near);
+        static readonly StringFormat Centered = MakeFormat(StringAlignment.Center);
 
-        static StringFormat Format(bool clip)
+        static StringFormat MakeFormat(StringAlignment align)
         {
             var sf = (StringFormat)StringFormat.GenericTypographic.Clone();
-            sf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces;
-            if (!clip) sf.FormatFlags |= StringFormatFlags.NoClip;
+            sf.FormatFlags |= StringFormatFlags.MeasureTrailingSpaces | StringFormatFlags.NoClip;
+            sf.Alignment = align; sf.LineAlignment = align;
             return sf;
+        }
+
+        public static SizeF Measure(Graphics g, string text, Font f, float maxWidth = 0)
+        {
+            return maxWidth > 0 ? g.MeasureString(text, f, (int)Math.Ceiling(maxWidth), Plain) : g.MeasureString(text, f, PointF.Empty, Plain);
         }
 
         public static void Text(Graphics g, string text, Font f, Color c, float x, float y)
         {
-            using (var b = new SolidBrush(c)) using (var sf = Format(false)) g.DrawString(text, f, b, x, y, sf);
+            using (var b = new SolidBrush(c)) g.DrawString(text, f, b, x, y, Plain);
         }
 
         public static void TextRight(Graphics g, string text, Font f, Color c, float right, float y)
@@ -63,21 +66,17 @@ namespace Gapo.Optimiser.UI
 
         public static void TextCenter(Graphics g, string text, Font f, Color c, RectangleF r)
         {
-            using (var b = new SolidBrush(c)) using (var sf = Format(false))
-            {
-                sf.Alignment = StringAlignment.Center; sf.LineAlignment = StringAlignment.Center;
-                g.DrawString(text, f, b, r, sf);
-            }
+            using (var b = new SolidBrush(c)) g.DrawString(text, f, b, r, Centered);
         }
 
         /// <summary>Wrapped text; returns the height used.</summary>
         public static float Wrap(Graphics g, string text, Font f, Color c, float x, float y, float width)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            using (var b = new SolidBrush(c)) using (var sf = Format(false))
+            using (var b = new SolidBrush(c))
             {
-                var size = g.MeasureString(text, f, (int)width, sf);
-                g.DrawString(text, f, b, new RectangleF(x, y, width, size.Height + 4), sf);
+                var size = g.MeasureString(text, f, (int)width, Plain);
+                g.DrawString(text, f, b, new RectangleF(x, y, width, size.Height + 4), Plain);
                 return size.Height;
             }
         }
@@ -85,7 +84,7 @@ namespace Gapo.Optimiser.UI
         public static float WrapHeight(Graphics g, string text, Font f, float width)
         {
             if (string.IsNullOrEmpty(text)) return 0;
-            using (var sf = Format(false)) return g.MeasureString(text, f, (int)width, sf).Height;
+            return g.MeasureString(text, f, (int)width, Plain).Height;
         }
 
         public static void GradientText(Graphics g, string text, Font f, float x, float y, Color a, Color b)

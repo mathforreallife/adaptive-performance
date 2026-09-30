@@ -111,7 +111,9 @@ namespace Gapo.Optimiser.Engine
             {
                 sb.AppendLine(string.Format(ci, "  {0,2}. [{1}] {2}", e.Index, e.Decision.ToString().ToUpperInvariant(), e.Title));
                 sb.AppendLine("      Why:    " + e.Hypothesis);
-                if (e.Before != null && e.After != null)
+                if (e.Kind == ChangeKind.Hitch && e.Before != null)
+                    sb.AppendLine(string.Format(ci, "      Result: save freezes {0} in {1:0} s before; see decision for after", e.Before.AutosaveHitches, e.Before.DurationMs / 1000));
+                else if (e.Before != null && e.After != null)
                     sb.AppendLine(string.Format(ci, "      Result: frame work {0:0.0} → {1:0.0} ms ({2}%), FPS {3:0.0} → {4:0.0}, visual cost {5}/10, predicted −{6:0.0} ms",
                         e.Before.MedianWorkMs, e.After.MedianWorkMs, Signed(e.GainPct), e.Before.AvgFps, e.After.AvgFps, e.VisualLoss, e.PredictedMs));
                 sb.AppendLine("      Decision: " + e.Reason);
@@ -122,6 +124,13 @@ namespace Gapo.Optimiser.Engine
                 sb.AppendLine();
                 sb.AppendLine("CONSIDERED BUT NOT CHANGED");
                 foreach (var n in NotTouched) sb.AppendLine("  · " + n);
+            }
+            if (BackgroundApps.Count > 0)
+            {
+                sb.AppendLine();
+                sb.AppendLine("BACKGROUND ACTIVITY WHILE THE GAME RAN (top 6)");
+                foreach (var a in BackgroundApps.Take(6))
+                    sb.AppendLine(string.Format(ci, "  · {0} ({1}{2}) {3:0.0}% CPU · {4}", a.Name, a.Kind, a.Protected ? ", never touched" : "", a.CpuPct, Gb(a.MemBytes)));
             }
             if (Recommendations.Count > 0)
             {

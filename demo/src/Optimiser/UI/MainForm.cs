@@ -57,11 +57,15 @@ namespace Gapo.Optimiser.UI
         readonly Stopwatch _clock = Stopwatch.StartNew();
         double _resultsShownAt = -1, _lastDiagAt, _lastSettingsAt, _lastLiveAt;
         Live _live = new Live();
+        FrameStats _longStats; double _longStatsAt;
         EngineStatus _status = new EngineStatus();
         SandboxSettings _gameSettings;
         Bitmap _bg;
         string _toast; double _toastUntil;
         double _selfCpuSum; int _selfCpuN;
+        MonitorSample _lastSample;
+        readonly Queue<float> _recentSelf = new Queue<float>();
+        double _paintMs; int _paints;
 
         // Autotest (CI)
         readonly string _autotestDir;
@@ -124,9 +128,9 @@ namespace Gapo.Optimiser.UI
             double now = _clock.Elapsed.TotalMilliseconds;
             bool measuring = _status != null && _status.Measuring;
             bool countUp = _resultsShownAt >= 0 && now - _resultsShownAt < 1400;
-            // Repaint budget: 1 Hz while a measurement window is open, 25 Hz only for the short result
-            // count-up, 4 Hz while tests run, 2 Hz for the live dashboard, 1 Hz when idle or minimised.
-            _timer.Interval = WindowState == FormWindowState.Minimized ? 1000 : measuring ? 1000 : countUp ? 40 : _view == View.Running ? 250 : _link.Connected ? 500 : 1000;
+            // Repaint budget: nothing at all while a measurement window is open, 25 Hz only for the
+            // short result count-up, 2 Hz for the live dashboard and between tests, 1 Hz when idle.
+            _timer.Interval = WindowState == FormWindowState.Minimized ? 1000 : measuring ? 1000 : countUp ? 40 : _link.Connected ? 500 : 1000;
 
             if (_engine != null && _engine.Running && _view != View.Running) { _view = View.Running; _details = false; }
             if (_view == View.Running && _engine != null && !_engine.Running)
@@ -136,12 +140,12 @@ namespace Gapo.Optimiser.UI
                 else if (_engine.Report != null && _engine.Report.Error != null) Toast(_engine.Report.Error);
             }
 
-            if (_link.Connected && now - _lastLiveAt >= (measuring ? 950 : 450)) { _lastLiveAt = now; RefreshLive(now); }
+            if (_link.Connected && !measuring && now - _lastLiveAt >= 450) { _lastLiveAt = now; RefreshLive(now); }
             if (_link.Connected && now - _lastSettingsAt > 2000) { _lastSettingsAt = now; _gameSettings = _link.ReadSettings(); }
             var m = _monitor.Latest;
-            if (m != null && m.TimeMs > 0 && m.SelfCpuPct > 0) { _selfCpuSum += m.SelfCpuPct; _selfCpuN++; }
+            if (m != null && m != _lastSample) { _lastSample = m; _selfCpuSum += m.SelfCpuPct; _selfCpuN++; _recentSelf.Enqueue(m.SelfCpuPct); while (_recentSelf.Count > 10) _recentSelf.Dequeue(); }
             if (_autotestDir != null) AutotestStep(now);
-            if (WindowState != FormWindowState.Minimized) Invalidate();
+            if (WindowState != FormWindowState.Minimized && !measuring) Invalidate();
         }
 
         void RefreshLive(double now)
@@ -151,7 +155,8 @@ namespace Gapo.Optimiser.UI
             double end = frames[frames.Count - 1].TimeMs;
             var recent = frames.Where(f => f.TimeMs >= end - 3000).ToList();
             var st = FrameStats.Compute(recent);
-            var lng = FrameStats.Compute(frames.Where(f => f.TimeMs >= end - 20000).ToList());
+            if (_longStats == null || now - _longStatsAt > 2000) { _longStatsAt = now; _longStats = FrameStats.Compute(frames.Where(f => f.TimeMs >= end - 20000).ToList()); }
+            var lng = _longStats;
             var live = new Live { Fps = st.AvgFps, Low1 = st.Low1Fps, Low01 = st.Low01Fps, FrameMs = st.MeanFrameMs, StdDev = st.StdDevFrameMs, StuttersPerMin = lng.StuttersPerMin, Sim = st.Sim, Render = st.Render, Present = st.Present, Frames = st.Count, Diag = _live.Diag };
             // Chart: last 8 s, bucketed; keep the worst frame per bucket so spikes stay visible.
             var span = frames.Where(f => f.TimeMs >= end - 8000).ToList();
@@ -257,7 +262,12 @@ namespace Gapo.Optimiser.UI
 
         // ================================================================= paint
 
-        protected override void OnPaint(PaintEventArgs e) { PaintAll(e.Graphics, ClientSize); }
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var sw = Stopwatch.StartNew();
+            PaintAll(e.Graphics, ClientSize);
+            _paintMs += sw.Elapsed.TotalMilliseconds; _paints++;
+        }
 
         void PaintAll(Graphics g, Size size)
         {
@@ -345,7 +355,7 @@ namespace Gapo.Optimiser.UI
 
             // Self-overhead pill: always visible, turns amber if GAPO ever exceeds its own budget.
             var m = _monitor.Latest;
-            double cpu = _selfCpuN > 0 ? _selfCpuSum / _selfCpuN : (m != null ? m.SelfCpuPct : 0);
+            double cpu = _recentSelf.Count > 0 ? _recentSelf.Average() : 0;
             double ram = m != null ? m.SelfPrivateBytes / 1048576.0 : 0;
             bool over = cpu > SelfCpuBudgetPct || ram > SelfRamBudgetMB;
             string ov = "GAPO uses " + cpu.ToString(cpu < 1 ? "0.0" : "0") + "% CPU · " + ram.ToString("0") + " MB" + (over ? " · over budget" : "");
@@ -671,9 +681,7 @@ namespace Gapo.Optimiser.UI
             // Progress ring + phase
             float ring = 118 * S;
             var rr = new RectangleF(inner.X + 6 * S, inner.Y + 6 * S, ring, ring);
-            float phase = st.Measuring ? 0 : (float)(_clock.Elapsed.TotalSeconds * 140 % 360);
             Gfx.Ring(g, rr, S, (float)st.Progress, 9 * S, false, 0);
-            if (!st.Measuring) Gfx.Ring(g, new RectangleF(rr.X + 16 * S, rr.Y + 16 * S, rr.Width - 32 * S, rr.Height - 32 * S), S, 0.12f, 3 * S, true, phase);
             Gfx.TextCenter(g, (st.Progress * 100).ToString("0") + "%", Theme.Font(24 * S, true, true), Theme.Text, rr);
             float tx = rr.Right + 24 * S, tw = inner.Right - tx;
             SectionLabel(g, PhaseLabel(st.Phase), tx, inner.Y + 8 * S);
@@ -798,7 +806,8 @@ namespace Gapo.Optimiser.UI
             Gfx.Fill(g, r, 10 * S, Theme.A(Theme.Accent, 22));
             Gfx.Stroke(g, r, 10 * S, Theme.A(Theme.Accent, 90), 1f);
             var cr = new RectangleF(r.X + 8 * S, r.Y + (r.Height - 22 * S) / 2, 22 * S, 22 * S);
-            Gfx.Ring(g, cr, S, 0.3f, 2.5f * S, true, (float)(_clock.Elapsed.TotalSeconds * 200 % 360));
+            Gfx.Fill(g, cr, 11 * S, Theme.A(Theme.Accent, 40));
+            Gfx.DrawIcon(g, Glyph.Pulse, new RectangleF(cr.X + 3 * S, cr.Y + 3 * S, 16 * S, 16 * S), Theme.Accent, S);
             Gfx.Text(g, Clip(g, title, Theme.Font(13 * S, true), r.Width - 140 * S), Theme.Font(13 * S, true), Theme.Text, cr.Right + 10 * S, r.Y + (r.Height - 17 * S) / 2);
             Gfx.TextRight(g, "measuring…", Theme.Font(12 * S), Theme.Accent, r.Right - 12 * S, r.Y + (r.Height - 15 * S) / 2);
         }
@@ -1270,6 +1279,7 @@ namespace Gapo.Optimiser.UI
             double avg = _selfCpuN > 0 ? _selfCpuSum / _selfCpuN : m.SelfCpuPct;
             y += KeyValue(g, x, y, kw, "CPU now / average / peak", m.SelfCpuPct.ToString("0.00") + "% / " + avg.ToString("0.00") + "% / " + _monitor.SelfCpuPeakPct.ToString("0.0") + "%");
             y += KeyValue(g, x, y, kw, "Memory (private / working set)", (m.SelfPrivateBytes / 1048576.0).ToString("0") + " / " + (m.SelfWorkingSet / 1048576.0).ToString("0") + " MB");
+            y += KeyValue(g, x, y, kw, "UI drawing", (_paints > 0 ? (_paintMs / _paints).ToString("0.0") : "–") + " ms per repaint · " + _paints + " repaints");
             y += KeyValue(g, x, y, kw, "Budget", SelfCpuBudgetPct.ToString("0.0") + "% CPU · " + SelfRamBudgetMB.ToString("0") + " MB — exceeding it is treated as a bug");
             return y;
         }
@@ -1313,8 +1323,9 @@ namespace Gapo.Optimiser.UI
                         File.WriteAllText(Path.Combine(_autotestDir, "report.txt"), rep != null ? rep.ToText() : "no report");
                         var m = _monitor.Latest;
                         File.WriteAllText(Path.Combine(_autotestDir, "overhead.txt"), string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                            "selfCpuAvgPct={0:0.000} selfCpuPeakPct={1:0.00} selfPrivateMB={2:0.0} selfWorkingSetMB={3:0.0} uiTimerAvgPct={4:0.000}",
-                            rep != null ? rep.SelfCpuAvgPct : -1, _monitor.SelfCpuPeakPct, m != null ? m.SelfPrivateBytes / 1048576.0 : -1, m != null ? m.SelfWorkingSet / 1048576.0 : -1, _selfCpuN > 0 ? _selfCpuSum / _selfCpuN : -1));
+                            "runSelfCpuAvgPct={0:0.000} runSelfCpuInWindowsPct={5:0.000} sessionSelfCpuAvgPct={4:0.000} selfCpuPeakPct={1:0.00} selfPrivateMB={2:0.0} selfWorkingSetMB={3:0.0} paints={6} paintAvgMs={7:0.00}",
+                            rep != null ? rep.SelfCpuAvgPct : -1, _monitor.SelfCpuPeakPct, m != null ? m.SelfPrivateBytes / 1048576.0 : -1, m != null ? m.SelfWorkingSet / 1048576.0 : -1, _selfCpuN > 0 ? _selfCpuSum / _selfCpuN : -1,
+                            rep != null ? rep.SelfCpuInWindowsPct : -1, _paints, _paints > 0 ? _paintMs / _paints : 0));
                         _autoStage = 10;
                         Close();
                         break;

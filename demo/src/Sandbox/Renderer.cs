@@ -30,6 +30,8 @@ namespace Gapo.Sandbox
         const float TanHalfFov = 1.0f;
 
         public SandboxSettings Settings = SandboxSettings.UnoptimisedDefaults();
+        /// <summary>Calibration knob (0.45..1): fewer ray-march steps on very slow PCs so "Ultra" stays only mildly laggy.</summary>
+        public float Detail = 1f;
         public float TimeSec;
         ParallelOptions _opts = new ParallelOptions { MaxDegreeOfParallelism = 1 };
         int _threads = 1;
@@ -165,7 +167,7 @@ namespace Gapo.Sandbox
             {
                 float dirx = _colDirX[x], diry = _colDirY[x];
                 int ytop = rh;
-                float z = 1.5f, dz = lod ? 0.55f : 1f;
+                float z = 1.5f, dz = (lod ? 0.55f : 1f) / Detail;
                 while (z < maxZ)
                 {
                     int ix = ((int)(camX + dirx * z + 65536f)) & World.Mask;
@@ -232,7 +234,7 @@ namespace Gapo.Sandbox
                     {
                         float u = (CamX + _colDirX[x] * dist) * 0.00055f + wind;
                         float w = (CamY + _colDirY[x] * dist) * 0.00055f;
-                        float n = clouds == CloudQuality.Ultra ? CloudFbm(u, w) : SampleBilinear(_cloudTex, u, w);
+                        float n = clouds == CloudQuality.Ultra ? CloudFbm(u, w, Detail >= 0.8f ? 5 : 4) : SampleBilinear(_cloudTex, u, w);
                         float cov = Smooth(0.48f, 0.78f, n) * fade;
                         if (cov > 0.003f)
                         {
@@ -246,10 +248,10 @@ namespace Gapo.Sandbox
         }
 
         /// <summary>"Ultra" clouds: five octaves of procedural noise per pixel, every frame.</summary>
-        static float CloudFbm(float u, float v)
+        static float CloudFbm(float u, float v, int octaves = 5)
         {
             float sum = 0, amp = 0.5f, freq = 4f;
-            for (int o = 0; o < 5; o++)
+            for (int o = 0; o < octaves; o++)
             {
                 sum += amp * Noise(u * freq, v * freq, (int)freq, 17 + o);
                 freq *= 2f; amp *= 0.5f;
@@ -299,6 +301,8 @@ namespace Gapo.Sandbox
             int rw = RW;
             bool ultra = Settings.Shadows == ShadowQuality.Ultra;
             float tanSun = _world.TanSun;
+            int steps = Math.Max(6, (int)(22 * Detail));
+            float stepLen = 3f * 22 / steps;
             for (int y = y0; y < y1; y++)
             {
                 int p = y * rw;
@@ -313,9 +317,9 @@ namespace Gapo.Sandbox
                         int cx = v & World.Mask, rowBase = v & ~World.Mask;
                         float h = hm[v];
                         light = 1f;
-                        for (int k = 1; k <= 22; k++)
+                        for (int k = 1; k <= steps; k++)
                         {
-                            float dist = k * 3f;
+                            float dist = k * stepLen;
                             float over = hm[rowBase | ((cx + (int)dist) & World.Mask)] - h - dist * tanSun;
                             if (over > 0)
                             {
@@ -340,6 +344,8 @@ namespace Gapo.Sandbox
             int rw = RW;
             bool ultra = Settings.WaterReflections == WaterQuality.Ultra;
             float camH = CamH, t = TimeSec;
+            int steps = Math.Max(8, (int)(24 * Detail));
+            float kScale = 24f / steps;
             for (int y = y0; y < y1; y++)
             {
                 int p = y * rw;
@@ -361,9 +367,10 @@ namespace Gapo.Sandbox
                         int idx0 = v & ~WaterBit;
                         float wx = (idx0 & World.Mask) + (float)Math.Sin((idx0 >> World.Shift) * 0.21f + t * 1.7f) * 1.2f;
                         float wy = (idx0 >> World.Shift) + (float)Math.Cos((idx0 & World.Mask) * 0.19f + t * 1.3f) * 1.2f;
-                        for (int k = 1; k <= 24; k++)
+                        for (int k = 1; k <= steps; k++)
                         {
-                            float dist = k * 3.5f + k * k * 0.2f;
+                            float kk = k * kScale;
+                            float dist = kk * 3.5f + kk * kk * 0.2f;
                             int idx = World.Index((int)(wx + dx * dist), (int)(wy + dy * dist));
                             if (hm[idx] > World.Sea + dist * slope)
                             {

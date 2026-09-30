@@ -187,7 +187,13 @@ namespace Gapo.Optimiser.Hardware
             catch (Exception ex) { hw.Notes.Add("Memory modules: WMI unavailable (" + ex.GetType().Name + ")."); }
 
             bool lp = mem.Modules.Exists(x => x.Type.StartsWith("LP"));
-            if (mem.Modules.Count == 1 && !lp) { mem.ChannelMode = "Single-channel (1 module)"; mem.SingleChannel = true; }
+            long sum = 0; foreach (var x in mem.Modules) sum += x.CapacityBytes;
+            if (mem.Modules.Count > 0 && mem.TotalBytes > 0 && (sum < mem.TotalBytes * 0.8 || sum > mem.TotalBytes * 1.3))
+            {
+                mem.ChannelMode = "Module data inconsistent (virtual machine?)";
+                hw.Notes.Add("Memory: installed modules (" + (sum >> 20) + " MB) don't add up to the RAM Windows sees (" + (mem.TotalBytes >> 20) + " MB); channel mode not judged.");
+            }
+            else if (mem.Modules.Count == 1 && !lp) { mem.ChannelMode = "Single-channel (1 module)"; mem.SingleChannel = true; }
             else if (mem.Modules.Count >= 2) mem.ChannelMode = "Dual-channel (" + mem.Modules.Count + " modules)";
             else if (lp) mem.ChannelMode = "Soldered LPDDR";
             else mem.ChannelMode = "Not reported";

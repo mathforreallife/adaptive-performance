@@ -94,7 +94,7 @@ namespace Gapo.Optimiser.Engine
                 {
                     d.Primary = Bottleneck.RenderSingleThread;
                     d.Title = "Rendering is stuck on one CPU thread";
-                    d.Summary = "Rendering takes " + KnowledgeBase.F(st.Render) + " ms of each " + KnowledgeBase.F(work) + " ms frame, all on 1 of your " + logical + " CPU threads. The rest of the CPU is mostly idle.";
+                    d.Summary = "Rendering takes " + KnowledgeBase.F(st.Render) + " ms of each " + KnowledgeBase.F(work) + " ms frame, all on 1 of your " + logical + " CPU threads" + OtherCoresNote(mon) + ".";
                     d.Category = "B · game setting (render threads)";
                 }
                 else
@@ -123,7 +123,8 @@ namespace Gapo.Optimiser.Engine
             // Evidence: utilisation is not the same as a bottleneck.
             if (mon.CoreUsage.Length > 1 && mon.TotalCpuPct > 0.5)
             {
-                d.Evidence.Add("Total CPU use is " + mon.TotalCpuPct.ToString("0") + "%, but the busiest core runs at " + mon.BusiestCore.ToString("0") + "% — overall CPU use hides a one-thread limit.");
+                if (mon.BusiestCore - mon.TotalCpuPct >= 25)
+                    d.Evidence.Add("Total CPU use is " + mon.TotalCpuPct.ToString("0") + "%, but the busiest core runs at " + mon.BusiestCore.ToString("0") + "% — overall CPU use hides a one-thread limit.");
                 if (perCore != null) d.Evidence.Add(perCore);
             }
             if (mon.HottestThreadPct >= 0)
@@ -150,6 +151,16 @@ namespace Gapo.Optimiser.Engine
                 d.Summary = "Each frame takes " + KnowledgeBase.F(work) + " ms of work — inside the " + KnowledgeBase.F(d.BudgetMs) + " ms budget for " + targetFps.ToString("0") + " FPS.";
             }
             return d;
+        }
+
+        static string OtherCoresNote(MonitorSummary mon)
+        {
+            if (mon == null || mon.CoreUsage.Length < 2 || mon.TotalCpuPct < 0.5) return "";
+            var sorted = mon.CoreUsage.OrderByDescending(u => u).ToArray();
+            double others = sorted.Skip(1).Average() * 100;
+            if (others < 35) return ", while the other cores are mostly idle (" + others.ToString("0") + "% on average)";
+            if (mon.BackgroundCpuPct >= 15) return "; the other cores are busy with background apps (" + mon.BackgroundCpuPct.ToString("0") + "% of the CPU)";
+            return "";
         }
 
         public static string ShortName(Bottleneck b)

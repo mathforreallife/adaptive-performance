@@ -128,7 +128,7 @@ namespace Gapo.Optimiser.Engine
                 _link.Toast("GAPO is measuring — benchmark flight");
 
                 // ---------------- Observe: A/A baseline gives the noise floor.
-                Publish(Phase.Baseline, "Measuring the baseline", "Two identical benchmark runs. How much they differ tells GAPO how precise its measurements are on this PC.");
+                Publish(Phase.Baseline, "Measuring the baseline", "Two identical benchmark runs. How much they differ tells GAPO how precise its measurements are on this PC.", true);
                 FrameStats a, b;
                 var baseline = MeasurePair("Baseline", out a, out b, rep.BaselineTrace);
                 _noise = Math.Abs(a.MedianWorkMs - b.MedianWorkMs) / Math.Max(0.01, (a.MedianWorkMs + b.MedianWorkMs) / 2);
@@ -177,10 +177,12 @@ namespace Gapo.Optimiser.Engine
                 }
 
                 // ---------------- Background contention: only then is process priority worth testing.
-                if (rep.BaselineMonitor.BackgroundCpuPct >= 15 && _originalPriority == ProcessPriorityClass.Normal)
+                if (rep.BaselineMonitor.BackgroundCpuPct >= 15 && (_originalPriority == ProcessPriorityClass.Normal || _originalPriority == ProcessPriorityClass.BelowNormal || _originalPriority == ProcessPriorityClass.Idle))
                     TestPriority(rep);
-                else
+                else if (rep.BaselineMonitor.BackgroundCpuPct < 15)
                     rep.NotTouched.Add("Process priority — background apps used only " + rep.BaselineMonitor.BackgroundCpuPct.ToString("0") + "% CPU, so raising the game's priority has nothing to win (and random priority changes are a classic 'booster' mistake).");
+                else
+                    rep.NotTouched.Add("Process priority — the game already runs at " + _originalPriority + " priority; GAPO doesn't raise it further.");
 
                 // ---------------- Experiments: best predicted gain per unit of visual cost first.
                 var tried = new HashSet<string>();
@@ -221,7 +223,7 @@ namespace Gapo.Optimiser.Engine
                 Pacing(rep, goal);
 
                 // ---------------- Validate.
-                Publish(Phase.Validating, "Validating the result", "Measuring the final configuration on the same benchmark flight as the baseline.");
+                Publish(Phase.Validating, "Validating the result", "Measuring the final configuration on the same benchmark flight as the baseline.", true);
                 FrameStats f1, f2;
                 rep.Final = MeasurePair("Final", out f1, out f2, rep.FinalTrace);
                 rep.FinalMonitor = MonitorSummary.From(_monitor.History(_monitor.Now - 7000));
@@ -231,6 +233,7 @@ namespace Gapo.Optimiser.Engine
                 VerifyHitchFix(rep);
                 rep.FinalDiagnosis = Diagnosis.Run(rep.Final, rep.FinalMonitor, _hw, _current, rep.TargetFps, rep.FinalHitches);
                 rep.FinalSettings = _current.Clone();
+                rep.FinalSettings.ModifiedBy = "GAPO Optimiser";
                 rep.Recommendations = Advisor.Build(_hw, rep.BaselineMonitor, rep.BackgroundApps, rep.BaselineHitches, rep);
                 rep.Completed = true;
                 _stepsDone = _stepsPlanned;
@@ -325,7 +328,7 @@ namespace Gapo.Optimiser.Engine
             List<FrameRecord> frames;
             while (true)
             {
-                Thread.Sleep(100);
+                Thread.Sleep(200);
                 Check();
                 frames = _link.FramesSince(start);
                 frames.RemoveAll(f => f.Revision != expectedRevision || (f.Flags & (int)FrameFlags.Warmup) != 0);
@@ -480,15 +483,16 @@ namespace Gapo.Optimiser.Engine
 
         void TestPriority(OptimisationReport rep)
         {
+            var target = _originalPriority == ProcessPriorityClass.Normal ? ProcessPriorityClass.AboveNormal : ProcessPriorityClass.Normal;
             var log = new ExperimentLog
             {
-                Index = rep.Experiments.Count + 1, Title = "Game process priority: Normal → Above normal", Setting = "Process priority", Kind = ChangeKind.Windows, Before = _reference,
-                Hypothesis = "Background apps use " + rep.BaselineMonitor.BackgroundCpuPct.ToString("0") + "% of the CPU. Giving the game a slightly higher priority lets it win those contests.",
+                Index = rep.Experiments.Count + 1, Title = "Game process priority: " + PrioName(_originalPriority) + " → " + PrioName(target), Setting = "Process priority", Kind = ChangeKind.Windows, Before = _reference,
+                Hypothesis = "Background apps use " + rep.BaselineMonitor.BackgroundCpuPct.ToString("0") + "% of the CPU" + (target == ProcessPriorityClass.Normal ? " and the game was started at " + PrioName(_originalPriority) + " priority, so it loses every contest for the CPU. Restoring normal priority should help." : ". Giving the game a slightly higher priority lets it win those contests."),
             };
             Publish(Phase.Testing, "Testing: " + log.Title, log.Hypothesis, true);
             try
             {
-                using (var gp = Process.GetProcessById(_link.Pid)) gp.PriorityClass = ProcessPriorityClass.AboveNormal;
+                using (var gp = Process.GetProcessById(_link.Pid)) gp.PriorityClass = target;
                 _priorityChanged = true;
                 var r = Measure(_current.Revision, "Priority");
                 log.After = r;
@@ -506,6 +510,16 @@ namespace Gapo.Optimiser.Engine
             rep.Experiments.Add(log);
             _stepsDone++;
             Publish(Phase.Testing, log.Title, log.Reason, false, log);
+        }
+
+        static string PrioName(ProcessPriorityClass p)
+        {
+            switch (p)
+            {
+                case ProcessPriorityClass.AboveNormal: return "Above normal";
+                case ProcessPriorityClass.BelowNormal: return "Below normal";
+                default: return p.ToString();
+            }
         }
 
         void QualityGiveBack(OptimisationReport rep, double budget)
