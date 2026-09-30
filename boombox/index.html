@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="build" content="v10">
+<meta name="theme-color" content="#15131c">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta name="description" content="Pon la cancion. Adivina el ano.">
+<title>BoomBox</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='88'>&#127911;</text></svg>">
+<style>
+:root{
+  --bg:#15131c; --card:#201c2b; --fg:#f8f3ea; --muted:#a49bb5; --line:#332c44;
+  --accent:#ffc14d; --ink:#2b2000; --bad:#ff8d8d;
+  --shadow:0 14px 34px rgba(0,0,0,.46); --disc1:#3a3350; --disc2:#4a4166;
+  --ease:cubic-bezier(.22,.9,.3,1);
+}
+:root[data-theme="light"]{
+  --bg:#f4ecdd; --card:#fffdf7; --fg:#29223a; --muted:#6b6379; --line:#e6dac5;
+  --accent:#d97e10; --ink:#fffdf7; --bad:#c2453f;
+  --shadow:0 14px 30px rgba(120,95,55,.17); --disc1:#1d1826; --disc2:#2a2336;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;min-height:100%}
+body{
+  background:var(--bg); color:var(--fg); font-size:16px;
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-font-smoothing:antialiased; overscroll-behavior-y:none;
+  touch-action:manipulation; user-select:none;-webkit-user-select:none;
+  transition:background .45s ease,color .45s ease;
+}
+.serif{font-family:Georgia,"Iowan Old Style","Times New Roman",ui-serif,serif}
+#app{min-height:100dvh;display:flex;flex-direction:column;
+  padding:calc(env(safe-area-inset-top) + 14px) 18px calc(env(safe-area-inset-bottom) + 16px);
+  max-width:540px;margin:0 auto;width:100%}
+.screen{flex:1;display:flex;flex-direction:column;min-height:0}
+.screen[hidden]{display:none}
+
+.screen:not([hidden]){animation:screenIn .42s var(--ease) both}
+@keyframes screenIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
+@keyframes riseIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+@keyframes popIn{from{opacity:0;transform:scale(.82)}to{opacity:1;transform:scale(1)}}
+
+.btn{
+  appearance:none;width:100%;min-height:58px;padding:17px 20px;border-radius:16px;
+  border:2px solid var(--line);background:var(--card);color:var(--fg);
+  font:700 17px/1.25 inherit;cursor:pointer;
+  transition:transform .2s var(--ease),background .25s ease,box-shadow .2s var(--ease),
+             opacity .3s ease,border-color .25s ease;
+}
+.btn:active{transform:translateY(2px) scale(.985)}
+.btn[disabled]{opacity:.35;cursor:default}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--ink);
+  box-shadow:0 5px 0 0 color-mix(in srgb,var(--accent) 60%, #000)}
+.btn.primary:active{box-shadow:0 1px 0 0 color-mix(in srgb,var(--accent) 60%, #000)}
+.btn.tall{min-height:64px;font-size:18.5px;letter-spacing:.01em}
+.linkbtn{background:none;border:0;color:var(--muted);font:600 15px inherit;
+  text-decoration:underline;text-underline-offset:4px;cursor:pointer;
+  min-height:48px;padding:12px;width:100%;transition:color .25s ease}
+.linkbtn:active{color:var(--fg)}
+.iconbtn{background:none;border:0;color:var(--muted);font-size:24px;line-height:1;
+  width:48px;height:48px;display:grid;place-items:center;cursor:pointer;border-radius:12px;
+  transition:color .25s ease,background .25s ease,transform .2s var(--ease)}
+.iconbtn:active{color:var(--fg);background:var(--card);transform:scale(.9)}
+
+.topbar{display:flex;justify-content:flex-end;flex:0 0 auto;min-height:44px}
+.langbox{display:flex;gap:2px;background:var(--card);border:2px solid var(--line);
+  border-radius:12px;padding:3px;transition:border-color .25s ease,background .25s ease}
+.langbox button{border:0;background:none;cursor:pointer;line-height:1;
+  width:46px;height:44px;border-radius:9px;opacity:.45;transition:opacity .3s ease,background .3s ease,transform .2s var(--ease);
+  display:grid;place-items:center;padding:0}
+.langbox button:active{transform:scale(.92)}
+.langbox button[aria-pressed="true"]{opacity:1;background:var(--line)}
+.flag{width:26px;height:17.5px;display:block;border-radius:2px;
+  box-shadow:0 0 0 1px rgba(128,128,128,.45)}
+
+.home{overflow-y:auto}
+.homeMid{flex:1;display:flex;flex-direction:column;justify-content:center;text-align:center;padding:8px 0 4px}
+.logo{width:66px;height:66px;margin:0 auto 14px;border-radius:50%;background:var(--accent);
+  color:var(--ink);display:grid;place-items:center;font-size:32px;
+  box-shadow:var(--shadow);transform:rotate(-6deg);transition:background .3s ease}
+h1.title{font-size:clamp(42px,13vw,56px);margin:0;letter-spacing:-.02em;font-weight:700}
+.tag{color:var(--muted);font-size:16px;margin:10px 0 24px;line-height:1.55}
+.settings{background:var(--card);border:2px solid var(--line);border-radius:18px;
+  margin:20px 0 14px;overflow:hidden;text-align:left;transition:background .3s ease,border-color .3s ease}
+.row{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:15px 16px;min-height:72px}
+.row + .row{border-top:2px solid var(--line)}
+.row .lbl{font-size:16.5px;font-weight:700;line-height:1.3}
+.row .sub{font-size:14px;color:var(--muted);margin-top:4px;line-height:1.45}
+.switch{flex:0 0 auto;width:62px;height:36px;border-radius:99px;border:0;
+  background:var(--line);position:relative;cursor:pointer;transition:background .3s ease}
+.switch::before{content:"";position:absolute;left:-5px;right:-5px;top:-7px;bottom:-7px;border-radius:99px}
+.switch::after{content:"";position:absolute;top:3px;left:3px;width:30px;height:30px;
+  border-radius:50%;background:#fffdf7;transition:transform .32s var(--ease);
+  box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.switch[aria-checked="true"]{background:var(--accent)}
+.switch[aria-checked="true"]::after{transform:translateX(26px)}
+.seg{display:flex;gap:6px;background:var(--line);padding:4px;border-radius:13px;flex:0 0 auto;transition:background .3s ease}
+.seg button{border:0;background:none;color:var(--muted);font:700 15px inherit;
+  padding:10px 15px;min-height:44px;border-radius:10px;cursor:pointer;
+  transition:background .3s ease,color .3s ease,transform .2s var(--ease)}
+.seg button:active{transform:scale(.95)}
+.seg button[aria-pressed="true"]{background:var(--card);color:var(--fg)}
+.stat{font-size:14.5px;color:var(--muted);margin:6px 0 0;line-height:1.55;transition:color .3s ease}
+
+#homeScreen:not([hidden]) .logo{animation:popIn .55s var(--ease) both .05s}
+#homeScreen:not([hidden]) h1.title{animation:riseIn .55s var(--ease) both .12s}
+#homeScreen:not([hidden]) .tag{animation:riseIn .55s var(--ease) both .19s}
+#homeScreen:not([hidden]) #startBtn{animation:riseIn .55s var(--ease) both .26s}
+#homeScreen:not([hidden]) .settings{animation:riseIn .55s var(--ease) both .33s}
+#homeScreen:not([hidden]) .stat{animation:riseIn .55s var(--ease) both .40s}
+#lockScreen:not([hidden]) .logo{animation:popIn .55s var(--ease) both .05s}
+#lockScreen:not([hidden]) h1.title{animation:riseIn .55s var(--ease) both .12s}
+#lockScreen:not([hidden]) .tag{animation:riseIn .55s var(--ease) both .19s}
+#lockScreen:not([hidden]) .codeIn{animation:riseIn .55s var(--ease) both .26s}
+#lockScreen:not([hidden]) #codeGo{animation:riseIn .55s var(--ease) both .33s}
+
+.gameHead{display:flex;align-items:center;justify-content:space-between;flex:0 0 auto}
+#counter{font-size:14px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;
+  transition:opacity .25s ease}
+.stage{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:20px;min-height:0;padding:4px 0 0}
+.turntable{position:relative;width:min(55vw,196px);height:min(55vw,196px);border:0;
+  background:none;padding:0;cursor:pointer;border-radius:50%;
+  transition:transform .25s var(--ease),opacity .35s ease}
+.turntable:active{transform:scale(.94)}
+.turntable[disabled]{opacity:.3;cursor:default}
+.turntable.arm{animation:armIn .6s var(--ease)}
+@keyframes armIn{0%{opacity:.25;transform:scale(.84) rotate(-10deg)}
+                 60%{transform:scale(1.03) rotate(2deg)}
+                 100%{opacity:1;transform:none}}
+.disc{position:absolute;inset:0;border-radius:50%;
+  background:repeating-radial-gradient(circle at 50% 50%, var(--disc1) 0 3px, var(--disc2) 3px 6px);
+  box-shadow:var(--shadow), inset 0 0 0 2px rgba(255,255,255,.10);
+  transition:background .4s ease}
+.disc::after{content:"";position:absolute;left:50%;top:50%;width:37%;height:37%;
+  transform:translate(-50%,-50%);border-radius:50%;background:var(--accent);
+  transition:background .3s ease}
+.turntable.spin .disc{animation:spin 3.4s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.glyph{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:2;
+  color:var(--ink);display:grid;place-items:center;width:37%;height:37%}
+.glyph svg{width:46%;height:46%;transition:opacity .2s ease}
+.glyph .pz{display:none}
+.turntable.spin .glyph .py{display:none}
+.turntable.spin .glyph .pz{display:block}
+.turntable.busy{animation:breathe 1.6s ease-in-out infinite}
+@keyframes breathe{0%,100%{opacity:1}50%{opacity:.42}}
+.bar{width:min(55vw,196px);height:6px;border-radius:99px;background:var(--line);overflow:hidden;
+  transition:background .3s ease}
+.bar i{display:block;height:100%;width:0;background:var(--accent);
+  transition:width .22s linear,background .3s ease}
+.status{font-size:15px;color:var(--muted);min-height:21px;text-align:center;line-height:1.45;
+  padding:0 8px;transition:opacity .22s ease}
+.status.fade{opacity:0}
+.status.err{color:var(--bad)}
+.tray{flex:0 0 auto;min-height:244px;display:flex;flex-direction:column;justify-content:flex-end;gap:14px}
+.answer{background:var(--card);border:2px solid var(--line);border-radius:20px;
+  padding:18px 18px 20px;text-align:center;box-shadow:var(--shadow);transform:rotate(-.7deg);
+  animation:deal .5s var(--ease)}
+@keyframes deal{0%{opacity:0;transform:translateY(22px) rotate(3.5deg) scale(.95)}
+                100%{opacity:1;transform:translateY(0) rotate(-.7deg) scale(1)}}
+#art{width:54px;height:54px;border-radius:11px;object-fit:cover;background:var(--line);margin-bottom:8px;
+  animation:popIn .5s var(--ease) both .08s}
+#year{font-size:clamp(54px,17vw,76px);font-weight:700;line-height:.95;letter-spacing:-.03em;
+  color:var(--accent);font-variant-numeric:tabular-nums;
+  animation:riseIn .5s var(--ease) both .12s}
+#title{font-size:18px;font-weight:700;margin-top:9px;line-height:1.32;
+  animation:riseIn .5s var(--ease) both .18s}
+#artist{font-size:15px;color:var(--muted);margin-top:5px;line-height:1.4;
+  animation:riseIn .5s var(--ease) both .24s}
+#reveal:not(.hide){animation:riseIn .35s var(--ease) both}
+#next:not(.hide){animation:riseIn .38s var(--ease) both}
+
+.finish{justify-content:center;text-align:center;gap:0;overflow-y:auto}
+.trophy{font-size:62px;margin-bottom:10px;animation:popIn .6s cubic-bezier(.2,1.5,.4,1) both}
+.finish h2{font-size:clamp(30px,8.5vw,38px);margin:0 0 12px;line-height:1.2;font-weight:700;
+  animation:riseIn .55s var(--ease) both .12s}
+.finish p{color:var(--muted);font-size:16.5px;line-height:1.6;margin:0 0 26px;padding:0 4px;
+  animation:riseIn .55s var(--ease) both .2s}
+#finAgain{animation:riseIn .55s var(--ease) both .28s}
+#finMenu{animation:riseIn .55s var(--ease) both .34s}
+
+.codeIn{width:100%;min-height:62px;padding:16px;border-radius:14px;
+  border:2px solid var(--line);background:var(--card);color:var(--fg);
+  font:700 21px/1.2 ui-monospace,Menlo,Consolas,monospace;text-align:center;
+  letter-spacing:.12em;text-transform:uppercase;
+  user-select:text;-webkit-user-select:text;margin-bottom:12px;
+  transition:border-color .25s ease,background .25s ease,box-shadow .25s ease}
+.codeIn:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 22%, transparent)}
+.errline{color:var(--bad);font-size:14.5px;min-height:20px;margin:10px 0 0;line-height:1.45;
+  transition:opacity .25s ease}
+.shake{animation:shake .42s cubic-bezier(.36,.07,.19,.97)}
+@keyframes shake{10%,90%{transform:translateX(-2px)}20%,80%{transform:translateX(4px)}
+                 30%,50%,70%{transform:translateX(-7px)}40%,60%{transform:translateX(7px)}}
+.hide{display:none !important}
+footer{flex:0 0 auto;text-align:center;font-size:12px;color:var(--muted);opacity:.65;padding-top:14px;line-height:1.5}
+
+@media (prefers-reduced-motion: reduce){
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;
+    transition-duration:.05ms !important}
+}
+</style>
+</head>
+<body>
+<main id="app">
+
+  <section class="screen home" id="lockScreen" hidden>
+    <div class="topbar">
+      <div class="langbox">
+        <button data-lang="es" aria-pressed="true" aria-label="Espanol"><svg class="flag" viewBox="0 0 30 20"><rect width="30" height="20" fill="#C60B1E"/><rect y="5" width="30" height="10" fill="#FFC400"/></svg></button>
+        <button data-lang="en" aria-pressed="false" aria-label="English"><svg class="flag" viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0,0 60,40 M60,0 0,40" stroke="#fff" stroke-width="9"/><path d="M0,0 60,40 M60,0 0,40" stroke="#C8102E" stroke-width="4.5"/><path d="M30,0 V40 M0,20 H60" stroke="#fff" stroke-width="14"/><path d="M30,0 V40 M0,20 H60" stroke="#C8102E" stroke-width="8"/></svg></button>
+      </div>
+    </div>
+    <div class="homeMid">
+      <div class="logo">&#128274;</div>
+      <h1 class="title serif">BoomBox</h1>
+      <p class="tag" id="lockText"></p>
+      <input id="codeInput" class="codeIn" type="text" inputmode="latin"
+             autocomplete="off" autocapitalize="characters" spellcheck="false"
+             maxlength="14" placeholder="XXXX-XXXX-XXXX">
+      <button class="btn primary tall" id="codeGo"></button>
+      <p class="errline" id="codeErr"></p>
+    </div>
+  </section>
+
+  <section class="screen home" id="homeScreen" hidden>
+    <div class="topbar">
+      <div class="langbox">
+        <button data-lang="es" aria-pressed="true" aria-label="Espanol"><svg class="flag" viewBox="0 0 30 20"><rect width="30" height="20" fill="#C60B1E"/><rect y="5" width="30" height="10" fill="#FFC400"/></svg></button>
+        <button data-lang="en" aria-pressed="false" aria-label="English"><svg class="flag" viewBox="0 0 60 40"><rect width="60" height="40" fill="#012169"/><path d="M0,0 60,40 M60,0 0,40" stroke="#fff" stroke-width="9"/><path d="M0,0 60,40 M60,0 0,40" stroke="#C8102E" stroke-width="4.5"/><path d="M30,0 V40 M0,20 H60" stroke="#fff" stroke-width="14"/><path d="M30,0 V40 M0,20 H60" stroke="#C8102E" stroke-width="8"/></svg></button>
+      </div>
+    </div>
+    <div class="homeMid">
+      <div class="logo">&#127911;</div>
+      <h1 class="title serif">BoomBox</h1>
+      <p class="tag" id="tagline"></p>
+      <button class="btn primary tall" id="startBtn"></button>
+      <div class="settings">
+        <div class="row">
+          <div>
+            <div class="lbl" id="lblSkip"></div>
+            <div class="sub" id="subSkip"></div>
+          </div>
+          <button class="switch" id="repeatSwitch" role="switch" aria-checked="true"></button>
+        </div>
+        <div class="row">
+          <div class="lbl" id="lblTheme"></div>
+          <div class="seg" id="themeSeg">
+            <button data-theme-val="dark" aria-pressed="true" id="btnDark"></button>
+            <button data-theme-val="light" aria-pressed="false" id="btnLight"></button>
+          </div>
+        </div>
+      </div>
+      <p class="stat" id="stat">&nbsp;</p>
+      <button class="linkbtn hide" id="resetBtn"></button>
+    </div>
+  </section>
+
+  <section class="screen" id="gameScreen" hidden>
+    <div class="gameHead">
+      <button class="iconbtn" id="homeBtn">&#8249;</button>
+      <span id="counter">&nbsp;</span>
+      <span style="width:48px"></span>
+    </div>
+    <div class="stage">
+      <button id="play" class="turntable" disabled>
+        <span class="disc"></span>
+        <span class="glyph">
+          <svg class="py" viewBox="0 0 24 24" fill="currentColor"><path d="M7 4.6c0-.9 1-1.5 1.8-1L19 9.9c.8.5.8 1.7 0 2.2L8.8 18.4c-.8.5-1.8-.1-1.8-1V4.6z"/></svg>
+          <svg class="pz" viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="4" width="4.2" height="16" rx="1.6"/><rect x="13.8" y="4" width="4.2" height="16" rx="1.6"/></svg>
+        </span>
+      </button>
+      <div class="bar"><i id="fill"></i></div>
+      <div id="status" class="status"></div>
+    </div>
+    <div class="tray">
+      <div id="answer" class="answer hide">
+        <img id="art" alt="" referrerpolicy="no-referrer">
+        <div id="year" class="serif"></div>
+        <div id="title"></div>
+        <div id="artist"></div>
+      </div>
+      <button id="reveal" class="btn primary tall" disabled></button>
+      <button id="next" class="btn primary tall hide"></button>
+    </div>
+  </section>
+
+  <section class="screen finish" id="finishScreen" hidden>
+    <div class="trophy">&#127942;</div>
+    <h2 class="serif" id="finTitle"></h2>
+    <p id="finBody"></p>
+    <button class="btn primary tall" id="finAgain"></button>
+    <div style="height:12px"></div>
+    <button class="btn" id="finMenu"></button>
+  </section>
+
+  <footer><span id="footText"></span></footer>
+</main>
+<script>
+"use strict";
+const SONGS = [
+  {t:"Rock Around the Clock", a:"Bill Haley & His Comets", y:1954},
+  {t:"Hound Dog", a:"Elvis Presley", y:1956},
+  {t:"Great Balls of Fire", a:"Jerry Lee Lewis", y:1957},
+  {t:"Jailhouse Rock", a:"Elvis Presley", y:1957},
+  {t:"Johnny B. Goode", a:"Chuck Berry", y:1958},
+  {t:"La Bamba", a:"Ritchie Valens", y:1958},
+  {t:"Stand By Me", a:"Ben E. King", y:1961},
+  {t:"Can't Help Falling in Love", a:"Elvis Presley", y:1961},
+  {t:"Twist and Shout", a:"The Beatles", y:1963},
+  {t:"I Want to Hold Your Hand", a:"The Beatles", y:1963},
+  {t:"My Girl", a:"The Temptations", y:1964},
+  {t:"(I Can't Get No) Satisfaction", a:"The Rolling Stones", y:1965},
+  {t:"California Dreamin'", a:"The Mamas & the Papas", y:1965},
+  {t:"Good Vibrations", a:"The Beach Boys", y:1966},
+  {t:"Respect", a:"Aretha Franklin", y:1967},
+  {t:"Brown Eyed Girl", a:"Van Morrison", y:1967},
+  {t:"(Sittin' On) The Dock of the Bay", a:"Otis Redding", y:1968},
+  {t:"Born to Be Wild", a:"Steppenwolf", y:1968},
+  {t:"Hey Jude", a:"The Beatles", y:1968},
+  {t:"Here Comes the Sun", a:"The Beatles", y:1969},
+  {t:"Come Together", a:"The Beatles", y:1969},
+  {t:"Sweet Caroline", a:"Neil Diamond", y:1969},
+  {t:"Suspicious Minds", a:"Elvis Presley", y:1969},
+  {t:"Let It Be", a:"The Beatles", y:1970},
+  {t:"Bridge Over Troubled Water", a:"Simon & Garfunkel", y:1970},
+  {t:"Your Song", a:"Elton John", y:1970},
+  {t:"Oye Como Va", a:"Santana", y:1970},
+  {t:"Imagine", a:"John Lennon", y:1971},
+  {t:"What's Going On", a:"Marvin Gaye", y:1971},
+  {t:"Stairway to Heaven", a:"Led Zeppelin", y:1971},
+  {t:"Tiny Dancer", a:"Elton John", y:1971},
+  {t:"American Pie", a:"Don McLean", y:1971},
+  {t:"Rocket Man", a:"Elton John", y:1972},
+  {t:"Crocodile Rock", a:"Elton John", y:1972},
+  {t:"Lean on Me", a:"Bill Withers", y:1972},
+  {t:"Superstition", a:"Stevie Wonder", y:1972},
+  {t:"Money", a:"Pink Floyd", y:1973},
+  {t:"Time", a:"Pink Floyd", y:1973},
+  {t:"Piano Man", a:"Billy Joel", y:1973},
+  {t:"Waterloo", a:"ABBA", y:1974},
+  {t:"Sweet Home Alabama", a:"Lynyrd Skynyrd", y:1974},
+  {t:"Killer Queen", a:"Queen", y:1974},
+  {t:"Bohemian Rhapsody", a:"Queen", y:1975},
+  {t:"Mamma Mia", a:"ABBA", y:1975},
+  {t:"Wish You Were Here", a:"Pink Floyd", y:1975},
+  {t:"Dancing Queen", a:"ABBA", y:1976},
+  {t:"Fernando", a:"ABBA", y:1976},
+  {t:"Hotel California", a:"Eagles", y:1976},
+  {t:"More Than a Feeling", a:"Boston", y:1976},
+  {t:"Stayin' Alive", a:"Bee Gees", y:1977},
+  {t:"We Will Rock You", a:"Queen", y:1977},
+  {t:"We Are the Champions", a:"Queen", y:1977},
+  {t:"Dreams", a:"Fleetwood Mac", y:1977},
+  {t:"Go Your Own Way", a:"Fleetwood Mac", y:1977},
+  {t:"I Feel Love", a:"Donna Summer", y:1977},
+  {t:"Knowing Me, Knowing You", a:"ABBA", y:1977},
+  {t:"Y.M.C.A.", a:"Village People", y:1978},
+  {t:"September", a:"Earth, Wind & Fire", y:1978},
+  {t:"Don't Stop Me Now", a:"Queen", y:1978},
+  {t:"I Will Survive", a:"Gloria Gaynor", y:1978},
+  {t:"Le Freak", a:"Chic", y:1978},
+  {t:"Rasputin", a:"Boney M.", y:1978},
+  {t:"Sultans of Swing", a:"Dire Straits", y:1978},
+  {t:"Heart of Glass", a:"Blondie", y:1978},
+  {t:"Roxanne", a:"The Police", y:1978},
+  {t:"Gimme! Gimme! Gimme! (A Man After Midnight)", a:"ABBA", y:1979},
+  {t:"Hot Stuff", a:"Donna Summer", y:1979},
+  {t:"Video Killed the Radio Star", a:"The Buggles", y:1979},
+  {t:"My Sharona", a:"The Knack", y:1979},
+  {t:"Message in a Bottle", a:"The Police", y:1979},
+  {t:"Another Brick in the Wall, Pt. 2", a:"Pink Floyd", y:1979},
+  {t:"Comfortably Numb", a:"Pink Floyd", y:1979},
+  {t:"Another One Bites the Dust", a:"Queen", y:1980},
+  {t:"Call Me", a:"Blondie", y:1980},
+  {t:"Under Pressure", a:"Queen & David Bowie", y:1981},
+  {t:"Tainted Love", a:"Soft Cell", y:1981},
+  {t:"Don't Stop Believin'", a:"Journey", y:1981},
+  {t:"Billie Jean", a:"Michael Jackson", y:1982},
+  {t:"Beat It", a:"Michael Jackson", y:1982},
+  {t:"Thriller", a:"Michael Jackson", y:1982},
+  {t:"Africa", a:"Toto", y:1982},
+  {t:"Eye of the Tiger", a:"Survivor", y:1982},
+  {t:"Come On Eileen", a:"Dexys Midnight Runners", y:1982},
+  {t:"Sweet Dreams (Are Made of This)", a:"Eurythmics", y:1983},
+  {t:"Girls Just Want to Have Fun", a:"Cyndi Lauper", y:1983},
+  {t:"Every Breath You Take", a:"The Police", y:1983},
+  {t:"Time After Time", a:"Cyndi Lauper", y:1983},
+  {t:"Total Eclipse of the Heart", a:"Bonnie Tyler", y:1983},
+  {t:"Karma Chameleon", a:"Culture Club", y:1983},
+  {t:"Let's Dance", a:"David Bowie", y:1983},
+  {t:"I'm Still Standing", a:"Elton John", y:1983},
+  {t:"Wake Me Up Before You Go-Go", a:"Wham!", y:1984},
+  {t:"Careless Whisper", a:"George Michael", y:1984},
+  {t:"Purple Rain", a:"Prince", y:1984},
+  {t:"When Doves Cry", a:"Prince", y:1984},
+  {t:"Dancing in the Dark", a:"Bruce Springsteen", y:1984},
+  {t:"Footloose", a:"Kenny Loggins", y:1984},
+  {t:"Material Girl", a:"Madonna", y:1984},
+  {t:"Take On Me", a:"a-ha", y:1985},
+  {t:"Walking on Sunshine", a:"Katrina and the Waves", y:1985},
+  {t:"Don't You (Forget About Me)", a:"Simple Minds", y:1985},
+  {t:"Livin' on a Prayer", a:"Bon Jovi", y:1986},
+  {t:"The Final Countdown", a:"Europe", y:1986},
+  {t:"Sweet Child O' Mine", a:"Guns N' Roses", y:1987},
+  {t:"Never Gonna Give You Up", a:"Rick Astley", y:1987},
+  {t:"With or Without You", a:"U2", y:1987},
+  {t:"Faith", a:"George Michael", y:1987},
+  {t:"I Wanna Dance with Somebody", a:"Whitney Houston", y:1987},
+  {t:"Smooth Criminal", a:"Michael Jackson", y:1987},
+  {t:"Welcome to the Jungle", a:"Guns N' Roses", y:1987},
+  {t:"Like a Prayer", a:"Madonna", y:1989},
+  {t:"Thunderstruck", a:"AC/DC", y:1990},
+  {t:"Groove Is in the Heart", a:"Deee-Lite", y:1990},
+  {t:"Smells Like Teen Spirit", a:"Nirvana", y:1991},
+  {t:"Come As You Are", a:"Nirvana", y:1991},
+  {t:"Losing My Religion", a:"R.E.M.", y:1991},
+  {t:"Under the Bridge", a:"Red Hot Chili Peppers", y:1991},
+  {t:"November Rain", a:"Guns N' Roses", y:1991},
+  {t:"Black or White", a:"Michael Jackson", y:1991},
+  {t:"Enter Sandman", a:"Metallica", y:1991},
+  {t:"Nothing Else Matters", a:"Metallica", y:1991},
+  {t:"Dreams", a:"The Cranberries", y:1992},
+  {t:"Lithium", a:"Nirvana", y:1992},
+  {t:"Everybody Hurts", a:"R.E.M.", y:1992},
+  {t:"Tears in Heaven", a:"Eric Clapton", y:1992},
+  {t:"I Will Always Love You", a:"Whitney Houston", y:1992},
+  {t:"What's Up?", a:"4 Non Blondes", y:1992},
+  {t:"Rhythm Is a Dancer", a:"Snap!", y:1992},
+  {t:"Two Princes", a:"Spin Doctors", y:1992},
+  {t:"What Is Love", a:"Haddaway", y:1993},
+  {t:"Linger", a:"The Cranberries", y:1993},
+  {t:"Mr. Jones", a:"Counting Crows", y:1993},
+  {t:"Runaway Train", a:"Soul Asylum", y:1993},
+  {t:"Zombie", a:"The Cranberries", y:1994},
+  {t:"Cotton Eye Joe", a:"Rednex", y:1994},
+  {t:"Basket Case", a:"Green Day", y:1994},
+  {t:"Black Hole Sun", a:"Soundgarden", y:1994},
+  {t:"Kiss from a Rose", a:"Seal", y:1994},
+  {t:"Can You Feel the Love Tonight", a:"Elton John", y:1994},
+  {t:"Wonderwall", a:"Oasis", y:1995},
+  {t:"Macarena (Bayside Boys Mix)", a:"Los del Rio", y:1995},
+  {t:"Ironic", a:"Alanis Morissette", y:1995},
+  {t:"Waterfalls", a:"TLC", y:1995},
+  {t:"Common People", a:"Pulp", y:1995},
+  {t:"Children", a:"Robert Miles", y:1995},
+  {t:"Insomnia", a:"Faithless", y:1995},
+  {t:"Wannabe", a:"Spice Girls", y:1996},
+  {t:"Return of the Mack", a:"Mark Morrison", y:1996},
+  {t:"Freed from Desire", a:"Gala", y:1996},
+  {t:"Un-Break My Heart", a:"Toni Braxton", y:1996},
+  {t:"Barbie Girl", a:"Aqua", y:1997},
+  {t:"Torn", a:"Natalie Imbruglia", y:1997},
+  {t:"Bitter Sweet Symphony", a:"The Verve", y:1997},
+  {t:"Karma Police", a:"Radiohead", y:1997},
+  {t:"Song 2", a:"Blur", y:1997},
+  {t:"Angels", a:"Robbie Williams", y:1997},
+  {t:"MMMBop", a:"Hanson", y:1997},
+  {t:"Truly Madly Deeply", a:"Savage Garden", y:1997},
+  {t:"Tubthumping", a:"Chumbawamba", y:1997},
+  {t:"My Heart Will Go On", a:"Celine Dion", y:1997},
+  {t:"Around the World", a:"Daft Punk", y:1997},
+  {t:"Good Riddance (Time of Your Life)", a:"Green Day", y:1997},
+  {t:"Blue (Da Ba Dee)", a:"Eiffel 65", y:1998},
+  {t:"Believe", a:"Cher", y:1998},
+  {t:"...Baby One More Time", a:"Britney Spears", y:1998},
+  {t:"Iris", a:"Goo Goo Dolls", y:1998},
+  {t:"I Don't Want to Miss a Thing", a:"Aerosmith", y:1998},
+  {t:"I Want It That Way", a:"Backstreet Boys", y:1999},
+  {t:"Better Off Alone", a:"Alice Deejay", y:1999},
+  {t:"Mambo No. 5 (A Little Bit of...)", a:"Lou Bega", y:1999},
+  {t:"Sandstorm", a:"Darude", y:1999},
+  {t:"Livin' la Vida Loca", a:"Ricky Martin", y:1999},
+  {t:"Smooth", a:"Santana feat. Rob Thomas", y:1999},
+  {t:"All Star", a:"Smash Mouth", y:1999},
+  {t:"Genie in a Bottle", a:"Christina Aguilera", y:1999},
+  {t:"No Scrubs", a:"TLC", y:1999},
+  {t:"Who Let the Dogs Out", a:"Baha Men", y:2000},
+  {t:"One More Time", a:"Daft Punk", y:2000},
+  {t:"Yellow", a:"Coldplay", y:2000},
+  {t:"Bye Bye Bye", a:"NSYNC", y:2000},
+  {t:"Complicated", a:"Avril Lavigne", y:2002},
+  {t:"Clocks", a:"Coldplay", y:2002},
+  {t:"Mr. Brightside", a:"The Killers", y:2003},
+  {t:"Seven Nation Army", a:"The White Stripes", y:2003},
+  {t:"Hey Ya!", a:"OutKast", y:2003},
+  {t:"Toxic", a:"Britney Spears", y:2003},
+  {t:"Numb", a:"Linkin Park", y:2003},
+  {t:"Since U Been Gone", a:"Kelly Clarkson", y:2004},
+  {t:"Unwritten", a:"Natasha Bedingfield", y:2004},
+  {t:"La Camisa Negra", a:"Juanes", y:2005},
+  {t:"Hips Don't Lie", a:"Shakira", y:2006},
+  {t:"Chasing Cars", a:"Snow Patrol", y:2006},
+  {t:"Viva La Vida", a:"Coldplay", y:2008},
+  {t:"Single Ladies (Put a Ring on It)", a:"Beyonce", y:2008},
+  {t:"Poker Face", a:"Lady Gaga", y:2008},
+  {t:"Use Somebody", a:"Kings of Leon", y:2008},
+  {t:"I Gotta Feeling", a:"The Black Eyed Peas", y:2009},
+  {t:"Rolling in the Deep", a:"Adele", y:2010},
+  {t:"Firework", a:"Katy Perry", y:2010},
+  {t:"Just the Way You Are", a:"Bruno Mars", y:2010},
+  {t:"Waka Waka (This Time for Africa)", a:"Shakira", y:2010},
+  {t:"Danza Kuduro", a:"Don Omar & Lucenzo", y:2010},
+  {t:"Someone Like You", a:"Adele", y:2011},
+  {t:"Titanium", a:"David Guetta feat. Sia", y:2011},
+  {t:"Levels", a:"Avicii", y:2011},
+  {t:"Moves Like Jagger", a:"Maroon 5 feat. Christina Aguilera", y:2011},
+  {t:"Call Me Maybe", a:"Carly Rae Jepsen", y:2011},
+  {t:"Somebody That I Used to Know", a:"Gotye", y:2011},
+  {t:"Paradise", a:"Coldplay", y:2011},
+  {t:"We Found Love", a:"Rihanna feat. Calvin Harris", y:2011},
+  {t:"Don't You Worry Child", a:"Swedish House Mafia", y:2012},
+  {t:"Radioactive", a:"Imagine Dragons", y:2012},
+  {t:"Diamonds", a:"Rihanna", y:2012},
+  {t:"Locked Out of Heaven", a:"Bruno Mars", y:2012},
+  {t:"Sweater Weather", a:"The Neighbourhood", y:2012},
+  {t:"Wake Me Up", a:"Avicii", y:2013},
+  {t:"Get Lucky", a:"Daft Punk", y:2013},
+  {t:"Happy", a:"Pharrell Williams", y:2013},
+  {t:"Roar", a:"Katy Perry", y:2013},
+  {t:"Counting Stars", a:"OneRepublic", y:2013},
+  {t:"Animals", a:"Martin Garrix", y:2013},
+  {t:"Riptide", a:"Vance Joy", y:2013},
+  {t:"Pompeii", a:"Bastille", y:2013},
+  {t:"Let It Go", a:"Idina Menzel", y:2013},
+  {t:"Vivir Mi Vida", a:"Marc Anthony", y:2013},
+  {t:"Uptown Funk", a:"Mark Ronson feat. Bruno Mars", y:2014},
+  {t:"Shake It Off", a:"Taylor Swift", y:2014},
+  {t:"Summer", a:"Calvin Harris", y:2014},
+  {t:"Chandelier", a:"Sia", y:2014},
+  {t:"Rather Be", a:"Clean Bandit feat. Jess Glynne", y:2014},
+  {t:"Thinking Out Loud", a:"Ed Sheeran", y:2014},
+  {t:"Sugar", a:"Maroon 5", y:2014},
+  {t:"Bailando", a:"Enrique Iglesias", y:2014},
+  {t:"Lean On", a:"Major Lazer & DJ Snake", y:2015},
+  {t:"Faded", a:"Alan Walker", y:2015},
+  {t:"Stitches", a:"Shawn Mendes", y:2015},
+  {t:"Sorry", a:"Justin Bieber", y:2015},
+  {t:"The Night We Met", a:"Lord Huron", y:2015},
+  {t:"Can't Stop the Feeling!", a:"Justin Timberlake", y:2016},
+  {t:"Cheap Thrills", a:"Sia", y:2016},
+  {t:"24K Magic", a:"Bruno Mars", y:2016},
+  {t:"Shape of You", a:"Ed Sheeran", y:2017},
+  {t:"Perfect", a:"Ed Sheeran", y:2017},
+  {t:"Believer", a:"Imagine Dragons", y:2017},
+  {t:"Symphony", a:"Clean Bandit feat. Zara Larsson", y:2017},
+  {t:"Havana", a:"Camila Cabello", y:2017},
+  {t:"Despacito", a:"Luis Fonsi & Daddy Yankee", y:2017},
+  {t:"Shotgun", a:"George Ezra", y:2018},
+  {t:"Someone You Loved", a:"Lewis Capaldi", y:2018},
+  {t:"Blinding Lights", a:"The Weeknd", y:2019},
+  {t:"Dance Monkey", a:"Tones and I", y:2019},
+  {t:"Don't Start Now", a:"Dua Lipa", y:2019},
+  {t:"Senorita", a:"Shawn Mendes & Camila Cabello", y:2019},
+  {t:"Bad Guy", a:"Billie Eilish", y:2019},
+  {t:"Memories", a:"Maroon 5", y:2019},
+  {t:"Cruel Summer", a:"Taylor Swift", y:2019},
+  {t:"Watermelon Sugar", a:"Harry Styles", y:2019},
+  {t:"Circles", a:"Post Malone", y:2019},
+  {t:"Before You Go", a:"Lewis Capaldi", y:2019},
+  {t:"Levitating", a:"Dua Lipa", y:2020},
+  {t:"Dynamite", a:"BTS", y:2020},
+  {t:"Heat Waves", a:"Glass Animals", y:2020},
+  {t:"Save Your Tears", a:"The Weeknd", y:2020},
+  {t:"Butter", a:"BTS", y:2021},
+  {t:"Bad Habits", a:"Ed Sheeran", y:2021},
+  {t:"drivers license", a:"Olivia Rodrigo", y:2021},
+  {t:"good 4 u", a:"Olivia Rodrigo", y:2021},
+  {t:"Shivers", a:"Ed Sheeran", y:2021},
+  {t:"As It Was", a:"Harry Styles", y:2022},
+  {t:"I'm Good (Blue)", a:"David Guetta & Bebe Rexha", y:2022},
+  {t:"Stick Season", a:"Noah Kahan", y:2022},
+  {t:"Anti-Hero", a:"Taylor Swift", y:2022},
+  {t:"About Damn Time", a:"Lizzo", y:2022},
+  {t:"Calm Down", a:"Rema", y:2022},
+  {t:"Golden Hour", a:"JVKE", y:2022},
+  {t:"Flowers", a:"Miley Cyrus", y:2023},
+  {t:"Vampire", a:"Olivia Rodrigo", y:2023},
+  {t:"Dance the Night", a:"Dua Lipa", y:2023},
+  {t:"Lose Control", a:"Teddy Swims", y:2023},
+  {t:"Greedy", a:"Tate McRae", y:2023},
+  {t:"Cupid", a:"FIFTY FIFTY", y:2023},
+  {t:"Houdini", a:"Dua Lipa", y:2023},
+  {t:"Espresso", a:"Sabrina Carpenter", y:2024},
+  {t:"APT.", a:"ROSE & Bruno Mars", y:2024},
+  {t:"Die With a Smile", a:"Lady Gaga & Bruno Mars", y:2024},
+  {t:"Beautiful Things", a:"Benson Boone", y:2024},
+  {t:"Birds of a Feather", a:"Billie Eilish", y:2024},
+  {t:"Good Luck, Babe!", a:"Chappell Roan", y:2024},
+  {t:"Please Please Please", a:"Sabrina Carpenter", y:2024},
+  {t:"Too Sweet", a:"Hozier", y:2024},
+  {t:"That's So True", a:"Gracie Abrams", y:2024},
+  {t:"Stargazing", a:"Myles Smith", y:2024},
+  {t:"Blue", a:"yung kai", y:2024},
+  {t:"Abracadabra", a:"Lady Gaga", y:2025},
+  {t:"Ordinary", a:"Alex Warren", y:2025}
+];
+const PREVIEWS = {"Bill Haley & His Comets|Rock Around the Clock":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ba/2c/7c/ba2c7ca1-90ec-7ec5-0c79-0ce32cd613fb/mzaf_4194861062813914729.plus.aac.p.m4a","r":"Bill Haley and His Comets","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/9e/2b/3c/9e2b3cbc-7a49-3af6-009c-ac14f7d71f68/00008811195724.rgb.jpg/200x200bb.jpg"},"Elvis Presley|Hound Dog":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/d1/25/e3/d125e3dc-f4cb-bc06-fc03-4121555be419/mzaf_11003219462409672929.plus.aac.p.m4a","r":"Elvis Presley","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/10/53/1d/10531d93-d6d2-996d-516f-5ea58bc4dbfa/884977724691.jpg/200x200bb.jpg"},"Jerry Lee Lewis|Great Balls of Fire":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/db/16/9a/db169af0-1de1-f77a-69ac-34fd00a59e93/mzaf_8365381742936582645.plus.aac.p.m4a","r":"Jerry Lee Lewis","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/30/99/9f/30999ffd-75fa-02bb-becc-0908f4cb86af/00042283951624.rgb.jpg/200x200bb.jpg"},"Elvis Presley|Jailhouse Rock":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/7a/42/b7/7a42b76d-538b-7450-a683-9b7dc6480d5a/mzaf_18006447134026521705.plus.aac.p.m4a","r":"Elvis Presley","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/3e/63/93/3e6393fb-5fe2-1ef4-1c0d-6452919a351c/828768904824.jpg/200x200bb.jpg"},"Chuck Berry|Johnny B. Goode":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e5/e3/7d/e5e37d79-825b-5412-c7d3-17e0c0858e97/mzaf_2407643628638675650.plus.aac.p.m4a","r":"Chuck Berry","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/74/86/9f/74869f4f-c52b-289b-31a7-9ac9fec31e2d/06UMGIM70785.rgb.jpg/200x200bb.jpg"},"Ritchie Valens|La Bamba":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e2/50/a8/e250a830-72b4-b6c7-f454-c074c9215fee/mzaf_1760314833155629375.plus.aac.p.m4a","r":"Ritchie Valens","art":"https://is1-ssl.mzstatic.com/image/thumb/Music6/v4/06/6d/e5/066de506-3711-44b1-5ede-149ace7ccaeb/889176888137.jpg/200x200bb.jpg"},"Ben E. King|Stand By Me":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/18/ad/fb/18adfbac-3fbd-756c-d259-6daf41f902f2/mzaf_12768986125082088263.plus.aac.p.m4a","r":"Ben E. King","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/46/75/80/467580f9-1f8d-5c80-ac48-34e0f1a56816/081227297060.jpg/200x200bb.jpg"},"Elvis Presley|Can't Help Falling in Love":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/cd/8b/b0/cd8bb0f9-d255-c6b9-e55b-3403d135c638/mzaf_11483484905380371632.plus.aac.p.m4a","r":"Elvis Presley","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/10/53/1d/10531d93-d6d2-996d-516f-5ea58bc4dbfa/884977724691.jpg/200x200bb.jpg"},"The Beatles|Twist and Shout":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a1/da/74/a1da7475-c355-8ecf-f46a-2ba0e8571561/mzaf_6982524764313957424.plus.aac.p.m4a","r":"The Beatles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/9c/ff/b5/9cffb5a6-a37f-c84a-7240-0333a071bc92/00602567725275.rgb.jpg/200x200bb.jpg"},"The Beatles|I Want to Hold Your Hand":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/99/d4/84/99d48419-cbd2-4d45-ad5c-60a581ff126e/mzaf_10364932228692401724.plus.aac.p.m4a","r":"The Beatles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/2a/4a/e6/2a4ae63d-ada7-fa57-6f16-02eebcf72f95/18UMGIM29770.rgb.jpg/200x200bb.jpg"},"The Temptations|My Girl":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/99/b3/ef/99b3ef00-3e74-5dfa-0d2e-4128ef5a9f0c/mzaf_12879689053309664622.plus.aac.p.m4a","r":"The Temptations","art":"https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/84/2d/f1/842df19d-e5f4-3b9f-9405-6779bbc43fe0/06UMGIM07353.rgb.jpg/200x200bb.jpg"},"The Rolling Stones|(I Can't Get No) Satisfaction":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/62/2f/1e/622f1ed4-0ce6-ccbb-ba0c-a595d942bc9b/mzaf_8841129286398562133.plus.aac.p.m4a","r":"The Rolling Stones","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/29/b7/81/29b781e5-3773-c87e-c6a8-82581e53d270/13ABKIM00053.rgb.jpg/200x200bb.jpg"},"The Mamas & the Papas|California Dreamin'":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/21/30/9a/21309af6-0458-39c9-f420-22bb0f0ac11b/mzaf_5048935370131739463.plus.aac.p.m4a","r":"The Mamas & The Papas","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/19/39/88/193988e9-02c3-b879-5881-2d31c9774bbf/06UMGIM04100.rgb.jpg/200x200bb.jpg"},"The Beach Boys|Good Vibrations":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4f/a1/b2/4fa1b2fe-7f99-8a4c-72a9-0804c77f2b58/mzaf_7135940363914090298.plus.aac.p.m4a","r":"The Beach Boys","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/94/62/6c/94626c44-4657-739e-e639-39ae55e6d2cc/13UABIM03827.rgb.jpg/200x200bb.jpg"},"Aretha Franklin|Respect":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/99/74/40/997440f5-f543-165d-321a-5a64245a6c1c/mzaf_7740075940996149397.plus.aac.p.m4a","r":"Aretha Franklin","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d1/31/ee/d131eec4-614c-d661-b580-3dc32b8547e8/603497896622.jpg/200x200bb.jpg"},"Van Morrison|Brown Eyed Girl":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/b8/5e/01/b85e0137-21d0-a265-b2e1-40d3c67a5d94/mzaf_1618708767076233365.plus.aac.p.m4a","r":"Van Morrison","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/dd/0e/bc/dd0ebcee-9d50-fe99-4ef8-c0fb79932511/886445621334_Cover.jpg/200x200bb.jpg"},"Otis Redding|(Sittin' On) The Dock of the Bay":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/20/7f/14/207f141a-f7e5-26c1-9e5a-b4556444e467/mzaf_18196714768063505974.plus.aac.p.m4a","r":"Otis Redding","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/83/e1/02/83e102bb-b5b8-78ea-10ce-8f210211a9a8/603497889945.jpg/200x200bb.jpg"},"Steppenwolf|Born to Be Wild":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/71/33/6d/71336d1f-e008-d0f8-5dff-25fa0974ef8d/mzaf_13245098132834526016.plus.aac.p.m4a","r":"Steppenwolf","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ec/b2/63/ecb263f0-55dd-6430-a916-f8c6d14430a6/00602537845194.rgb.jpg/200x200bb.jpg"},"The Beatles|Hey Jude":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/11/a9/7a/11a97ad1-5281-41b5-bef5-94c93a0083e4/mzaf_216068609330958223.plus.aac.p.m4a","r":"The Beatles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/f2/98/fb/f298fb48-1e0e-6ad4-4cff-fb824b77f02e/15UMGIM59587.rgb.jpg/200x200bb.jpg"},"The Beatles|Here Comes the Sun":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/cd/7d/83/cd7d834f-34bf-7be0-1647-0fb0920d25a7/mzaf_5281747653026802926.plus.aac.p.m4a","r":"The Beatles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/df/db/61/dfdb615d-47f8-06e9-9533-b96daccc029f/18UMGIM31076.rgb.jpg/200x200bb.jpg"},"The Beatles|Come Together":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/26/65/7c/26657c20-9fec-56d6-55ff-61a76996f19b/mzaf_6128091568231335556.plus.aac.p.m4a","r":"The Beatles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/df/db/61/dfdb615d-47f8-06e9-9533-b96daccc029f/18UMGIM31076.rgb.jpg/200x200bb.jpg"},"Neil Diamond|Sweet Caroline":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ad/4f/a3/ad4fa361-9ee5-0799-1ca7-6900ffecc216/mzaf_11795694173831798173.plus.aac.p.m4a","r":"Neil Diamond","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/11/5a/12/115a123b-d3b6-b661-e2a3-88d6e137e25a/17UMGIM03521.rgb.jpg/200x200bb.jpg"},"Elvis Presley|Suspicious Minds":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/69/80/35/69803593-60c5-51c3-572f-b7c3f0f0dc77/mzaf_9945991278826753290.plus.aac.p.m4a","r":"Elvis Presley","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/10/53/1d/10531d93-d6d2-996d-516f-5ea58bc4dbfa/884977724691.jpg/200x200bb.jpg"},"The Beatles|Let It Be":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/60/76/fd/6076fd8f-422a-d5e3-7b02-5953bc93cfbd/mzaf_3945462995290301839.plus.aac.p.m4a","r":"The Beatles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/ae/98/4c/ae984c7a-cd06-a7cd-e8bf-32cb15ba698d/00602567705475.rgb.jpg/200x200bb.jpg"},"Simon & Garfunkel|Bridge Over Troubled Water":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e7/9b/60/e79b60c4-4971-aed9-92aa-db57d453cd42/mzaf_12057489393656620288.plus.aac.p.m4a","r":"Simon & Garfunkel","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/a3/84/0a/a3840a6d-44e8-0afe-fc3e-316c517dddfe/5099749521421.jpg/200x200bb.jpg"},"Elton John|Your Song":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/85/f4/5e/85f45e08-8724-4144-54c0-d87f0ac42f51/mzaf_17953656609560449107.plus.aac.p.m4a","r":"Elton John","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a9/52/e6/a952e6c5-a5e1-a56d-a6f4-b01ca42a4368/06UMGIM50695.rgb.jpg/200x200bb.jpg"},"Santana|Oye Como Va":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0b/74/5e/0b745e71-f2da-d787-0243-c79ca4e82015/mzaf_5545306012475464542.plus.aac.p.m4a","r":"Santana","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/30/03/7f/30037fd6-3292-1806-c806-5341391c9aac/886444593038.jpg/200x200bb.jpg"},"John Lennon|Imagine":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/7d/4e/8c/7d4e8ced-a37b-fab9-c66a-f3b4d6f043cb/mzaf_1566428042492234227.plus.aac.p.m4a","r":"John Lennon","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/21/e3/b0/21e3b048-c917-92c4-bd7d-ace44797b388/13UABIM52808.rgb.jpg/200x200bb.jpg"},"Marvin Gaye|What's Going On":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/08/f3/f4/08f3f452-b24f-e25b-92bc-15850f1bdc6a/mzaf_14002930736666872327.plus.aac.p.m4a","r":"Marvin Gaye","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/76/36/2d/76362d74-cb7a-8ef9-104e-cde1d858e9a9/20UMGIM95279.rgb.jpg/200x200bb.jpg"},"Led Zeppelin|Stairway to Heaven":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a2/e9/c8/a2e9c8fb-e282-9e9d-b5f9-d44fadb07e1e/mzaf_13939222705716798166.plus.aac.p.m4a","r":"Led Zeppelin","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/5c/15/9b/5c159b27-95ca-b9a7-84e3-28e795fffd39/dj.kvkrpptq.jpg/200x200bb.jpg"},"Elton John|Tiny Dancer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/24/5b/6d/245b6dcb-098e-40ff-3d5d-b795b55410bf/mzaf_12791161787497744077.plus.aac.p.m4a","r":"Elton John","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/f1/2a/0a/f12a0a94-5c3f-82d7-4faf-38873cbf77fe/06UMGIM01420.rgb.jpg/200x200bb.jpg"},"Don McLean|American Pie":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/63/dd/79/63dd791d-7e2e-1d3a-f2fa-01c5be6b9d5e/mzaf_8148438283557855281.plus.aac.p.m4a","r":"Don Mclean","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/1a/54/65/1a546518-5709-5c11-3f30-90528331fbf6/15UMGIM65659.rgb.jpg/200x200bb.jpg"},"Elton John|Rocket Man":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8c/09/6d/8c096da7-10b6-422b-51b6-f1f97a66380d/mzaf_5290536375751623365.plus.aac.p.m4a","r":"Elton John","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/75/b6/da/75b6da76-a3e0-6a77-cbe5-ad6c42cb0692/06UMGIM48050.rgb.jpg/200x200bb.jpg"},"Elton John|Crocodile Rock":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a9/80/15/a98015e5-06c2-101f-5c8d-7c5c627a1d9c/mzaf_6788803206095592994.plus.aac.p.m4a","r":"Elton John","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/49/cd/b8/49cdb8de-4752-8cec-f795-b7547930990d/06UMGIM34697.rgb.jpg/200x200bb.jpg"},"Bill Withers|Lean on Me":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/98/93/e3/9893e31d-8c4d-62f9-df64-67ce4dbfae28/mzaf_2446780408908846314.plus.aac.p.m4a","r":"Bill Withers","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/3a/93/40/3a9340a1-73f7-5bbb-86a2-15a4ba20acea/884977735840.jpg/200x200bb.jpg"},"Stevie Wonder|Superstition":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/59/4b/88/594b880c-4744-0510-775c-73d8b06567e8/mzaf_14855748840810986812.plus.aac.p.m4a","r":"Stevie Wonder","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/62/61/61/626161c0-f4d7-e6ff-8586-768340ef278f/00602537002382.rgb.jpg/200x200bb.jpg"},"Pink Floyd|Money":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/99/3e/e5/993ee5ea-6f6e-90c0-1206-1005ff67ed51/mzaf_5024889116279985513.plus.aac.p.m4a","r":"Pink Floyd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/be/6e/ba/be6ebade-739e-fc43-e430-e20162645c65/886445613940.jpg/200x200bb.jpg"},"Pink Floyd|Time":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a2/73/36/a27336b7-07c8-207a-74fd-9926910f9903/mzaf_10065953245083721782.plus.aac.p.m4a","r":"Pink Floyd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/3e/76/b0/3e76b0e3-762b-2286-a019-8afb19cee541/886445635829.jpg/200x200bb.jpg"},"Billy Joel|Piano Man":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b5/9b/40/b59b40e2-da43-4d2a-9e85-51f09ebedc3b/mzaf_17284150486262234531.plus.aac.p.m4a","r":"Billy Joel","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/f0/7a/54/f07a54ab-3ebc-6813-e515-86200b8138fc/dj.uthntyfe.jpg/200x200bb.jpg"},"ABBA|Waterloo":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/c6/7c/00/c67c008a-125e-816b-d605-13029848a14d/mzaf_9917084468265042979.plus.aac.p.m4a","r":"ABBA","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/60/f8/a6/60f8a6bc-e875-238d-f2f8-f34a6034e6d2/14UMGIM07615.rgb.jpg/200x200bb.jpg"},"Lynyrd Skynyrd|Sweet Home Alabama":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/3c/6d/b5/3c6db5f7-9d5f-0207-f0ae-c64a70ffd186/mzaf_17818188901638567993.plus.aac.p.m4a","r":"Lynyrd Skynyrd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/cc/ff/39/ccff392e-ec9d-1ffd-6c1b-d21978bca939/06UMGIM02061.rgb.jpg/200x200bb.jpg"},"Queen|Killer Queen":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/16/35/49/16354974-a9d7-913e-4da2-2e8864842eda/mzaf_6140236367815796807.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/0f/7d/c2/0f7dc2da-f5c1-3252-a8bc-55b541451a52/602527644141.jpg/200x200bb.jpg"},"Queen|Bohemian Rhapsody":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/17/fc/1e/17fc1eba-946d-84a9-710b-a0e88ea64209/mzaf_3049006317693088799.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8b/0a/ea/8b0aea60-6f4a-195b-5958-cdf459c2333b/602527644271.jpg/200x200bb.jpg"},"ABBA|Mamma Mia":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b6/11/b6/b611b634-d2ea-3413-19be-b3c19daddfe5/mzaf_11228048896593074702.plus.aac.p.m4a","r":"ABBA","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/8a/5d/a4/8a5da415-562c-c7f3-0801-2bd251947ac3/14UMGIM07609.rgb.jpg/200x200bb.jpg"},"Pink Floyd|Wish You Were Here":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ca/73/b0/ca73b075-9f43-5ba2-4a9c-494d2e2b1d6e/mzaf_16835053037302358726.plus.aac.p.m4a","r":"Pink Floyd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/aa/e0/ab/aae0ab6a-d906-a189-81bf-70b56aa43f7a/886445635843.jpg/200x200bb.jpg"},"ABBA|Dancing Queen":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ec/b1/63/ecb163bc-aff2-4dd2-d40b-c044f0b9fa4d/mzaf_4358783485405794088.plus.aac.p.m4a","r":"ABBA","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/60/f8/a6/60f8a6bc-e875-238d-f2f8-f34a6034e6d2/14UMGIM07615.rgb.jpg/200x200bb.jpg"},"ABBA|Fernando":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e8/6b/29/e86b29c3-e551-d756-4e77-183e1000db25/mzaf_17708621445489530256.plus.aac.p.m4a","r":"ABBA","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/69/4d/b4/694db440-1fdd-0112-16a0-ae501501cb32/14UMGIM07610.rgb.jpg/200x200bb.jpg"},"Eagles|Hotel California":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/17/30/06/1730066d-13fb-6803-0e52-46d4762b94e0/mzaf_8068080726527063383.plus.aac.p.m4a","r":"Eagles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/88/16/2c/88162c3d-46db-8321-61f3-3a47404cfe76/075596050920.jpg/200x200bb.jpg"},"Boston|More Than a Feeling":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ec/d4/d6/ecd4d62c-c9b7-ceca-1e17-91a053231b2d/mzaf_1747289863060511720.plus.aac.p.m4a","r":"Boston","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/e3/08/9a/e3089ac9-a820-5ee9-64be-39500ad8a5e2/886444824972.jpg/200x200bb.jpg"},"Bee Gees|Stayin' Alive":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/3f/26/77/3f2677d0-8077-c16a-7eea-7795fa614e0f/mzaf_14501202821130740263.plus.aac.p.m4a","r":"Bee Gees","art":"https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/6d/ed/e9/6dede96a-6c1b-c5bb-001b-e3039195bdbb/00602567067177.rgb.jpg/200x200bb.jpg"},"Queen|We Will Rock You":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/0a/a9/f3/0aa9f3af-4672-fb3b-42d8-6d56a9a4c69b/mzaf_16030082968131796908.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/3a/25/81/3a258183-09c1-e6ee-b517-258288ca3d03/602527717487.jpg/200x200bb.jpg"},"Queen|We Are the Champions":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/af/75/41/af754164-7845-42a0-3376-c625a6e485cc/mzaf_13104804120835868732.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/3a/25/81/3a258183-09c1-e6ee-b517-258288ca3d03/602527717487.jpg/200x200bb.jpg"},"Fleetwood Mac|Dreams":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b6/5a/4b/b65a4b6f-54dd-ee99-0b36-98e27d5b5dd8/mzaf_13813391014293209258.plus.aac.p.m4a","r":"Fleetwood Mac","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d2/48/f4/d248f4ae-a7e4-a48e-1588-6617de3e8d76/mzi.izeorbmm.jpg/200x200bb.jpg"},"Fleetwood Mac|Go Your Own Way":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/d1/37/68/d1376853-ec1e-cce0-4ac9-2e98fc9d9c51/mzaf_7672022765745493173.plus.aac.p.m4a","r":"Fleetwood Mac","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/4d/13/ba/4d13bac3-d3d5-7581-2c74-034219eadf2b/081227970949.jpg/200x200bb.jpg"},"Donna Summer|I Feel Love":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/f6/f2/f0/f6f2f08a-a788-a354-b5ed-b4a71f8a58da/mzaf_11155681679719877923.plus.aac.p.m4a","r":"Donna Summer","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/82/13/19/8213190b-60a9-95cd-9cc0-0948e08a085a/06UMGIM05259.rgb.jpg/200x200bb.jpg"},"ABBA|Knowing Me, Knowing You":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/9f/bb/0d/9fbb0d35-b2b6-7fc7-00c7-718854176c02/mzaf_10938722160436606855.plus.aac.p.m4a","r":"ABBA","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/69/4d/b4/694db440-1fdd-0112-16a0-ae501501cb32/14UMGIM07610.rgb.jpg/200x200bb.jpg"},"Village People|Y.M.C.A.":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/60/a2/55/60a25534-09a7-36ee-7fb0-ce4b54577efb/mzaf_7314337828041624355.plus.aac.p.m4a","r":"Village People","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/ee/35/c0/ee35c038-1bc2-d04f-3dd9-6fc20a2ada7e/00602537831074.rgb.jpg/200x200bb.jpg"},"Earth, Wind & Fire|September":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/49/2d/44/492d441e-f0ce-5c3a-dcc6-3a892d2600f2/mzaf_2765278844043228646.plus.aac.p.m4a","r":"Earth, Wind & Fire","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/5c/8e/19/5c8e191d-b458-fc29-54ef-bd9367835044/886447618547.jpg/200x200bb.jpg"},"Queen|Don't Stop Me Now":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4b/d2/85/4bd2852c-81a9-1da0-01df-31b77705830c/mzaf_17036269860840746883.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/9e/ae/4a/9eae4a23-130a-4ed7-d590-bfa701f9acaf/602527717685.jpg/200x200bb.jpg"},"Gloria Gaynor|I Will Survive":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e7/40/66/e74066a0-d000-1896-cd2e-7b2bc97393ad/mzaf_6935563640938257821.plus.aac.p.m4a","r":"Gloria Gaynor","art":"https://is1-ssl.mzstatic.com/image/thumb/Music128/v4/33/12/df/3312dfbf-2cd2-e149-1ccb-9688e2a60980/00731454913720.rgb.jpg/200x200bb.jpg"},"Chic|Le Freak":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/76/18/dd/7618dd92-b61f-65c7-a1a5-6d08dc7d8b2d/mzaf_10536878235644314919.plus.aac.p.m4a","r":"Chic","art":"https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/23/5b/b2/235bb2c3-abaa-22e2-753d-afa8b1806dfe/603497853588.jpg/200x200bb.jpg"},"Boney M.|Rasputin":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c9/f3/1a/c9f31ada-36b3-cbcf-f00d-d71e4e30d3b7/mzaf_778984828701442746.plus.aac.p.m4a","r":"Boney M.","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b7/86/45/b786452a-a723-eaed-8170-cdc261367eb7/886443575578.jpg/200x200bb.jpg"},"Dire Straits|Sultans of Swing":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/fd/75/02/fd75026a-5301-dbb5-f65d-b4359f7fd83d/mzaf_51370362575177613.plus.aac.p.m4a","r":"Dire Straits","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/47/c3/21/mzi.ciyzkqao.jpg/200x200bb.jpg"},"Blondie|Heart of Glass":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/46/46/d8/4646d8fd-86d7-fbaa-c1e2-8e41fbe92618/mzaf_4475341847035934850.plus.aac.p.m4a","r":"Blondie","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/2f/0b/25/2f0b252d-838e-4f19-3c08-91e49b269564/15UMGIM18445.rgb.jpg/200x200bb.jpg"},"The Police|Roxanne":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/64/ef/d6/64efd6bd-6d64-1eb8-c369-c8c364a91286/mzaf_15898822718298618699.plus.aac.p.m4a","r":"The Police","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/42/b7/db/42b7dbe1-d13f-c600-5b78-daa57c5d0f08/06UMGIM50761.rgb.jpg/200x200bb.jpg"},"ABBA|Gimme! Gimme! Gimme! (A Man After Midnight)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5a/15/3d/5a153d97-6516-6002-2b38-4fec70a10c32/mzaf_10077693738786116788.plus.aac.p.m4a","r":"ABBA","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/60/f8/a6/60f8a6bc-e875-238d-f2f8-f34a6034e6d2/14UMGIM07615.rgb.jpg/200x200bb.jpg"},"Donna Summer|Hot Stuff":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/33/3c/28/333c2803-51c5-4bc6-d841-3f36a22e8f1f/mzaf_7814669585703286529.plus.aac.p.m4a","r":"Donna Summer","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/10/07/f5/1007f5f4-71b2-6ba1-65e0-52e75b450980/602567826309_Cover.jpg/200x200bb.jpg"},"The Buggles|Video Killed the Radio Star":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0f/8b/32/0f8b3276-4dbf-a6ff-9090-80a547a44127/mzaf_13268793385752250561.plus.aac.p.m4a","r":"The Buggles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/16/21/ea/1621eaf0-f7c8-c9e9-5eaf-e11a7ec87610/06UMGIM01037.rgb.jpg/200x200bb.jpg"},"The Knack|My Sharona":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/b3/87/c2/b387c20a-b4d7-9506-43da-c9f0657c71b4/mzaf_9900797574180547858.plus.aac.p.m4a","r":"The Knack","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d2/8c/a9/d28ca97f-f577-4bee-fb12-716570d076da/05099922669056.rgb.jpg/200x200bb.jpg"},"The Police|Message in a Bottle":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/eb/6f/6f/eb6f6f7b-9e96-b42b-01ff-1c9d85fa2260/mzaf_12652539612063264492.plus.aac.p.m4a","r":"The Police","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/74/2a/da/742ada22-9a00-1620-b72e-6667745b010a/16UMGIM60881.rgb.jpg/200x200bb.jpg"},"Pink Floyd|Another Brick in the Wall, Pt. 2":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8a/21/41/8a214193-f9e0-fbeb-aad5-6ca8b8420dbb/mzaf_2628810625325580575.plus.aac.p.m4a","r":"Pink Floyd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/3e/17/ec/3e17ec6d-f980-c64f-19e0-a6fd8bbf0c10/886445635850.jpg/200x200bb.jpg"},"Pink Floyd|Comfortably Numb":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/af/1b/39/af1b3957-d1d3-06c9-d547-633cb081b677/mzaf_3421307010114212683.plus.aac.p.m4a","r":"Pink Floyd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/3e/17/ec/3e17ec6d-f980-c64f-19e0-a6fd8bbf0c10/886445635850.jpg/200x200bb.jpg"},"Queen|Another One Bites the Dust":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f1/84/52/f1845293-e7a3-5d0c-9bfd-55e3d059c945/mzaf_16627152648909684483.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/08/ee/da/08eeda1f-d44d-aec1-ec9d-0c5b9f8c8536/602527717524.jpg/200x200bb.jpg"},"Blondie|Call Me":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/b1/13/b5/b113b569-8639-b071-9199-3c8f8fb0d3a9/mzaf_2541938402474802623.plus.aac.p.m4a","r":"Blondie","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/72/73/8f/72738f62-d8a1-f1f9-e84d-244ff697d1db/13UABIM56926.rgb.jpg/200x200bb.jpg"},"Queen & David Bowie|Under Pressure":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5a/2b/93/5a2b9308-1fae-1f5c-e8fa-cedf32665a9f/mzaf_7067965290064232227.plus.aac.p.m4a","r":"Queen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/62/2e/97/622e97c4-d620-2ae1-2a47-a32e16a01492/602567988847.jpg/200x200bb.jpg"},"Soft Cell|Tainted Love":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/24/21/ba/2421ba35-1d77-9a2b-2e6e-d83af784eec3/mzaf_12069175805349111010.plus.aac.p.m4a","r":"Soft Cell","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/70/ff/8c/70ff8c59-95dc-5444-fd3b-81204d0477e5/00600753223598.rgb.jpg/200x200bb.jpg"},"Journey|Don't Stop Believin'":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/0f/e9/54/0fe95410-dc38-8696-0259-f61d869e9fca/mzaf_13616088119456591905.plus.aac.p.m4a","r":"Journey","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/71/2d/61/712d617d-f4a4-5904-1b11-d4b4b45c47c5/828768588925.jpg/200x200bb.jpg"},"Michael Jackson|Billie Jean":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/dc/bc/8a/dcbc8a3e-4ce1-c00d-cc02-eda2212053c7/mzaf_8347559338388601510.plus.aac.p.m4a","r":"Michael Jackson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/32/4f/fd/324ffda2-9e51-8f6a-0c2d-c6fd2b41ac55/074643811224.jpg/200x200bb.jpg"},"Michael Jackson|Beat It":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/88/cd/46/88cd46bd-dba7-1dc2-a63b-e8c111ac4fc3/mzaf_4042555053237612653.plus.aac.p.m4a","r":"Michael Jackson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/32/4f/fd/324ffda2-9e51-8f6a-0c2d-c6fd2b41ac55/074643811224.jpg/200x200bb.jpg"},"Michael Jackson|Thriller":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/58/8c/cb/588ccb9a-ab79-4a38-43b5-d4c24ea42859/mzaf_2083607504726567992.plus.aac.p.m4a","r":"Michael Jackson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/32/4f/fd/324ffda2-9e51-8f6a-0c2d-c6fd2b41ac55/074643811224.jpg/200x200bb.jpg"},"Toto|Africa":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/bb/3d/07/bb3d07a3-b3af-2c99-5c9f-eb72796268c2/mzaf_11871467005041854011.plus.aac.p.m4a","r":"Toto","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/69/ce/d2/69ced240-07a7-2a04-bbab-2afbacf30809/074643772822.jpg/200x200bb.jpg"},"Survivor|Eye of the Tiger":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/fe/fa/9e/fefa9edd-c023-4d1c-1012-08bfb0ec69e6/mzaf_4651653238471209843.plus.aac.p.m4a","r":"Survivor","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/f9/02/8f/f9028f63-7a55-235e-f789-1e8946430fa2/614223201122.jpg/200x200bb.jpg"},"Dexys Midnight Runners|Come On Eileen":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/99/3f/2f/993f2f79-eff6-8bb6-5620-89297ab82bf9/mzaf_8325234611055133997.plus.aac.p.m4a","r":"Dexys Midnight Runners","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/98/a5/7c/98a57c6d-c857-90bb-5835-fdd60699bf05/06UMGIM09147.rgb.jpg/200x200bb.jpg"},"Eurythmics|Sweet Dreams (Are Made of This)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/86/e3/8a/86e38af3-8863-973c-1c55-9f8187125741/mzaf_11175782400808341439.plus.aac.p.m4a","r":"Eurythmics","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f2/4c/c2/f24cc223-f889-c8a3-ebbc-8ce458438580/mzi.zbvljpxb.jpg/200x200bb.jpg"},"Cyndi Lauper|Girls Just Want to Have Fun":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/95/1d/ed/951ded3d-4e31-1452-42b6-cc36070a2204/mzaf_10794841548233618528.plus.aac.p.m4a","r":"Cyndi Lauper","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/8a/8c/13/8a8c13e0-06af-1710-7b7d-ebec65fb8361/074643893022.jpg/200x200bb.jpg"},"The Police|Every Breath You Take":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/6c/b4/79/6cb47947-0860-8788-95b1-a2b0a908f342/mzaf_4654925634744235278.plus.aac.p.m4a","r":"The Police","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/42/b7/db/42b7dbe1-d13f-c600-5b78-daa57c5d0f08/06UMGIM50761.rgb.jpg/200x200bb.jpg"},"Cyndi Lauper|Time After Time":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/02/bd/5e/02bd5e7c-8efe-9218-6c91-1c69c4c5c062/mzaf_23204011408983330.plus.aac.p.m4a","r":"Cyndi Lauper","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/8a/8c/13/8a8c13e0-06af-1710-7b7d-ebec65fb8361/074643893022.jpg/200x200bb.jpg"},"Bonnie Tyler|Total Eclipse of the Heart":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/47/3d/35/473d35b3-b379-12d9-8fbf-88299e3cad7e/mzaf_5191559564499798673.plus.aac.p.m4a","r":"Bonnie Tyler","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/20/74/b8/2074b81d-d546-b0c2-d85b-dda3a5e17661/886448236856.jpg/200x200bb.jpg"},"Culture Club|Karma Chameleon":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a9/42/20/a942207e-d148-976a-b9e7-d6b1eaef3952/mzaf_1604336396931130918.plus.aac.p.m4a","r":"Culture Club","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ea/dc/39/eadc39bf-f349-a141-a5c4-12b3d9b018cb/14ULAIM00351.rgb.jpg/200x200bb.jpg"},"David Bowie|Let's Dance":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ea/e1/be/eae1be9d-611b-f67d-864f-1dc8df04726b/mzaf_8018381438157593013.plus.aac.p.m4a","r":"David Bowie","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bd/df/9d/bddf9d26-d45a-278f-26c1-e5274094cb27/190295671600.jpg/200x200bb.jpg"},"Elton John|I'm Still Standing":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/25/2c/ff/252cff7a-887a-1086-0aed-2f18da51f973/mzaf_15765186317138488450.plus.aac.p.m4a","r":"Elton John","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/45/e5/b4/45e5b409-0564-a7a3-186c-1dc116c3ffb7/06UMGIM49712.rgb.jpg/200x200bb.jpg"},"Wham!|Wake Me Up Before You Go-Go":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/59/d0/df/59d0df1f-b9b0-c1f0-d27e-ad59ee9fe1fa/mzaf_15629855503092199047.plus.aac.p.m4a","r":"Wham!","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/ee/49/ac/ee49accc-78bd-bcdb-1aff-c40c1ac3ccc4/074643959520.jpg/200x200bb.jpg"},"George Michael|Careless Whisper":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/7c/bb/d8/7cbbd80c-29a1-6142-d0f3-de33e8569a0e/mzaf_12978360432335063808.plus.aac.p.m4a","r":"George Michael","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/89/46/95/8946959a-e959-f22d-ced2-745feb799454/mzm.upagbaeg.jpg/200x200bb.jpg"},"Prince|Purple Rain":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4a/70/9b/4a709b41-3c29-626a-ca69-44aa907f4705/mzaf_14388295257133509788.plus.aac.p.m4a","r":"Prince & The Revolution","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/c1/b6/79/c1b679f5-d59d-1b3e-62ab-514de20f06c6/093624912002.jpg/200x200bb.jpg"},"Prince|When Doves Cry":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0f/d3/ae/0fd3ae2b-542d-170e-f148-f4d08949a006/mzaf_2606432863197016679.plus.aac.p.m4a","r":"Prince & The Revolution","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/00/17/f2/0017f24f-e580-b77a-71a8-1bc7b75881bf/603497822065.jpg/200x200bb.jpg"},"Bruce Springsteen|Dancing in the Dark":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/cf/97/6e/cf976e1c-1769-1747-5b30-13b2bf122f4d/mzaf_2930450612609077309.plus.aac.p.m4a","r":"Bruce Springsteen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/32/72/68/327268ba-b9dd-b322-2a16-bdd0212df48c/074643865326.jpg/200x200bb.jpg"},"Kenny Loggins|Footloose":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/22/18/68/2218688a-ff36-7277-56de-c6b221d691c8/mzaf_12250270063124855744.plus.aac.p.m4a","r":"Kenny Loggins","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/ab/e1/f9/abe1f91c-4f32-4384-6632-13334c07c4b2/886446159812.jpg/200x200bb.jpg"},"Madonna|Material Girl":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f9/a3/69/f9a369cc-16a4-3064-2c12-56ecf13f18bc/mzaf_2371968126843790037.plus.aac.p.m4a","r":"Madonna","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/8e/80/32/8e803264-c925-14dd-3412-2d7652c3df7b/mzi.wxptosaa.jpg/200x200bb.jpg"},"a-ha|Take On Me":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/f2/03/4f/f2034f41-707f-7111-bc63-e5d3cf7f2240/mzaf_17215043934336702540.plus.aac.p.m4a","r":"a-ha","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/c6/e1/c8/mzi.ixgzfcmc.jpg/200x200bb.jpg"},"Katrina and the Waves|Walking on Sunshine":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/fe/af/a9/feafa950-3d4d-6eb4-5c5c-a4170d27a605/mzaf_14050415466863438352.plus.aac.p.m4a","r":"Katrina and the Waves","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f6/b6/37/f6b6378c-9b34-72fb-9abe-4a6d6042ad53/13ULAIM49571.rgb.jpg/200x200bb.jpg"},"Simple Minds|Don't You (Forget About Me)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/d2/38/f0/d238f015-847a-6a10-09e4-9f00391a59bb/mzaf_6669203872576217423.plus.aac.p.m4a","r":"Simple Minds","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/28/6e/43/286e43ed-12e3-f007-966f-ebd6c25b96bf/15UMGIM42148.rgb.jpg/200x200bb.jpg"},"Bon Jovi|Livin' on a Prayer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/75/15/30/75153020-b7c4-7958-8907-4aa1b965dc24/mzaf_2377504467597068152.plus.aac.p.m4a","r":"Bon Jovi","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/40/16/3e/40163e24-6985-b785-d4ea-cbae07d74812/06UMGIM05422.rgb.jpg/200x200bb.jpg"},"Europe|The Final Countdown":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/d3/5b/d9/d35bd9a3-d105-95d8-ba29-0f5c6b8e764b/mzaf_7609183394807520180.plus.aac.p.m4a","r":"Europe","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/00/4d/a9/004da9d2-9b4f-99f4-d396-72ec786fb88c/696998575721.jpg/200x200bb.jpg"},"Guns N' Roses|Sweet Child O' Mine":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a5/82/2d/a5822d67-2e65-fe95-511e-1f785d23e5cc/mzaf_8619467974951398014.plus.aac.p.m4a","r":"Guns N' Roses","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/a0/4d/c4/a04dc484-03cc-02aa-fa82-5334fcb4bc16/18UMGIM24878.rgb.jpg/200x200bb.jpg"},"Rick Astley|Never Gonna Give You Up":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/62/ff/3a/62ff3abe-bc6d-a7d0-31b0-71cbec9aaa24/mzaf_13802296211720217737.plus.aac.p.m4a","r":"Rick Astley","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/ce/6d/5b/ce6d5b48-8c36-b990-3b9c-81862fadb459/0859381157694.jpg/200x200bb.jpg"},"U2|With or Without You":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/73/9f/b8/739fb89d-05fc-a158-d34d-578d07213262/mzaf_15599762317871907296.plus.aac.p.m4a","r":"U2","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/9a/48/54/9a485494-b969-aaf4-a916-07452ea69869/06UMGIM72507.rgb.jpg/200x200bb.jpg"},"George Michael|Faith":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a5/a0/b9/a5a0b9b5-25c0-eea4-aff5-e653eb2144a5/mzaf_12972342335011969375.plus.aac.p.m4a","r":"George Michael","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/47/55/0c/47550cd6-7ef5-bf86-c194-c7695d63c759/dj.xuditatj.jpg/200x200bb.jpg"},"Whitney Houston|I Wanna Dance with Somebody":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/7b/67/fd/7b67fd07-6a7a-0362-135c-878ac5799f2c/mzaf_11309521725869189721.plus.aac.p.m4a","r":"Whitney Houston","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/86/b5/25/86b525b1-bff1-4bf6-6112-531251b3d672/dj.hthdmusj.jpg/200x200bb.jpg"},"Michael Jackson|Smooth Criminal":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/38/7d/84/387d847b-0a17-d7d0-81fa-3d1e2036a0e3/mzaf_1148403634523455455.plus.aac.p.m4a","r":"Michael Jackson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/3d/9d/38/3d9d3811-71f0-3a0e-1ada-3004e56ff852/827969428726.jpg/200x200bb.jpg"},"Guns N' Roses|Welcome to the Jungle":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/60/0d/c5/600dc586-7fcc-f435-26be-751ad11c7692/mzaf_4053810104755384420.plus.aac.p.m4a","r":"Guns N' Roses","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/a0/4d/c4/a04dc484-03cc-02aa-fa82-5334fcb4bc16/18UMGIM24878.rgb.jpg/200x200bb.jpg"},"Madonna|Like a Prayer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0b/23/82/0b238289-52e2-2107-5531-181836267ed2/mzaf_6726729811402686020.plus.aac.p.m4a","r":"Madonna","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/20/3c/f5/203cf53d-689e-528f-29d7-ba33758254aa/mzi.rotbotfl.jpg/200x200bb.jpg"},"AC/DC|Thunderstruck":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/11/cb/bb/11cbbbcc-49f3-11e2-cbe9-9f8c02ce390f/mzaf_13150709707479713449.plus.aac.p.m4a","r":"AC/DC","art":"https://is1-ssl.mzstatic.com/image/thumb/Features125/v4/bb/a2/f0/bba2f0d7-4d9e-c617-d49e-3ae02fd5d440/dj.xbkfgllk.jpg/200x200bb.jpg"},"Deee-Lite|Groove Is in the Heart":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/2b/11/98/2b11988f-5cdf-97b5-8cbd-8ed8d49fd6f0/mzaf_9425573898167217549.plus.aac.p.m4a","r":"Deee-Lite","art":"https://is1-ssl.mzstatic.com/image/thumb/Features115/v4/b9/85/ff/b985ff10-8301-4920-0e14-8352cae0aade/dj.scnjpwaf.jpg/200x200bb.jpg"},"Nirvana|Smells Like Teen Spirit":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/65/49/4e/65494e02-b6d3-26d8-6b0c-9bd98dcf4d5d/mzaf_7665413316386155700.plus.aac.p.m4a","r":"Nirvana","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/95/fd/b9/95fdb9b2-6d2b-92a6-97f2-51c1a6d77f1a/00602527874609.rgb.jpg/200x200bb.jpg"},"Nirvana|Come As You Are":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/88/55/17/88551793-f12c-c809-2657-bea5256c7aa0/mzaf_4166033993768096448.plus.aac.p.m4a","r":"Nirvana","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/95/fd/b9/95fdb9b2-6d2b-92a6-97f2-51c1a6d77f1a/00602527874609.rgb.jpg/200x200bb.jpg"},"R.E.M.|Losing My Religion":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/06/ee/70/06ee70ca-c0f6-783c-1935-e0be0f3228d4/mzaf_1437283987200939868.plus.aac.p.m4a","r":"R.E.M.","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d4/9c/f6/d49cf63f-a412-5737-9392-1576c297b475/00888072396272.rgb.jpg/200x200bb.jpg"},"Red Hot Chili Peppers|Under the Bridge":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ff/5e/6c/ff5e6c34-4b2c-fa5b-232c-194183e5310f/mzaf_18293543166089220451.plus.aac.p.m4a","r":"Red Hot Chili Peppers","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/c9/c8/b2/c9c8b20d-42b8-a2a6-1678-54b997e845f5/093624931973.jpg/200x200bb.jpg"},"Guns N' Roses|November Rain":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/67/6b/0c/676b0cc6-2f6e-555a-b4f1-a514ab21adb4/mzaf_10772491023997849447.plus.aac.p.m4a","r":"Guns N' Roses","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/6a/e2/1f/6ae21fa9-c897-3be1-2967-50eefae22b93/06UMGIM05041.rgb.jpg/200x200bb.jpg"},"Michael Jackson|Black or White":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/69/01/0c/69010c8e-2ff7-2809-589d-6f304400a359/mzaf_3468624104964279051.plus.aac.p.m4a","r":"Michael Jackson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/3d/9d/38/3d9d3811-71f0-3a0e-1ada-3004e56ff852/827969428726.jpg/200x200bb.jpg"},"Metallica|Enter Sandman":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/53/8a/fc/538afc1c-b9cd-24ab-b401-2fa8c81abc46/mzaf_3160131754964321707.plus.aac.p.m4a","r":"Metallica","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/2e/94/95/2e9495d7-dfe3-ddc8-87ef-6ef797a60218/850007452056.png/200x200bb.jpg"},"Metallica|Nothing Else Matters":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/d4/3d/f7/d43df7ae-a9fc-6f17-cee8-46c20348bdd3/mzaf_5684199236885023822.plus.aac.p.m4a","r":"Metallica","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/9e/80/1b/9e801b06-67fa-0990-2d15-85480ad3cd46/850007452025.png/200x200bb.jpg"},"The Cranberries|Dreams":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/77/66/37/77663729-e773-ec0f-8a19-b026bcdc27c8/mzaf_2992994050246771751.plus.aac.p.m4a","r":"The Cranberries","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/5c/cb/18/5ccb18f7-ab44-3478-cf33-7953837907d2/18UMGIM43740.rgb.jpg/200x200bb.jpg"},"Nirvana|Lithium":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/10/26/3a/10263abf-e10b-1b19-282f-2cfe1e160bb0/mzaf_13537127778296504562.plus.aac.p.m4a","r":"Nirvana","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/95/fd/b9/95fdb9b2-6d2b-92a6-97f2-51c1a6d77f1a/00602527874609.rgb.jpg/200x200bb.jpg"},"R.E.M.|Everybody Hurts":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/b0/c5/13/b0c51371-3400-f4bd-6c10-f344c21fc7e7/mzaf_3215842591454222636.plus.aac.p.m4a","r":"R.E.M.","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/fb/d9/e2/fbd9e203-818c-06cf-405d-8906f2eae6ec/00888072396258.rgb.jpg/200x200bb.jpg"},"Eric Clapton|Tears in Heaven":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f6/26/6a/f6266afe-37ec-8486-8f62-e45bbb2a72c0/mzaf_17532936821223198316.plus.aac.p.m4a","r":"Eric Clapton","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/b4/a8/99/b4a89922-4b67-104e-f85c-d6d478303e65/93624755364.jpg/200x200bb.jpg"},"Whitney Houston|I Will Always Love You":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/03/d2/1a/03d21aca-c69e-09af-03ef-118004e68ab5/mzaf_17408932698913708736.plus.aac.p.m4a","r":"Whitney Houston","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/82/f3/e9/82f3e968-8174-c5eb-7fc5-36384d050129/dj.mdauihuy.jpg/200x200bb.jpg"},"4 Non Blondes|What's Up?":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0d/5e/61/0d5e612a-78a7-388a-79b8-c0c0cbb87a59/mzaf_16167981556861077252.plus.aac.p.m4a","r":"4 Non Blondes","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/d2/aa/44/d2aa4418-7e74-7e6d-4247-9b9c1cba9e64/06UMGIM01654.rgb.jpg/200x200bb.jpg"},"Snap!|Rhythm Is a Dancer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/6a/1e/5d/6a1e5d59-95b3-0e69-e339-251283063d0f/mzaf_17499744920370195381.plus.aac.p.m4a","r":"Snap!","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/b8/65/41/b865413a-d80a-96af-f042-a82e4aa36ac1/4050538293401.jpg/200x200bb.jpg"},"Spin Doctors|Two Princes":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/14/d7/a3/14d7a3a8-f72d-3184-eae2-f93a83769ab2/mzaf_6988914045398035533.plus.aac.p.m4a","r":"Spin Doctors","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/a7/9c/43/mzi.woniuqrs.jpg/200x200bb.jpg"},"Haddaway|What Is Love":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/89/ea/52/89ea5203-802f-2158-614c-8c7d5cedd3df/mzaf_13828661315018209252.plus.aac.p.m4a","r":"Haddaway","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/88/ec/43/88ec43e7-3321-6664-835b-73243625f668/4250282801123.jpg/200x200bb.jpg"},"The Cranberries|Linger":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/9d/c7/9d/9dc79d4b-b854-be87-be7d-addc0d60a2e7/mzaf_8920905009810686312.plus.aac.p.m4a","r":"The Cranberries","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/b6/c8/85/b6c885de-fde6-d40d-c95a-d89ede4270ae/06UMGIM09433.rgb.jpg/200x200bb.jpg"},"Counting Crows|Mr. Jones":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/f3/b0/2a/f3b02a56-a5bf-e940-4370-2e0a609f1cb4/mzaf_16264556580562087321.plus.aac.p.m4a","r":"Counting Crows","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/3b/dc/90/3bdc90a2-3697-0c5e-3265-65ccaa7dcbb3/14UMGIM00847.rgb.jpg/200x200bb.jpg"},"Soul Asylum|Runaway Train":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/94/29/97/94299776-0cd4-2c0c-bd36-84c4cb0b7519/mzaf_5530043588967312695.plus.aac.p.m4a","r":"Soul Asylum","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/99/61/07/mzi.wzrulphk.jpg/200x200bb.jpg"},"The Cranberries|Zombie":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/35/bb/65/35bb6532-1abe-59e4-9ced-8bee2742ea24/mzaf_15102830936602294569.plus.aac.p.m4a","r":"The Cranberries","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/a3/77/a3/a377a309-8e52-f787-2250-2b34d320bf7b/25UMGIM64146.rgb.jpg/200x200bb.jpg"},"Rednex|Cotton Eye Joe":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8d/c0/fd/8dc0fd9d-67a3-71f7-f46e-48fd0aa1a639/mzaf_9868878036209029706.plus.aac.p.m4a","r":"Rednex","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/a0/7e/dc/mzi.bvturdqb.jpg/200x200bb.jpg"},"Green Day|Basket Case":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/d3/2b/fe/d32bfe59-ce6f-2130-7445-589be60c4b17/mzaf_14529423277593289725.plus.aac.p.m4a","r":"Green Day","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/88/83/e7/8883e74b-1b7c-0725-09de-21e4e00d54b5/093624915713.jpg/200x200bb.jpg"},"Soundgarden|Black Hole Sun":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/93/3a/b1/933ab128-cfac-b1f4-2542-62f955bf7ad7/mzaf_5473686799767912736.plus.aac.p.m4a","r":"Soundgarden","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/ae/b6/d6/aeb6d672-2004-41eb-ccba-e2964643a2bc/06UMGIM18607.rgb.jpg/200x200bb.jpg"},"Seal|Kiss from a Rose":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5b/32/60/5b32607f-683f-4298-1c4c-3f2086508444/mzaf_572188254823172236.plus.aac.p.m4a","r":"Seal","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/9c/b5/79/9cb579e1-0b40-3fd1-961e-2e0a65e69f4a/s06.mfkmyngx.jpg/200x200bb.jpg"},"Elton John|Can You Feel the Love Tonight":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/2f/bf/4b/2fbf4bd4-c6bd-6f2e-d171-f0ec292a3658/mzaf_5355432627439173482.plus.aac.p.m4a","r":"Elton John","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/ce/80/89/ce808921-d594-fa7f-03e8-adcc92a69de8/06PNDIM00020.rgb.jpg/200x200bb.jpg"},"Oasis|Wonderwall":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ab/16/93/ab16933c-6203-3db9-9da9-513ff1c8496d/mzaf_16993612140334549994.plus.aac.p.m4a","r":"Oasis","art":"https://is1-ssl.mzstatic.com/image/thumb/Music113/v4/04/92/e0/0492e08b-cbcc-9969-9ad6-8f5a0888068c/5051961007107.jpg/200x200bb.jpg"},"Los del Rio|Macarena (Bayside Boys Mix)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a6/29/46/a629469e-a8b7-d339-b242-9e85f861ca80/mzaf_14430702753892589437.plus.aac.p.m4a","r":"Los del R\u00edo","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/a1/2d/6a/a12d6a7b-6173-ed2e-9682-a30d245ed7fe/mzi.ndplymif.jpg/200x200bb.jpg"},"Alanis Morissette|Ironic":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/05/99/bb/0599bb8c-2dc2-14f6-213f-1ee69c72e4ed/mzaf_17860950106664762758.plus.aac.p.m4a","r":"Alanis Morissette","art":"https://is1-ssl.mzstatic.com/image/thumb/Features124/v4/5f/3b/ca/5f3bca60-024c-d4aa-d638-6d58e7e81461/mza_1406686761081396977.jpg/200x200bb.jpg"},"TLC|Waterfalls":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e9/81/4e/e9814ecd-7282-e0cf-6a19-70ea78117382/mzaf_10928185948311762507.plus.aac.p.m4a","r":"TLC","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/14/a8/69/14a86912-841d-3cb8-cf55-0439b15c6cab/dj.mjduepez.jpg/200x200bb.jpg"},"Pulp|Common People":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/91/0d/98/910d982e-1d98-a551-0cd7-f340f1125d67/mzaf_10421007834642375895.plus.aac.p.m4a","r":"Pulp","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/21/f2/85/21f2856c-b6b9-9855-ede0-57b68427e268/00044006351322.rgb.jpg/200x200bb.jpg"},"Robert Miles|Children":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e9/e0/23/e9e02342-2c80-5978-35c9-97b183d4de74/mzaf_18025446244152122942.plus.aac.p.m4a","r":"Robert Miles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/38/42/63/3842637b-c554-df9c-f338-b6594e9f3ab7/828768796559.jpg/200x200bb.jpg"},"Faithless|Insomnia":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f2/90/08/f2900882-dcb3-4ca7-e061-e269171a2129/mzaf_6816172395392303265.plus.aac.p.m4a","r":"Faithless","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e7/d6/2d/e7d62d5f-190c-e644-c628-117e14e6db5a/888880789198.jpg/200x200bb.jpg"},"Spice Girls|Wannabe":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/db/cb/c6/dbcbc688-8277-b365-8deb-1da3c30da079/mzaf_7842872759474974048.plus.aac.p.m4a","r":"Spice Girls","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e1/92/8f/e1928fcb-0204-ca19-597a-6edaf8e6ebc8/21UMGIM16233.rgb.jpg/200x200bb.jpg"},"Mark Morrison|Return of the Mack":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/38/6d/52/386d5254-6dd5-72bd-967b-92a81a1c7656/mzaf_12730891264385772646.plus.aac.p.m4a","r":"Mark Morrison","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/29/6a/cd/296acd3a-9410-6fb9-7dc2-725dbc20f5a6/mzi.fhhlolpu.jpg/200x200bb.jpg"},"Gala|Freed from Desire":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/8a/a6/ed/8aa6edd7-c6b8-a99a-d5ee-d092e1460e9d/mzaf_12498017299340318780.plus.aac.p.m4a","r":"Gala","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/70/a3/33/70a333a9-29d8-bfde-fe2d-79d2a9a72518/mzi.hroawrfd.tif/200x200bb.jpg"},"Toni Braxton|Un-Break My Heart":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/45/c7/4f/45c74f71-2585-e28d-3e02-9791cacbcad6/mzaf_15430701100313895621.plus.aac.p.m4a","r":"Toni Braxton","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/87/8d/72/mzi.baogxofm.jpg/200x200bb.jpg"},"Aqua|Barbie Girl":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/3d/b7/7d/3db77df0-d9a3-b60e-0714-41fd79b9ebff/mzaf_3692738463507322199.plus.aac.p.m4a","r":"Aqua","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/77/57/ba/7757ba77-0163-a195-950b-95786aa7a90e/17UMGIM98492.rgb.jpg/200x200bb.jpg"},"Natalie Imbruglia|Torn":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/96/be/3b/96be3b9e-035d-3d29-ad16-796ea4495968/mzaf_17099026484635430619.plus.aac.p.m4a","r":"Natalie Imbruglia","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/11/5d/f1/115df15e-e05f-b0f1-ae66-3ad2c5e969b4/mzi.ihaejhxb.jpg/200x200bb.jpg"},"The Verve|Bitter Sweet Symphony":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/2b/85/d9/2b85d9ff-6d3a-528a-2fdc-66cd66111e87/mzaf_13620494321838247126.plus.aac.p.m4a","r":"The Verve","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/5c/b1/85/5cb18512-9cbd-7b84-4042-37f23bc2ae45/17UMGIM89555.rgb.jpg/200x200bb.jpg"},"Radiohead|Karma Police":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/46/21/35/46213520-da4a-1806-0c59-5ca6ad008b4e/mzaf_5277404092043261430.plus.aac.p.m4a","r":"Radiohead","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/07/60/ba/0760ba0f-148c-b18f-d0ff-169ee96f3af5/634904078164.png/200x200bb.jpg"},"Blur|Song 2":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/0d/7b/06/0d7b068e-914f-b01a-ef1e-fd21e9b106c6/mzaf_2441215755969695380.plus.aac.p.m4a","r":"Blur","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/ed/73/cc/ed73cc61-8244-4f45-90fc-23ad8a3ee7e4/5099997227359.jpg/200x200bb.jpg"},"Robbie Williams|Angels":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/65/3b/08/653b0800-b1ac-f311-99df-2eef8734a74a/mzaf_9241683199220794890.plus.aac.p.m4a","r":"Robbie Williams","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/cf/86/e7/cf86e787-2177-6366-a5c3-2180c3031015/13ULAIM49472.rgb.jpg/200x200bb.jpg"},"Hanson|MMMBop":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8c/6d/db/8c6ddba0-e5ba-977e-5258-1512a1fbb1cd/mzaf_7353445484288718038.plus.aac.p.m4a","r":"Hanson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/2d/00/8c/2d008c91-a13d-c60a-9ed1-ed715c583f7c/06UMGIM20991.rgb.jpg/200x200bb.jpg"},"Savage Garden|Truly Madly Deeply":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/9f/21/e3/9f21e388-57e7-4a0a-f184-df5b6127dd13/mzaf_4312247336291606094.plus.aac.p.m4a","r":"Savage Garden","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/5c/1c/c1/5c1cc11b-c477-0fc7-e9f0-740264cb0d01/mzi.gfeicsof.jpg/200x200bb.jpg"},"Chumbawamba|Tubthumping":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b6/85/a8/b685a898-b48e-14a3-50d3-43009162fa0d/mzaf_5688414155772340127.plus.aac.p.m4a","r":"Chumbawamba","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/15/49/8f/15498fd1-6fbe-9ddb-09c4-6615639adc89/17UM1IM22672.rgb.jpg/200x200bb.jpg"},"Celine Dion|My Heart Will Go On":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ad/10/9c/ad109c62-aa02-8345-bfcc-b50f98345475/mzaf_3279697888712975539.plus.aac.p.m4a","r":"C\u00e9line Dion","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/f8/22/71/f82271b5-febd-23c2-8028-040760dda6f8/mzi.actfimaz.jpg/200x200bb.jpg"},"Daft Punk|Around the World":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1a/0d/dc/1a0ddc60-0cb0-5481-abd1-b1b1d8b92c7a/mzaf_14895857175025523567.plus.aac.p.m4a","r":"Daft Punk","art":"https://is1-ssl.mzstatic.com/image/thumb/Features115/v4/34/8d/c7/348dc71c-d75e-9baf-671a-994e9e74b018/dj.pimdxdmf.jpg/200x200bb.jpg"},"Green Day|Good Riddance (Time of Your Life)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/cd/21/c6/cd21c681-a52e-2127-b890-52e3b1c5e8db/mzaf_11154861246076438744.plus.aac.p.m4a","r":"Green Day","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/f9/d7/89/f9d7890a-5182-7587-8dfe-678e30ba227e/093624859772.jpg/200x200bb.jpg"},"Eiffel 65|Blue (Da Ba Dee)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/5b/69/25/5b6925d7-c90c-10eb-09b9-895b5b216da1/mzaf_15634846101520322035.plus.aac.p.m4a","r":"Eiffel 65","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/a9/ec/b3/a9ecb373-0ea0-4117-9a68-03f513bae597/mzi.iwxdpjun.jpg/200x200bb.jpg"},"Cher|Believe":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/9c/52/d8/9c52d83d-242e-abc4-68fc-273eeb8f0358/mzaf_10714034642820090237.plus.aac.p.m4a","r":"Cher","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/bb/90/f3/bb90f392-b78d-f180-ba6b-f04d2d1e62fd/s05.kfnyrece.jpg/200x200bb.jpg"},"Britney Spears|...Baby One More Time":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/2a/ef/e5/2aefe5c7-e83b-07b1-227e-117347aa3006/mzaf_11333878250757508664.plus.aac.p.m4a","r":"Britney Spears","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/51/73/28/5173280b-9b5e-c5e4-d3f8-a2612d044543/888880423368.jpg/200x200bb.jpg"},"Goo Goo Dolls|Iris":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/60/17/35/60173512-3d5c-1d6f-549e-d8ddafa93e07/mzaf_5281658494050788067.plus.aac.p.m4a","r":"The Goo Goo Dolls","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/2c/13/18/2c131801-00af-58b1-3cc2-13abf4ad5416/093624919162.jpg/200x200bb.jpg"},"Aerosmith|I Don't Want to Miss a Thing":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c4/58/9f/c4589fe8-9422-fcc0-37a9-4fc787e38c93/mzaf_15572015471568568627.plus.aac.p.m4a","r":"Aerosmith","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/08/3f/fb/083ffb78-ce26-bd3f-d13d-e066b7eb708d/22UM1IM35761.rgb.jpg/200x200bb.jpg"},"Backstreet Boys|I Want It That Way":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/12/cd/f8/12cdf81c-f174-cd45-9a56-9b2388df9e63/mzaf_2642298639219088626.plus.aac.p.m4a","r":"Backstreet Boys","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/5f/6b/e9/5f6be919-1b9e-30ef-45b7-cc27fc428fd5/012414167224.jpg/200x200bb.jpg"},"Lou Bega|Mambo No. 5 (A Little Bit of...)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/95/12/14/951214ff-a3f2-7b9c-094c-385b382b5a14/mzaf_6010878480642586774.plus.aac.p.m4a","r":"Lou Bega","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/68/59/96/68599610-92f1-4400-8db3-4e794e2f2757/886446819020.jpg/200x200bb.jpg"},"Darude|Sandstorm":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/41/18/93/41189355-9033-e6e4-d7ce-97a7515e7aa9/mzaf_17924145138458674060.plus.aac.p.m4a","r":"Darude","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/01/a1/c8/mzi.tqopjuka.jpg/200x200bb.jpg"},"Ricky Martin|Livin' la Vida Loca":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/b6/09/71/b60971c6-8dc4-275b-4442-e894b83415bd/mzaf_2571876592631039304.plus.aac.p.m4a","r":"Ricky Martin","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/ab/3c/ed/ab3cedd0-03a6-0802-ec42-2f48c4eb118c/074646989128.jpg/200x200bb.jpg"},"Santana feat. Rob Thomas|Smooth":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/5e/00/f4/5e00f40c-5f4b-7043-a499-c842019c39b9/mzaf_14454759577232643774.plus.aac.p.m4a","r":"Santana","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f5/97/4c/f5974c1e-06cb-f84c-1da9-5f7505a20a0c/mzi.etsqfvqq.jpg/200x200bb.jpg"},"Smash Mouth|All Star":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b0/03/ef/b003ef4c-1a22-6b15-e851-fb106ad96a3b/mzaf_3320656447657988367.plus.aac.p.m4a","r":"Smash Mouth","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/ab/6f/5f/ab6f5f79-fe60-a6b9-c47c-cecf0e491be0/06UMGIM04334.rgb.jpg/200x200bb.jpg"},"Christina Aguilera|Genie in a Bottle":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e9/63/7c/e9637c84-3cbe-ad95-a5be-b6962ed54e08/mzaf_11300153256112368673.plus.aac.p.m4a","r":"Christina Aguilera","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/6b/25/9b/6b259bc3-3e53-4339-80b0-5b50131c8901/888880771674.jpg/200x200bb.jpg"},"TLC|No Scrubs":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c9/64/38/c964385e-f18a-fd99-638c-76d4f9bdd4e2/mzaf_4744709234124158764.plus.aac.p.m4a","r":"TLC","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/2d/19/0c/2d190ce6-a157-6364-b5b4-e9b00265d313/mzi.ucefobwj.jpg/200x200bb.jpg"},"Baha Men|Who Let the Dogs Out":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/06/f3/e1/06f3e17f-51ca-6ab9-b994-e2052329925a/mzaf_1294416854126703238.plus.aac.p.m4a","r":"Baha Men","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/0b/37/10/0b3710e7-f427-939f-88b2-56ec186a6f03/13UABIM51494.rgb.jpg/200x200bb.jpg"},"Daft Punk|One More Time":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/5d/93/d8/5d93d83f-ad1e-da4d-1d79-9937bdff24ec/mzaf_14396932211949300852.plus.aac.p.m4a","r":"Daft Punk","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/fd/4a/77/fd4a77db-0ebc-d043-41a2-f32fa1bb0fb4/dj.qrikkdwj.jpg/200x200bb.jpg"},"Coldplay|Yellow":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/66/f3/1a/66f31a76-a6ed-cb4c-f353-23310a7ae9a8/mzaf_10593596652344378873.plus.aac.p.m4a","r":"Coldplay","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/f5/93/8c/f5938c49-964c-31d1-4b33-78b634f71fb7/190295978075.jpg/200x200bb.jpg"},"NSYNC|Bye Bye Bye":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/6a/a8/c2/6aa8c264-c7f8-5db7-4b52-808abf96156d/mzaf_15046152716316545247.plus.aac.p.m4a","r":"*NSYNC","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/36/22/d6/3622d665-873c-57b8-392b-971292e6086f/012414170224.jpg/200x200bb.jpg"},"Avril Lavigne|Complicated":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/d5/82/55/d58255cd-4bd1-c339-1584-591e9d1305ee/mzaf_14546367220838781682.plus.aac.p.m4a","r":"Avril Lavigne","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/32/2c/f3/322cf324-9ea1-3962-865a-f4f9bf83764d/888880191069.jpg/200x200bb.jpg"},"Coldplay|Clocks":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/d2/9b/17/d29b173f-546a-606b-378f-8f3c333e81f1/mzaf_3952108508633208951.plus.aac.p.m4a","r":"Coldplay","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b9/b4/2a/b9b42ad1-1e25-5096-da43-497a247e69a3/190295978051.jpg/200x200bb.jpg"},"The Killers|Mr. Brightside":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/c3/a0/30/c3a03008-17c5-aa29-6c6a-5e757ccdbaa5/mzaf_6073120660767081787.plus.aac.p.m4a","r":"The Killers","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/11/64/9c/11649c80-2066-dba8-77a9-df7eecae26c1/17UM1IM06937.rgb.jpg/200x200bb.jpg"},"The White Stripes|Seven Nation Army":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/fe/2d/58/fe2d587f-6344-3fb3-43f7-d318a6253dcc/mzaf_16825320951570507954.plus.aac.p.m4a","r":"The White Stripes","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/07/25/09/0725098a-09f4-f240-e551-94384a590371/886448799009.jpg/200x200bb.jpg"},"OutKast|Hey Ya!":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/4f/9c/76/4f9c7649-716c-8fbd-82ed-08e149c0793b/mzaf_10136253120773220502.plus.aac.p.m4a","r":"Outkast","art":"https://is1-ssl.mzstatic.com/image/thumb/Music/9f/b6/5f/mzi.zbhtxrta.jpg/200x200bb.jpg"},"Britney Spears|Toxic":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ae/c4/7f/aec47f56-842d-49b4-558b-7a7523fd6728/mzaf_6693111381462300599.plus.aac.p.m4a","r":"Britney Spears","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/38/8b/7a/388b7a8f-10ff-a4e0-7624-65e29ac6a793/828765374828.jpg/200x200bb.jpg"},"Linkin Park|Numb":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1f/9d/28/1f9d2810-2ac3-efbd-ef02-623691ff9cd2/mzaf_17560018091772095942.plus.aac.p.m4a","r":"LINKIN PARK","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/13/44/05/134405bd-9e27-a678-8953-b5f724201f95/093624948988.jpg/200x200bb.jpg"},"Kelly Clarkson|Since U Been Gone":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8d/e7/24/8de72427-cabf-27c4-563f-5be2e83da122/mzaf_8282882240981789361.plus.aac.p.m4a","r":"Kelly Clarkson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e3/7e/c5/e37ec5d7-725b-695c-333c-ee0deb5adcc6/dj.mveioodu.jpg/200x200bb.jpg"},"Natasha Bedingfield|Unwritten":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c1/9f/d1/c19fd1a0-81c2-e342-0b05-709a07b1c320/mzaf_6968857392182098040.plus.aac.p.m4a","r":"Natasha Bedingfield","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/1b/dd/1c/1bdd1cf6-c75e-e174-1fda-65d320a4e178/ticket.ejbavdpq.jpg/200x200bb.jpg"},"Juanes|La Camisa Negra":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/84/de/46/84de46ef-f9f8-c6ad-fb6e-f6d5ca7571b7/mzaf_17789816509198950478.plus.aac.p.m4a","r":"Juanes","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/21/1d/ad/211dad4f-69f6-9ac3-4c3b-3116dd3de4d4/06UMGIM24053.rgb.jpg/200x200bb.jpg"},"Shakira|Hips Don't Lie":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ac/c7/61/acc7619f-c1e3-e0a5-df9b-0329a35af062/mzaf_13106936727189536738.plus.aac.p.m4a","r":"Shakira","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/0d/b5/8a/0db58a8b-7b17-dd53-3464-116a415d0f49/196872648836.jpg/200x200bb.jpg"},"Snow Patrol|Chasing Cars":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/bf/dc/fe/bfdcfeb4-7fde-c148-bf2d-f82d0f1e8096/mzaf_15850382492018725787.plus.aac.p.m4a","r":"Snow Patrol","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/c4/25/bf/c425bf7c-f3d8-6baf-7397-40868971f77f/06UMGIM43473.rgb.jpg/200x200bb.jpg"},"Coldplay|Viva La Vida":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b0/19/60/b0196060-7786-24c0-8c56-8f628fe89f52/mzaf_12479456646715449366.plus.aac.p.m4a","r":"Coldplay","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/52/aa/85/52aa851f-15b7-6322-f91f-df84b15b7b19/190295978044.jpg/200x200bb.jpg"},"Beyonce|Single Ladies (Put a Ring on It)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/3b/27/a3/3b27a332-48ee-a5b1-1ce5-4b067850f6e6/mzaf_7719939820293883536.plus.aac.p.m4a","r":"Beyonc\u00e9","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/35/0f/55/350f55da-2104-162a-5872-cb35fef30410/mzi.morbeoaw.jpg/200x200bb.jpg"},"Lady Gaga|Poker Face":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview115/v4/21/a4/9f/21a49f2c-d648-e775-6f3c-0db03b858f92/mzaf_8474670769503861886.plus.aac.p.m4a","r":"Lady Gaga","art":"https://is1-ssl.mzstatic.com/image/thumb/Music118/v4/b2/70/78/b2707801-8460-5b10-db7b-35db1d549de6/00602517959408.rgb.jpg/200x200bb.jpg"},"Kings of Leon|Use Somebody":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/23/1d/b3/231db3c5-a99c-3fba-5d3b-f6e9cdbeb841/mzaf_12581310710694950303.plus.aac.p.m4a","r":"Kings of Leon","art":"https://is1-ssl.mzstatic.com/image/thumb/Features125/v4/74/25/4c/74254c8b-e03d-44e8-304d-4cde508b8cfb/dj.swemfdrr.jpg/200x200bb.jpg"},"The Black Eyed Peas|I Gotta Feeling":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/88/5e/6a/885e6adb-f307-d849-a3e0-47280088b5a4/mzaf_12588254824919596992.plus.aac.p.m4a","r":"Black Eyed Peas","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/42/fc/47/42fc4794-3c69-8c00-e528-1c7e92b5ac93/09UMGIM13833.rgb.jpg/200x200bb.jpg"},"Adele|Rolling in the Deep":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/4c/4f/03/4c4f032a-3d2b-853d-da81-996602355b42/mzaf_11625850023134180491.plus.aac.p.m4a","r":"Adele","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/eb/ca/25/ebca2596-cd1e-b295-91a3-771c868d0a79/191404113868.png/200x200bb.jpg"},"Katy Perry|Firework":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ab/27/3b/ab273b22-1eb1-dd49-5332-5ef70c35683b/mzaf_4912325324633099647.plus.aac.p.m4a","r":"Katy Perry","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/c8/d3/42/c8d342af-26d9-3ec2-c511-e1eaf860e299/13UABIM57787.rgb.jpg/200x200bb.jpg"},"Bruno Mars|Just the Way You Are":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/04/c9/ee/04c9eeea-24ca-2198-17ea-c1c1436cb953/mzaf_16637738980836746910.plus.aac.p.m4a","r":"Bruno Mars","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/52/b1/45/52b1452b-229e-78db-231b-7b43fa0077cc/075679956491.jpg/200x200bb.jpg"},"Shakira|Waka Waka (This Time for Africa)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1e/db/30/1edb301d-0143-03ea-9d9b-d9900534d33f/mzaf_14875936031825025014.plus.aac.p.m4a","r":"Shakira","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/ec/15/38/ec1538d9-67b8-e561-6b11-bc5a266cba7c/886444681568.jpg/200x200bb.jpg"},"Don Omar & Lucenzo|Danza Kuduro":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/08/40/df/0840df61-1e6d-c985-1136-500dd9e09cc5/mzaf_13424326045030692319.plus.aac.p.m4a","r":"Don Omar","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/9d/de/92/9dde92c3-5b15-2c2f-0964-a1b4cda36e50/11ABKIM00016.rgb.jpg/200x200bb.jpg"},"Adele|Someone Like You":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/08/22/2e/08222e25-43f5-20e6-a442-b8127ac83368/mzaf_1689070223363740216.plus.aac.p.m4a","r":"Adele","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/eb/ca/25/ebca2596-cd1e-b295-91a3-771c868d0a79/191404113868.png/200x200bb.jpg"},"David Guetta feat. Sia|Titanium":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/fe/ec/07/feec0796-eff9-e6ec-01f3-5f74b66800ce/mzaf_3610002945740549096.plus.aac.p.m4a","r":"David Guetta","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/f6/b9/e2/f6b9e2df-c638-3e4b-c28d-a68b06465758/5099997943051.jpg/200x200bb.jpg"},"Avicii|Levels":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/66/dc/bd/66dcbd68-b557-bdfd-f2c2-a05491758783/mzaf_13654489760720011690.plus.aac.p.m4a","r":"Avicii","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/67/38/43/67384338-9ed7-fc68-5927-93f1fcf4705d/11UMGIM36900.rgb.jpg/200x200bb.jpg"},"Maroon 5 feat. Christina Aguilera|Moves Like Jagger":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/1a/e8/be/1ae8bea8-8962-8168-80d5-65bf3b1478ba/mzaf_471500839444486606.plus.aac.p.m4a","r":"Maroon 5","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/61/53/15/61531592-3e8b-1e85-b434-73a991d8143c/14UMGIM27067.rgb.jpg/200x200bb.jpg"},"Carly Rae Jepsen|Call Me Maybe":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/5e/0b/c4/5e0bc4b4-51fb-c992-4953-8cc13ecfb773/mzaf_4904797060238555261.plus.aac.p.m4a","r":"Carly Rae Jepsen","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/14/54/19/145419b2-96f6-fc9e-3110-fbdc78022df6/12UMGIM48177.rgb.jpg/200x200bb.jpg"},"Gotye|Somebody That I Used to Know":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/4a/63/85/4a6385ef-b80a-5e40-0bf2-245fa5b3dc52/mzaf_1146936378720252898.plus.aac.p.m4a","r":"Gotye","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b3/8a/98/b38a9867-2a9c-de2f-2d80-c624fb2200ec/11UMGIM19347.rgb.jpg/200x200bb.jpg"},"Coldplay|Paradise":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/aa/3e/62/aa3e6293-da9a-bba2-15da-0acf90282a5f/mzaf_9828018370517979528.plus.aac.p.m4a","r":"Coldplay","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/fa/41/1c/fa411c37-7a65-8a3e-71c9-4b566c49617c/5099967983858_1562x1562_300dpi.jpg/200x200bb.jpg"},"Rihanna feat. Calvin Harris|We Found Love":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/da/ce/2e/dace2e8b-9cb8-a3bb-5988-b5190015dd3b/mzaf_8863443876273198051.plus.aac.p.m4a","r":"Rihanna","art":"https://is1-ssl.mzstatic.com/image/thumb/Music123/v4/ae/46/51/ae465169-b0a4-3c10-42a0-63e4448d1508/16UMGIM59230.rgb.jpg/200x200bb.jpg"},"Swedish House Mafia|Don't You Worry Child":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/7c/c2/a6/7cc2a6ed-f367-c83c-77c4-3be2ca451581/mzaf_8738525352989151305.plus.aac.p.m4a","r":"Swedish House Mafia","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/7a/a0/33/7aa0335b-167b-c15a-fcac-22e22ed2ea03/5099997933755.jpg/200x200bb.jpg"},"Imagine Dragons|Radioactive":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/77/70/88/777088e9-60a1-c459-bfa5-6e66f2fd2695/mzaf_7685408661765681881.plus.aac.p.m4a","r":"Imagine Dragons","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/1f/fa/09/1ffa092f-f52f-4a66-7d10-4cc5982dc747/12UMGIM46901.rgb.jpg/200x200bb.jpg"},"Rihanna|Diamonds":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/26/97/fb/2697fb36-8ef2-9d18-0a2e-6545947b4445/mzaf_9032202105098805603.plus.aac.p.m4a","r":"Rihanna","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/a0/1a/10/a01a1080-7b1d-e475-a03c-394e5cbba66c/12UMGIM53876.rgb.jpg/200x200bb.jpg"},"Bruno Mars|Locked Out of Heaven":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/d5/05/04/d5050434-1278-6b8e-9cd8-6261ea319fd1/mzaf_9746689865251353718.plus.aac.p.m4a","r":"Bruno Mars","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e0/a4/7c/e0a47c6f-005a-9f9f-ce29-8e858e2bcfcb/075679957283.jpg/200x200bb.jpg"},"The Neighbourhood|Sweater Weather":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/8c/37/20/8c372047-2727-8054-9411-0e4867643dd8/mzaf_10169659262182214119.plus.aac.p.m4a","r":"The Neighbourhood","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/28/71/00/287100fb-5c31-0195-5343-e6b3625886d0/886443969834.jpg/200x200bb.jpg"},"Avicii|Wake Me Up":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/68/1e/60/681e601f-e1f2-4ebb-37de-adf00bdf57b6/mzaf_8266263075137964740.plus.aac.p.m4a","r":"Avicii","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/18/5b/1e/185b1ef5-5d97-19d8-aebf-8e29e41874ef/13UAAIM59255.rgb.jpg/200x200bb.jpg"},"Daft Punk|Get Lucky":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/57/a5/85/57a585aa-f1bc-7619-881b-f8a04a5541d5/mzaf_6906185026678279401.plus.aac.p.m4a","r":"Daft Punk, Pharrell Williams & Nile Rodgers","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e8/43/5f/e8435ffa-b6b9-b171-40ab-4ff3959ab661/886443919266.jpg/200x200bb.jpg"},"Pharrell Williams|Happy":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ed/a0/19/eda019cf-2794-66d1-208d-2e2e74c26c3d/mzaf_16469762943852039623.plus.aac.p.m4a","r":"Pharrell Williams","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/76/ff/5e/76ff5ee0-7ab4-2ac2-2598-486a9ccc06e1/886444516877.jpg/200x200bb.jpg"},"Katy Perry|Roar":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/21/a8/76/21a87607-1fe3-2bd2-753c-0b4b73c22b90/mzaf_9666996724668759977.plus.aac.p.m4a","r":"Katy Perry","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/36/21/81/36218129-51b4-df22-cafb-8e9503b53147/13UAAIM70445.rgb.jpg/200x200bb.jpg"},"OneRepublic|Counting Stars":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b0/db/7f/b0db7fbe-f8ff-1f67-fe72-ca8185ffbca2/mzaf_15298650366584767800.plus.aac.p.m4a","r":"OneRepublic","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/25/46/a7/2546a71a-b2bb-b4c9-4c52-a4daa3ae23ca/13UMGIM15076.rgb.jpg/200x200bb.jpg"},"Martin Garrix|Animals":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/8f/ca/53/8fca53bf-328f-4006-fb9c-eef2feee7790/mzaf_17242236602085711440.plus.aac.p.m4a","r":"Martin Garrix","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/6e/1e/f0/6e1ef055-195a-bb73-d5a8-5926058366a5/8712944577525.png/200x200bb.jpg"},"Vance Joy|Riptide":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/1e/de/ea/1edeea50-c0f4-9d95-f0b8-b23a1af561db/mzaf_6343110017276582270.plus.aac.p.m4a","r":"Vance Joy","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/7a/1c/65/7a1c6571-34e9-bb77-32be-90c72ba003c0/075679920355.jpg/200x200bb.jpg"},"Bastille|Pompeii":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/b3/3d/fb/b33dfbb6-dac3-b97c-b239-18cf3688fdb7/mzaf_8177734646947686437.plus.aac.p.m4a","r":"Bastille","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e6/d8/61/e6d86177-ae8c-e84e-dfcc-0042687066ed/13UAAIM41955.rgb.jpg/200x200bb.jpg"},"Idina Menzel|Let It Go":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/43/5f/36/435f3609-ddd5-bc10-3dbb-ddf5872b93ce/mzaf_9461789858996596537.plus.aac.p.m4a","r":"Idina Menzel","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/4c/5d/31/4c5d3166-3a4b-fb3c-473e-1776ff947466/13DMGIM04437.rgb.jpg/200x200bb.jpg"},"Marc Anthony|Vivir Mi Vida":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/10/fd/bf/10fdbf20-d17d-a8a2-6058-c1ef9f221068/mzaf_9159790581568803090.plus.aac.p.m4a","r":"Marc Anthony","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/f7/24/ce/f724ce48-4d0d-0cbc-3493-3d935142e5e6/886443947238.jpg/200x200bb.jpg"},"Mark Ronson feat. Bruno Mars|Uptown Funk":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/38/55/fe/3855feef-5884-9f0c-a1a5-5c1a9ff4e269/mzaf_16034847874510944537.plus.aac.p.m4a","r":"Mark Ronson","art":"https://is1-ssl.mzstatic.com/image/thumb/Music5/v4/43/03/57/430357e0-e142-8d4d-ca56-87f4bd41e017/886444976145.jpg/200x200bb.jpg"},"Taylor Swift|Shake It Off":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/11/d5/6d/11d56d4a-ce23-e793-8681-70dc4d35d931/mzaf_5886436202259848624.plus.aac.p.m4a","r":"Taylor Swift","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/a7/98/d8/a798d867-344d-2bf2-fbfe-d2d1412dcef8/14UMDIM03793.rgb.jpg/200x200bb.jpg"},"Calvin Harris|Summer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/c3/32/f1/c332f138-aa3c-52b8-c414-e85111b58bf5/mzaf_12226515580236242706.plus.aac.p.m4a","r":"Calvin Harris","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/da/50/cc/da50cc80-3515-a38d-369b-0d700ffd249d/886444820448.jpg/200x200bb.jpg"},"Sia|Chandelier":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f0/de/66/f0de661c-299a-b7ae-80d9-4f35f79875b1/mzaf_10598240417031133475.plus.aac.p.m4a","r":"Sia","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/00/bf/72/00bf72a2-3e50-e5e7-ae78-dc35bbf9bcda/886444578219.jpg/200x200bb.jpg"},"Clean Bandit feat. Jess Glynne|Rather Be":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/1f/65/20/1f652048-d007-9671-cbb1-dd64419a9d3e/mzaf_3565758066098797350.plus.aac.p.m4a","r":"Clean Bandit","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/10/55/d1/1055d1b7-e579-8f4a-5172-9bf865e3cfcb/825646090037.jpg/200x200bb.jpg"},"Ed Sheeran|Thinking Out Loud":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/78/a5/f2/78a5f25e-ad1b-718d-82ad-b82e676c1855/mzaf_6133970271589343093.plus.aac.p.m4a","r":"Ed Sheeran","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/2d/36/f9/2d36f9a7-2c3e-ce0f-7fb6-036feecb221f/825646974450.jpg/200x200bb.jpg"},"Maroon 5|Sugar":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1b/3f/68/1b3f68e0-3c42-f367-cd0f-e46c746e0668/mzaf_15052021441666328650.plus.aac.p.m4a","r":"Maroon 5","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/b7/25/76/b72576f1-072e-3da2-60d5-2724a9bccf4a/14UMGIM31673.rgb.jpg/200x200bb.jpg"},"Enrique Iglesias|Bailando":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/ea/8d/6f/ea8d6fb5-d980-f295-62b0-3fbc7b78188e/mzaf_10172751316776147095.plus.aac.p.m4a","r":"Enrique Iglesias","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/c7/18/3e/c7183ef7-49f1-8941-03cf-ad17ca8b97ea/00602537854097.rgb.jpg/200x200bb.jpg"},"Major Lazer & DJ Snake|Lean On":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/db/f3/9c/dbf39c64-1814-87af-3a14-3e2ad46b45e6/mzaf_13079282429009181600.plus.aac.p.m4a","r":"Major Lazer","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/2b/dd/a8/2bdda816-1a33-a706-f5f7-63913fded2be/653738310424_Cover.jpg/200x200bb.jpg"},"Alan Walker|Faded":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/ab/18/d9/ab18d9e9-01f0-27ea-3a51-6e08585a0072/mzaf_14299744081264843911.plus.aac.p.m4a","r":"Alan Walker","art":"https://is1-ssl.mzstatic.com/image/thumb/Music114/v4/0d/a3/1a/0da31af7-d0ff-9bee-c427-1b6d0336f6fc/886446321981.jpg/200x200bb.jpg"},"Shawn Mendes|Stitches":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e8/7c/7d/e87c7ddf-d844-6485-085b-95f15f9ee423/mzaf_12884712290949429165.plus.aac.p.m4a","r":"Shawn Mendes","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/e3/d4/de/e3d4def5-886e-da47-e1cf-568566510b53/15UMGIM62454.rgb.jpg/200x200bb.jpg"},"Justin Bieber|Sorry":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/66/eb/29/66eb29c0-c2f9-d9df-8af3-3bf2562c9d7c/mzaf_4099789285264521999.plus.aac.p.m4a","r":"Justin Bieber","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/75/11/84/751184b0-77df-1eff-bb20-dac03247425d/15UMGIM59808.rgb.jpg/200x200bb.jpg"},"Lord Huron|The Night We Met":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/64/b4/f3/64b4f3e5-d4f9-ec10-e6af-b6c26bde9b47/mzaf_8621887946764980860.plus.aac.p.m4a","r":"Lord Huron","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/55/41/4a/55414a18-861a-79d1-e575-5bf8cf205dbe/886445056839_Cover.jpg/200x200bb.jpg"},"Justin Timberlake|Can't Stop the Feeling!":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/86/41/2d/86412d20-2f4d-39fc-221b-3f643d7c99c6/mzaf_9909715182585785919.plus.aac.p.m4a","r":"Justin Timberlake","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/68/19/43/68194388-efa7-3afe-8a15-a4c3eebef1f6/886445915211.jpg/200x200bb.jpg"},"Sia|Cheap Thrills":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/89/73/fb/8973fb2c-5417-e56b-30f1-bf5035bb46a2/mzaf_5922398524297774212.plus.aac.p.m4a","r":"Sia","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/bc/13/27/bc13275c-8b26-802d-771b-d15ae00fb530/mzm.hvpwjsvi.jpg/200x200bb.jpg"},"Bruno Mars|24K Magic":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/45/c4/cb/45c4cb28-670f-f1fe-9678-7fa1601bbb5a/mzaf_2006385778979520718.plus.aac.p.m4a","r":"Bruno Mars","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/e3/47/a0/e347a0cc-87ce-5d05-d560-176c7d48f66e/075679904119.jpg/200x200bb.jpg"},"Ed Sheeran|Shape of You":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/44/c7/4f/44c74f0d-72dc-6143-d4d0-ba14d661ca0d/mzaf_9566898362556366703.plus.aac.p.m4a","r":"Ed Sheeran","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/15/e6/e8/15e6e8a4-4190-6a8b-86c3-ab4a51b88288/190295851286.jpg/200x200bb.jpg"},"Ed Sheeran|Perfect":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c7/ba/bc/c7babc66-f598-aaa6-bcf6-307281795817/mzaf_16337361235117168274.plus.aac.p.m4a","r":"Ed Sheeran","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/15/e6/e8/15e6e8a4-4190-6a8b-86c3-ab4a51b88288/190295851286.jpg/200x200bb.jpg"},"Imagine Dragons|Believer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c0/3f/36/c03f367a-b66b-fd0a-a54c-30f8250c4410/mzaf_12768434238801682952.plus.aac.p.m4a","r":"Imagine Dragons","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/11/7a/b8/117ab805-6811-8929-18b9-0fad7baf0c25/17UMGIM98210.rgb.jpg/200x200bb.jpg"},"Clean Bandit feat. Zara Larsson|Symphony":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview115/v4/5f/4a/60/5f4a6032-a30b-fb11-b9ae-272149e4b0cf/mzaf_12772865885992329723.plus.aac.p.m4a","r":"Clean Bandit","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/d9/8d/f6/d98df618-dacb-f934-06e9-696c6064f84b/190295812751.jpg/200x200bb.jpg"},"Camila Cabello|Havana":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/7d/42/fe/7d42fe40-78b9-c546-861e-bda5788bba4e/mzaf_7434858341023410545.plus.aac.p.m4a","r":"Camila Cabello","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/85/28/70/85287029-19b9-cbe3-d1ab-300781875bf4/886446870298.jpg/200x200bb.jpg"},"Luis Fonsi & Daddy Yankee|Despacito":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/01/55/6f/01556f75-ea92-0267-c6d4-09ee6fd8ff26/mzaf_15962911936959580358.plus.aac.p.m4a","r":"Luis Fonsi & Daddy Yankee","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/11/d6/58/11d658ed-2ee0-31bb-da65-3377b879f7fe/00602557543537.rgb.jpg/200x200bb.jpg"},"George Ezra|Shotgun":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e8/d2/fc/e8d2fc70-afa6-230b-4e0f-32f1f99ea8b1/mzaf_18434333048034740247.plus.aac.p.m4a","r":"George Ezra","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/b0/47/cf/b047cf32-2af6-7ed5-754e-e4eed488be27/886446561875.jpg/200x200bb.jpg"},"Lewis Capaldi|Someone You Loved":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/e5/c8/17/e5c817e2-7830-091f-8686-d6276d5beaeb/mzaf_5586826958480073790.plus.aac.p.m4a","r":"Lewis Capaldi","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/92/d7/8f/92d78fb1-df3d-049e-c81d-7022808b151f/19UMGIM02973.rgb.jpg/200x200bb.jpg"},"The Weeknd|Blinding Lights":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1d/44/0d/1d440dbc-9832-08e6-080d-aa1e1bacf40c/mzaf_3600642016947675074.plus.aac.p.m4a","r":"The Weeknd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/03/e1/67/03e167d6-ee05-eb32-55e9-c5040f55a8bf/20UMGIM21166.rgb.jpg/200x200bb.jpg"},"Tones and I|Dance Monkey":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/43/1a/32/431a3203-7e62-c7b1-0377-824aded16096/mzaf_7471896698419931094.plus.aac.p.m4a","r":"Tones And I","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/87/ed/42/87ed4279-d8d7-840f-90b5-2bffe34699ef/075679839237.jpg/200x200bb.jpg"},"Dua Lipa|Don't Start Now":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/24/3d/34/243d3413-a0fc-b229-f54a-1715ebd3a9ca/mzaf_11578996572221800393.plus.aac.p.m4a","r":"Dua Lipa","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/41/ee/66/41ee66fa-f8dd-7e82-155a-3a1b360dc562/190295322175.jpg/200x200bb.jpg"},"Shawn Mendes & Camila Cabello|Senorita":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/cf/06/d6/cf06d6fd-f7a0-2898-8363-67688df6c14f/mzaf_8234301186390421644.plus.aac.p.m4a","r":"Shawn Mendes & Camila Cabello","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/46/fe/4a/46fe4a39-feb4-7b8b-97b9-0187d49a46bd/19UMGIM53914.rgb.jpg/200x200bb.jpg"},"Billie Eilish|Bad Guy":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/c3/87/1f/c3871f7e-3260-d615-1c66-5fdca2c3a48f/mzaf_10721331211699880949.plus.aac.p.m4a","r":"Billie Eilish","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/1a/37/d1/1a37d1b1-8508-54f2-f541-bf4e437dda76/19UMGIM05028.rgb.jpg/200x200bb.jpg"},"Maroon 5|Memories":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/3a/6c/4f/3a6c4f77-50a1-3936-1794-cd636ef0e4e5/mzaf_3813450707784399955.plus.aac.p.m4a","r":"Maroon 5","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/69/20/10/692010ef-8e2d-0137-b060-ff4fa420062a/21UMGIM44927.rgb.jpg/200x200bb.jpg"},"Taylor Swift|Cruel Summer":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/44/af/81/44af8168-9609-1b85-5048-ada08dceacf3/mzaf_1341699644335558812.plus.aac.p.m4a","r":"Taylor Swift","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/49/3d/ab/493dab54-f920-9043-6181-80993b8116c9/19UMGIM53909.rgb.jpg/200x200bb.jpg"},"Harry Styles|Watermelon Sugar":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/25/54/81/255481c0-1ef2-c1bc-f3b3-ea2b1419c1f1/mzaf_5289557126888202047.plus.aac.p.m4a","r":"Harry Styles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/2b/c4/c9/2bc4c9d4-3bc6-ab13-3f71-df0b89b173de/886448022213.jpg/200x200bb.jpg"},"Post Malone|Circles":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/f9/b1/aa/f9b1aaed-3e24-227f-153d-99969f8b8464/mzaf_6272498007975402144.plus.aac.p.m4a","r":"Post Malone","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/7b/1b/1b/7b1b1b0b-7ce2-b223-f9e0-8e36abe51877/19UMGIM78325.rgb.jpg/200x200bb.jpg"},"Lewis Capaldi|Before You Go":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/60/b9/cc/60b9cc69-2e37-f867-bc15-91e2ce767b4a/mzaf_18421692819209045993.plus.aac.p.m4a","r":"Lewis Capaldi","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/9f/58/7c/9f587c97-f0e9-e335-d8e2-60b8e2d62bad/19UMGIM90850.rgb.jpg/200x200bb.jpg"},"Dua Lipa|Levitating":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/59/dc/4d/59dc4dda-93ff-8f1c-c536-f005f6ea6af5/mzaf_3066686759813252385.plus.aac.p.m4a","r":"Dua Lipa","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/6c/11/d6/6c11d681-aa3a-d59e-4c2e-f77e181026ab/190295092665.jpg/200x200bb.jpg"},"BTS|Dynamite":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a3/a0/a6/a3a0a6b5-4715-b872-1aff-21e42634d9cd/mzaf_7224423421767640589.plus.aac.p.m4a","r":"BTS","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/22/f3/8f/22f38fb9-1690-326a-d891-7aa946c2b06f/195497623273_Cover.jpg/200x200bb.jpg"},"Glass Animals|Heat Waves":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a3/4c/b9/a34cb911-40fc-5f0c-e862-14bd171a77aa/mzaf_384792072030970151.plus.aac.p.m4a","r":"Glass Animals","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/da/8b/77/da8b7731-6f4f-eacf-5e74-8b23389eefa1/20UMGIM03371.rgb.jpg/200x200bb.jpg"},"The Weeknd|Save Your Tears":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8b/38/17/8b3817e4-c0e9-7e02-2654-3e2ecee93603/mzaf_18415642125637540903.plus.aac.p.m4a","r":"The Weeknd","art":"https://is1-ssl.mzstatic.com/image/thumb/Music124/v4/83/3a/f7/833af71b-2e0c-3303-24f5-8f5c546c073b/20UMGIM21167.rgb.jpg/200x200bb.jpg"},"BTS|Butter":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/80/c8/46/80c84615-efb7-b538-d818-226cf7803358/mzaf_11498582023380901573.plus.aac.p.m4a","r":"BTS","art":"https://is1-ssl.mzstatic.com/image/thumb/Music122/v4/f7/68/9c/f7689ce3-6d41-60cd-62d2-57a91ddf5b9d/196922067341_Cover.jpg/200x200bb.jpg"},"Ed Sheeran|Bad Habits":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/f2/08/5d/f2085d7c-a4d0-451b-4d1d-ccc3057ab6e2/mzaf_11771336260379351390.plus.aac.p.m4a","r":"Ed Sheeran","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/63/45/cc/6345cc98-aa83-ad6e-e3c9-1a36ff9838a4/190296614316.jpg/200x200bb.jpg"},"Olivia Rodrigo|drivers license":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/36/62/61/366261be-0996-d73d-de6f-03417867c800/mzaf_8201528327761821135.plus.aac.p.m4a","r":"Olivia Rodrigo","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/02/ed/8c/02ed8cab-c089-2fdd-7ce6-ab334a9a4e19/21UMGIM26093.rgb.jpg/200x200bb.jpg"},"Olivia Rodrigo|good 4 u":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/9f/bd/f1/9fbdf1ce-12d9-7440-1c1c-3fed40567619/mzaf_7303839465958373073.plus.aac.p.m4a","r":"Olivia Rodrigo","art":"https://is1-ssl.mzstatic.com/image/thumb/Music115/v4/76/46/48/76464884-0e9c-1951-a3f6-ce02f74c2b19/21UMGIM26093.rgb.jpg/200x200bb.jpg"},"Ed Sheeran|Shivers":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a8/9f/a5/a89fa5e9-8a3b-77bb-e081-866067d3f213/mzaf_13889707114574366771.plus.aac.p.m4a","r":"Ed Sheeran","art":"https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/c5/d8/c6/c5d8c675-63e3-6632-33db-2401eabe574d/190296491412.jpg/200x200bb.jpg"},"Harry Styles|As It Was":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/67/10/16/67101606-3869-ca44-6c03-e13d6322cb51/mzaf_1135399237022217274.plus.aac.p.m4a","r":"Harry Styles","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/2a/19/fb/2a19fb85-2f70-9e44-f2a9-82abe679b88e/886449990061.jpg/200x200bb.jpg"},"David Guetta & Bebe Rexha|I'm Good (Blue)":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/3a/4e/bd/3a4ebd86-16fa-4804-d39b-04e62e596735/mzaf_1434980429612457583.plus.aac.p.m4a","r":"David Guetta & Bebe Rexha","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/32/d2/9c/32d29c8a-e0a2-a629-7889-23c12ead0595/5054197344749.jpg/200x200bb.jpg"},"Noah Kahan|Stick Season":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/a0/ed/8d/a0ed8d32-ed28-75b7-8de7-6555e84f5617/mzaf_8530395673130453138.plus.aac.p.m4a","r":"Noah Kahan","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/e4/75/f3/e475f31a-ade1-50bf-e983-1467aaf62c46/23UMGIM59938.rgb.jpg/200x200bb.jpg"},"Taylor Swift|Anti-Hero":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/1d/56/2a/1d562a07-dc5f-a9c0-1f36-2051a8c14eb7/mzaf_7214829135431340590.plus.aac.p.m4a","r":"Taylor Swift","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/3d/01/f2/3d01f2e5-5a08-835f-3d30-d031720b2b80/22UM1IM07364.rgb.jpg/200x200bb.jpg"},"Lizzo|About Damn Time":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/1f/1d/91/1f1d9169-e7a4-85f4-c614-845640028993/mzaf_14417727468767979062.plus.aac.p.m4a","r":"Lizzo","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/b8/20/f9/b820f951-e53c-93bf-e75d-33df6165e7c1/075679736109.jpg/200x200bb.jpg"},"Rema|Calm Down":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c3/c7/54/c3c754cd-6680-4818-9182-e08a719d59ba/mzaf_1190051474475595816.plus.aac.p.m4a","r":"Rema & Selena Gomez","art":"https://is1-ssl.mzstatic.com/image/thumb/Music112/v4/ee/f1/dc/eef1dc82-f516-fd0f-581c-3f952a0e2243/22UMGIM92113.rgb.jpg/200x200bb.jpg"},"JVKE|Golden Hour":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/30/02/8c/30028c8a-a125-5466-bcc6-27a83b1c0135/mzaf_16911571635366913039.plus.aac.p.m4a","r":"JVKE","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/8d/1a/7b/8d1a7b44-316f-7c7f-4380-935673fb697a/5056167175650.jpg/200x200bb.jpg"},"Miley Cyrus|Flowers":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/68/9e/f7/689ef7fe-14fe-a846-c87f-7d3b2d6344b1/mzaf_4167137058064023087.plus.aac.p.m4a","r":"Miley Cyrus","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/8c/67/ff/8c67ff91-31c3-3fef-1884-ce3ec89f3af4/196589946874.jpg/200x200bb.jpg"},"Olivia Rodrigo|Vampire":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/83/09/5e/83095ea1-83bf-ecdc-3b75-358c350fca51/mzaf_15560849688086702972.plus.aac.p.m4a","r":"Olivia Rodrigo","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/08/9e/07/089e0799-b405-9e69-b648-e6a19df9879c/24UMGIM30485.rgb.jpg/200x200bb.jpg"},"Dua Lipa|Dance the Night":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/9d/9f/56/9d9f566f-abf6-5f10-bcdb-09e14dcace42/mzaf_10277018989080903908.plus.aac.p.m4a","r":"Dua Lipa","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/c0/54/97/c05497aa-c19f-bf4f-de29-71edf30fbefb/075679688767.jpg/200x200bb.jpg"},"Teddy Swims|Lose Control":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/9f/65/d6/9f65d67d-db40-d7da-c954-9a23d28dfe1a/mzaf_7625794503195542708.plus.aac.p.m4a","r":"Teddy Swims","art":"https://is1-ssl.mzstatic.com/image/thumb/Music126/v4/36/19/66/36196640-1561-dc5e-c6bc-1e5f4befa583/093624856771.jpg/200x200bb.jpg"},"Tate McRae|Greedy":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/8d/e0/e2/8de0e2ae-f88c-5056-c07d-fe04acbc1d58/mzaf_1974309867621262359.plus.aac.p.m4a","r":"Tate McRae","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/21/4a/c2/214ac20c-a66c-84a1-e357-f7e60b1932ca/196871542661.jpg/200x200bb.jpg"},"FIFTY FIFTY|Cupid":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/89/34/e3/8934e3f9-28bf-fae8-d862-7fafc9a7bec5/mzaf_15174989071406241005.plus.aac.p.m4a","r":"FIFTY FIFTY","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/6b/2e/aa/6b2eaa77-af21-4b0d-5ae0-2062cbf44e55/196872355437.jpg/200x200bb.jpg"},"Dua Lipa|Houdini":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/2c/da/b5/2cdab5c6-04a8-5231-c697-00101e876479/mzaf_5586859405346659517.plus.aac.p.m4a","r":"Dua Lipa","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/dd/af/ea/ddafeab5-797a-5b6f-7735-f96c537b45e0/5054197894091.jpg/200x200bb.jpg"},"Sabrina Carpenter|Espresso":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/e9/4d/02/e94d0230-11ee-ef94-d2cf-a5d547bd73f4/mzaf_554140808559155562.plus.aac.p.m4a","r":"Sabrina Carpenter","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/57/e8/7b/57e87ba0-5057-9bb9-c247-ce7dbe426e89/24UMGIM55213.rgb.jpg/200x200bb.jpg"},"ROSE & Bruno Mars|APT.":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/70/41/42/70414259-14f5-245e-bd79-93c80401d556/mzaf_8687698460653166345.plus.aac.p.m4a","r":"ROS\u00c9 & Bruno Mars","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/2d/14/66/2d14661b-345b-d0f3-4e86-56ef626e68aa/075679629203.jpg/200x200bb.jpg"},"Lady Gaga & Bruno Mars|Die With a Smile":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/07/6a/99/076a99ed-b946-431b-6f1f-54fa187ca5bd/mzaf_8102882277995122875.plus.aac.p.m4a","r":"Lady Gaga & Bruno Mars","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/11/ae/f2/11aef294-f57c-bab9-c9fc-529162984e62/24UMGIM85348.rgb.jpg/200x200bb.jpg"},"Benson Boone|Beautiful Things":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/4d/d5/00/4dd5006f-ee02-c3f1-94db-0ed4b8dd68f1/mzaf_14250561294796027079.plus.aac.p.m4a","r":"Benson Boone","art":"https://is1-ssl.mzstatic.com/image/thumb/Music116/v4/54/f4/92/54f49210-e260-b519-ebbd-f4f40ee710cd/054391342751.jpg/200x200bb.jpg"},"Billie Eilish|Birds of a Feather":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/34/31/d3/3431d34e-847f-5d66-df83-0bce688d997e/mzaf_18106743962423782018.plus.aac.p.m4a","r":"Billie Eilish","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/92/9f/69/929f69f1-9977-3a44-d674-11f70c852d1b/24UMGIM36186.rgb.jpg/200x200bb.jpg"},"Chappell Roan|Good Luck, Babe!":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/c3/6d/4f/c36d4f23-b87f-046d-7a0e-e3e05d180b2a/mzaf_17235999651335214399.plus.aac.p.m4a","r":"Chappell Roan","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/29/a7/c4/29a7c478-351d-25eb-a116-3e68118cdab8/24UMGIM31246.rgb.jpg/200x200bb.jpg"},"Sabrina Carpenter|Please Please Please":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/54/86/0b/54860b8b-0c3b-b16b-5b19-b00424af8b9b/mzaf_1272478887800630516.plus.aac.p.m4a","r":"Sabrina Carpenter & Dolly Parton","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c9/a3/e9/c9a3e987-3952-a6ac-7975-680f2033e660/25UMGIM10586.rgb.jpg/200x200bb.jpg"},"Hozier|Too Sweet":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/a6/61/fc/a661fcaf-f8e5-03db-36f3-31f2e196b1a5/mzaf_18300083713037280538.plus.aac.p.m4a","r":"Hozier","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/98/80/95/98809581-4a0e-68a6-04de-b72492e35939/196871908191.jpg/200x200bb.jpg"},"Gracie Abrams|That's So True":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/87/35/09/87350944-6e13-4249-dd75-70a878ced764/mzaf_11536442585660644927.plus.aac.p.m4a","r":"Gracie Abrams","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/d2/f8/99/d2f89987-d2a5-45a5-1746-c0841c7e9843/24UM1IM17286.rgb.jpg/200x200bb.jpg"},"Myles Smith|Stargazing":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/fc/9f/38/fc9f3868-52f1-bb3b-f692-1dca6d78c0df/mzaf_1462205118009470155.plus.aac.p.m4a","r":"Myles Smith","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/36/2d/75/362d75b7-9be2-ef72-5204-6888731cf077/196872051872.jpg/200x200bb.jpg"},"yung kai|Blue":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/35/82/0f/35820f58-856a-3def-922c-d554152e0c0d/mzaf_3599226039290781217.plus.aac.p.m4a","r":"yung kai","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/33/62/62/33626226-0cf3-ff64-3296-b2355de71fac/0748777703419.jpg/200x200bb.jpg"},"Lady Gaga|Abracadabra":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview221/v4/bb/eb/07/bbeb0734-5ea4-03e8-f44b-035e7a3b3451/mzaf_10575868946430449949.plus.aac.p.m4a","r":"Lady Gaga","art":"https://is1-ssl.mzstatic.com/image/thumb/Music221/v4/c5/43/8b/c5438b81-75e8-3a0a-05ee-4f29ae0b9bb3/25UMGIM07433.rgb.jpg/200x200bb.jpg"},"Alex Warren|Ordinary":{"u":"https://audio-ssl.itunes.apple.com/itunes-assets/AudioPreview211/v4/f4/2f/82/f42f82e5-e164-dd14-4f9a-2767d0215bae/mzaf_2512873933120069750.plus.aac.p.m4a","r":"Alex Warren","art":"https://is1-ssl.mzstatic.com/image/thumb/Music211/v4/46/78/fb/4678fb84-d19e-f11b-93ff-4dc17660bff8/075679619075.jpg/200x200bb.jpg"}};
+</script>
+<script>
+"use strict";
+(function(){
+
+var STR={
+  es:{
+    tag:"Pon la canción. Adivina el año.<br>Discútelo con tus amigos.",
+    start:"Empezar a jugar", keep:"Seguir jugando", again:"Jugar otra vez",
+    skip:"Saltar las que ya he oído",
+    skipSub:"Se acuerda de un día para otro, así siempre salen canciones nuevas",
+    theme:"Tema", dark:"Oscuro", light:"Claro",
+    clear:"Borrar mi historial",
+    statFresh:"{n} canciones en la caja — ninguna jugada todavía.",
+    statLeft:"Quedan {l} canciones nuevas · {h} ya escuchadas.",
+    statAll:"Ya has escuchado las {n} canciones.",
+    statNoHide:"{n} canciones en la caja.",
+    cleared:"Historial borrado — las {n} canciones vuelven a estar disponibles.",
+    counter:"Canción {i} de {n}",
+    tapPlay:"Toca el disco para reproducir",
+    paused:"En pausa", over:"Se acabó el fragmento — pulsa Siguiente",
+    buffering:"Cargando…", tapAgain:"Toca otra vez para empezar",
+    previewFail:"Ese fragmento ha fallado — pulsa Siguiente",
+    deckDone:"¡Se acabó la baraja!", freshShuffle:"Baraja nueva",
+    reveal:"Revelar el año", next:"Siguiente canción",
+    finTitle:"¡Te las has escuchado todas!",
+    finBody:"Has jugado las {n} canciones de la caja. Gracias por jugar a BoomBox.",
+    finAgain:"Empezar de nuevo", finMenu:"Volver al menú",
+    foot:"FRAGMENTOS DE APPLE",
+    lockText:"Escribe aquí el código que viene en el papel de tu caja de BoomBox.",
+    codeGo:"Entrar",
+    codeBad:"Ese código no es válido. Comprueba que lo has copiado bien."
+  },
+  en:{
+    tag:"Play the song. Guess the year.<br>Argue about it with your friends.",
+    start:"Start playing", keep:"Keep playing", again:"Play again",
+    skip:"Skip songs I've heard",
+    skipSub:"Remembers between days, so you always get fresh tracks",
+    theme:"Theme", dark:"Dark", light:"Light",
+    clear:"Clear my history",
+    statFresh:"{n} songs in the box — none played yet.",
+    statLeft:"{l} fresh songs left · {h} already heard.",
+    statAll:"You've heard all {n} songs.",
+    statNoHide:"{n} songs in the box.",
+    cleared:"History cleared — all {n} songs are fresh again.",
+    counter:"Song {i} of {n}",
+    tapPlay:"Tap the record to play",
+    paused:"Paused", over:"Preview over — hit Next",
+    buffering:"Buffering…", tapAgain:"Tap once more to start",
+    previewFail:"That preview failed — hit Next",
+    deckDone:"That's the whole deck!", freshShuffle:"Fresh shuffle",
+    reveal:"Reveal the year", next:"Next song",
+    finTitle:"You've heard them all!",
+    finBody:"You played all {n} songs in the box. Thanks for playing BoomBox.",
+    finAgain:"Start over", finMenu:"Back to menu",
+    foot:"APPLE PREVIEWS",
+    lockText:"Type the code printed on the slip inside your BoomBox box.",
+    codeGo:"Enter",
+    codeBad:"That code isn't valid. Check you copied it correctly."
+  }
+};
+function t(k,v){
+  var s=(STR[settings.lang]||STR.es)[k]||k;
+  if(v) for(var p in v) s=s.split('{'+p+'}').join(v[p]);
+  return s;
+}
+
+var $=function(i){return document.getElementById(i);};
+var lockScreen=$('lockScreen'), homeScreen=$('homeScreen'), gameScreen=$('gameScreen'),
+    finishScreen=$('finishScreen'), startBtn=$('startBtn'), repeatSwitch=$('repeatSwitch'),
+    themeSeg=$('themeSeg'), statEl=$('stat'), resetBtn=$('resetBtn'), homeBtn=$('homeBtn'),
+    playBtn=$('play'), revealBtn=$('reveal'), nextBtn=$('next'), answer=$('answer'),
+    artEl=$('art'), yearEl=$('year'), titleEl=$('title'), artistEl=$('artist'),
+    statusEl=$('status'), counterEl=$('counter'), fillEl=$('fill'),
+    finAgain=$('finAgain'), finMenu=$('finMenu'),
+    codeInput=$('codeInput'), codeGo=$('codeGo'), codeErr=$('codeErr');
+
+var metaBuild=document.querySelector('meta[name="build"]');
+var VERSION=metaBuild?metaBuild.getAttribute('content'):'?';
+
+function rd(k,f){ try{ var v=localStorage.getItem(k); return v?JSON.parse(v):f; }catch(e){ return f; } }
+function wr(k,v){ try{ localStorage.setItem(k,JSON.stringify(v)); }catch(e){} }
+var SET_KEY='boombox.settings', PLAYED_KEY='boombox.played.v1', UNLOCK_KEY='boombox.unlocked';
+
+var settings=rd(SET_KEY,null)||{};
+if(typeof settings.hideRepeats!=='boolean') settings.hideRepeats=true;
+if(settings.theme!=='light'&&settings.theme!=='dark') settings.theme='dark';
+if(settings.lang!=='en'&&settings.lang!=='es') settings.lang='es';
+function saveSettings(){ wr(SET_KEY,settings); }
+
+var played={};
+(function(){ var r=rd(PLAYED_KEY,[]); for(var i=0;i<r.length;i++) played[r[i]]=1; })();
+function savePlayed(){ var a=[]; for(var k in played) a.push(k); wr(PLAYED_KEY,a); }
+
+function keyOf(s){ return s.a+'|'+s.t; }
+var DECK_SOURCE=SONGS.filter(function(s){ return !!PREVIEWS[keyOf(s)]; });
+
+function applyTheme(){
+  document.documentElement.setAttribute('data-theme',settings.theme);
+  var m=document.querySelector('meta[name="theme-color"]');
+  if(m) m.setAttribute('content',settings.theme==='light'?'#f4ecdd':'#15131c');
+  var b=themeSeg.querySelectorAll('button');
+  for(var i=0;i<b.length;i++) b[i].setAttribute('aria-pressed',String(b[i].getAttribute('data-theme-val')===settings.theme));
+}
+function applyLang(){
+  document.documentElement.setAttribute('lang',settings.lang);
+  $('tagline').innerHTML=t('tag');
+  $('lblSkip').textContent=t('skip');
+  $('subSkip').textContent=t('skipSub');
+  $('lblTheme').textContent=t('theme');
+  $('btnDark').textContent=t('dark');
+  $('btnLight').textContent=t('light');
+  resetBtn.textContent=t('clear');
+  revealBtn.textContent=t('reveal');
+  nextBtn.textContent=t('next');
+  $('finTitle').textContent=t('finTitle');
+  $('finBody').textContent=t('finBody',{n:DECK_SOURCE.length});
+  finAgain.textContent=t('finAgain');
+  finMenu.textContent=t('finMenu');
+  $('footText').textContent=t('foot');
+  $('lockText').textContent=t('lockText');
+  codeGo.textContent=t('codeGo');
+  var boxes=document.querySelectorAll('.langbox');
+  for(var q=0;q<boxes.length;q++){
+    var b=boxes[q].querySelectorAll('button');
+    for(var i=0;i<b.length;i++) b[i].setAttribute('aria-pressed',String(b[i].getAttribute('data-lang')===settings.lang));
+  }
+  paintHome(); setCounter();
+}
+
+var deck=[], idx=0, current=null, revealed=false, busy=false;
+var audio=new Audio(); audio.preload='auto'; audio.setAttribute('playsinline','');
+var warm=new Audio(); warm.preload='auto';
+var wantPlay=false;
+
+function shuffled(l){
+  var a=l.slice();
+  for(var i=a.length-1;i>0;i--){ var j=Math.floor(Math.random()*(i+1)); var x=a[i]; a[i]=a[j]; a[j]=x; }
+  return a;
+}
+function remaining(){
+  if(!settings.hideRepeats) return DECK_SOURCE.length;
+  var n=0;
+  for(var i=0;i<DECK_SOURCE.length;i++) if(!played[keyOf(DECK_SOURCE[i])]) n++;
+  return n;
+}
+function buildDeck(){
+  var pool=DECK_SOURCE;
+  if(settings.hideRepeats){
+    pool=DECK_SOURCE.filter(function(s){ return !played[keyOf(s)]; });
+    if(!pool.length) pool=DECK_SOURCE;
+  }
+  deck=shuffled(pool); idx=0;
+}
+
+function paintHome(){
+  repeatSwitch.setAttribute('aria-checked',String(!!settings.hideRepeats));
+  var total=DECK_SOURCE.length, left=remaining(), heard=total-left;
+  if(!settings.hideRepeats) statEl.textContent=t('statNoHide',{n:total});
+  else if(left===0) statEl.textContent=t('statAll',{n:total});
+  else if(heard===0) statEl.textContent=t('statFresh',{n:total});
+  else statEl.textContent=t('statLeft',{l:left,h:heard});
+  resetBtn.classList.toggle('hide',heard===0);
+  startBtn.textContent = left===0 ? t('again') : (heard>0?t('keep'):t('start'));
+}
+function show(screen){
+  lockScreen.hidden = screen!==lockScreen;
+  homeScreen.hidden = screen!==homeScreen;
+  gameScreen.hidden = screen!==gameScreen;
+  finishScreen.hidden = screen!==finishScreen;
+}
+function showHome(){ audio.pause(); wantPlay=false; show(homeScreen); paintHome(); }
+function showGame(){ show(gameScreen); }
+function showFinish(){ audio.pause(); wantPlay=false; show(finishScreen); }
+function showLock(){ show(lockScreen); }
+
+var statusTimer=0;
+function setStatus(m,isErr){
+  m=m||'';
+  if(statusEl.textContent===m && statusEl.classList.contains('err')===!!isErr) return;
+  clearTimeout(statusTimer);
+  statusEl.classList.add('fade');
+  statusTimer=setTimeout(function(){
+    statusEl.textContent=m;
+    statusEl.classList.toggle('err',!!isErr);
+    statusEl.classList.remove('fade');
+  },190);
+}
+function setCounter(){ counterEl.textContent = deck.length ? t('counter',{i:idx+1,n:deck.length}) : ''; }
+function showSpin(on){ playBtn.classList.toggle('spin',on); }
+
+function resetRound(){
+  revealed=false; wantPlay=false;
+  answer.classList.add('hide');
+  revealBtn.classList.remove('hide');
+  nextBtn.classList.add('hide');
+  showSpin(false);
+  fillEl.style.width='0%';
+  setCounter();
+}
+function armFor(song){
+  var meta=PREVIEWS[keyOf(song)];
+  current={song:song, meta:meta};
+  if(!played[keyOf(song)]){ played[keyOf(song)]=1; savePlayed(); }
+  audio.src=meta.u;
+  try{ audio.load(); }catch(e){}
+  playBtn.disabled=false; revealBtn.disabled=false;
+  playBtn.classList.remove('busy');
+  playBtn.classList.remove('arm');
+  void playBtn.offsetWidth;
+  playBtn.classList.add('arm');
+  setStatus(t('tapPlay'));
+  var nxt=deck[idx+1];
+  if(nxt && PREVIEWS[keyOf(nxt)]){
+    try{ warm.src=PREVIEWS[keyOf(nxt)].u; warm.load(); }catch(e){}
+  }
+}
+function prime(){
+  try{
+    audio.muted=true;
+    var p=audio.play();
+    function stop(){
+      if(wantPlay){ audio.muted=false; return; }
+      audio.pause(); try{ audio.currentTime=0; }catch(e){} audio.muted=false;
+    }
+    if(p&&p.then) p.then(stop)['catch'](function(){ audio.muted=false; }); else stop();
+  }catch(e){ audio.muted=false; }
+}
+function loadCurrent(){
+  busy=true;
+  audio.pause();
+  resetRound();
+  if(idx>=deck.length){
+    playBtn.disabled=true; revealBtn.disabled=true;
+    setStatus(t('deckDone'));
+    busy=false; return;
+  }
+  armFor(deck[idx]);
+  busy=false;
+}
+
+startBtn.addEventListener('click',function(){ buildDeck(); showGame(); loadCurrent(); });
+homeBtn.addEventListener('click',showHome);
+finMenu.addEventListener('click',showHome);
+finAgain.addEventListener('click',function(){
+  played={}; savePlayed(); buildDeck(); showGame(); loadCurrent();
+});
+repeatSwitch.addEventListener('click',function(){
+  settings.hideRepeats=!settings.hideRepeats; saveSettings(); paintHome();
+});
+themeSeg.addEventListener('click',function(e){
+  var b=e.target.closest('button[data-theme-val]'); if(!b) return;
+  settings.theme=b.getAttribute('data-theme-val'); saveSettings(); applyTheme();
+});
+document.addEventListener('click',function(e){
+  if(!e.target.closest('.langbox')) return;
+  var b=e.target.closest('button[data-lang]'); if(!b) return;
+  settings.lang=b.getAttribute('data-lang'); saveSettings(); applyLang();
+});
+resetBtn.addEventListener('click',function(){
+  played={}; savePlayed(); paintHome();
+  statEl.textContent=t('cleared',{n:DECK_SOURCE.length});
+});
+
+playBtn.addEventListener('click',function(){
+  if(!current||playBtn.disabled) return;
+  if(audio.paused){
+    wantPlay=true; audio.muted=false;
+    var p=audio.play();
+    if(p&&p['catch']) p['catch'](function(){ setStatus(t('tapAgain'),true); });
+    showSpin(true); setStatus('');
+  }else{
+    wantPlay=false; audio.pause(); showSpin(false); setStatus(t('paused'));
+  }
+});
+revealBtn.addEventListener('click',function(){
+  if(!current||revealed) return;
+  revealed=true;
+  yearEl.textContent=current.song.y;
+  titleEl.textContent=current.song.t;
+  artistEl.textContent=current.song.a;
+  if(current.meta.art){ artEl.src=current.meta.art; artEl.classList.remove('hide'); }
+  else artEl.classList.add('hide');
+  answer.classList.remove('hide');
+  revealBtn.classList.add('hide');
+  nextBtn.classList.remove('hide');
+});
+nextBtn.addEventListener('click',function(){
+  if(busy) return;
+  idx++;
+  if(idx>=deck.length){
+    if(settings.hideRepeats && remaining()===0){ showFinish(); return; }
+    buildDeck(); setStatus(t('freshShuffle'));
+  }
+  audio.pause();
+  resetRound();
+  armFor(deck[idx]);
+  prime();
+});
+
+audio.addEventListener('timeupdate',function(){
+  var d=(audio.duration&&isFinite(audio.duration))?audio.duration:30;
+  fillEl.style.width=Math.min(100,(audio.currentTime/d)*100)+'%';
+});
+audio.addEventListener('ended',function(){ wantPlay=false; showSpin(false); setStatus(t('over')); });
+audio.addEventListener('waiting',function(){ if(wantPlay) setStatus(t('buffering')); });
+audio.addEventListener('playing',function(){ if(wantPlay) setStatus(''); });
+audio.addEventListener('error',function(){ if(current) setStatus(t('previewFail'),true); });
+document.addEventListener('gesturestart',function(e){ e.preventDefault(); });
+
+var ALPHA="0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+var SECRET="bmbx.f9e2337597a8b3d54bc8b2ae83ae6aa4";
+function sha256bytes(str){
+  var K=[0x428a2f98,0x71374491,0xb5c0fbcf,0xe9b5dba5,0x3956c25b,0x59f111f1,0x923f82a4,0xab1c5ed5,
+  0xd807aa98,0x12835b01,0x243185be,0x550c7dc3,0x72be5d74,0x80deb1fe,0x9bdc06a7,0xc19bf174,
+  0xe49b69c1,0xefbe4786,0x0fc19dc6,0x240ca1cc,0x2de92c6f,0x4a7484aa,0x5cb0a9dc,0x76f988da,
+  0x983e5152,0xa831c66d,0xb00327c8,0xbf597fc7,0xc6e00bf3,0xd5a79147,0x06ca6351,0x14292967,
+  0x27b70a85,0x2e1b2138,0x4d2c6dfc,0x53380d13,0x650a7354,0x766a0abb,0x81c2c92e,0x92722c85,
+  0xa2bfe8a1,0xa81a664b,0xc24b8b70,0xc76c51a3,0xd192e819,0xd6990624,0xf40e3585,0x106aa070,
+  0x19a4c116,0x1e376c08,0x2748774c,0x34b0bcb5,0x391c0cb3,0x4ed8aa4a,0x5b9cca4f,0x682e6ff3,
+  0x748f82ee,0x78a5636f,0x84c87814,0x8cc70208,0x90befffa,0xa4506ceb,0xbef9a3f7,0xc67178f2];
+  var H=[0x6a09e667,0xbb67ae85,0x3c6ef372,0xa54ff53a,0x510e527f,0x9b05688c,0x1f83d9ab,0x5be0cd19];
+  var b=[],i,c;
+  for(i=0;i<str.length;i++){
+    c=str.charCodeAt(i);
+    if(c<128) b.push(c);
+    else if(c<2048) b.push(192|(c>>6),128|(c&63));
+    else if(c<55296||c>=57344) b.push(224|(c>>12),128|((c>>6)&63),128|(c&63));
+    else { i++; c=0x10000+(((c&1023)<<10)|(str.charCodeAt(i)&1023));
+      b.push(240|(c>>18),128|((c>>12)&63),128|((c>>6)&63),128|(c&63)); }
+  }
+  var bitLen=b.length*8;
+  b.push(0x80);
+  while(b.length%64!==56) b.push(0);
+  var hi=Math.floor(bitLen/4294967296), lo=bitLen>>>0;
+  b.push((hi>>>24)&255,(hi>>>16)&255,(hi>>>8)&255,hi&255,(lo>>>24)&255,(lo>>>16)&255,(lo>>>8)&255,lo&255);
+  function rr(x,n){ return (x>>>n)|(x<<(32-n)); }
+  var w=new Array(64),a,bb,cc,d,e,f,g,h,t1,t2,j;
+  for(i=0;i<b.length;i+=64){
+    for(j=0;j<16;j++) w[j]=(b[i+j*4]<<24)|(b[i+j*4+1]<<16)|(b[i+j*4+2]<<8)|b[i+j*4+3];
+    for(j=16;j<64;j++){
+      var s0=rr(w[j-15],7)^rr(w[j-15],18)^(w[j-15]>>>3);
+      var s1=rr(w[j-2],17)^rr(w[j-2],19)^(w[j-2]>>>10);
+      w[j]=(w[j-16]+s0+w[j-7]+s1)|0;
+    }
+    a=H[0];bb=H[1];cc=H[2];d=H[3];e=H[4];f=H[5];g=H[6];h=H[7];
+    for(j=0;j<64;j++){
+      var S1=rr(e,6)^rr(e,11)^rr(e,25), ch=(e&f)^(~e&g);
+      t1=(h+S1+ch+K[j]+w[j])|0;
+      var S0=rr(a,2)^rr(a,13)^rr(a,22), maj=(a&bb)^(a&cc)^(bb&cc);
+      t2=(S0+maj)|0;
+      h=g;g=f;f=e;e=(d+t1)|0;d=cc;cc=bb;bb=a;a=(t1+t2)|0;
+    }
+    H[0]=(H[0]+a)|0;H[1]=(H[1]+bb)|0;H[2]=(H[2]+cc)|0;H[3]=(H[3]+d)|0;
+    H[4]=(H[4]+e)|0;H[5]=(H[5]+f)|0;H[6]=(H[6]+g)|0;H[7]=(H[7]+h)|0;
+  }
+  var out=[];
+  for(i=0;i<8;i++) out.push((H[i]>>>24)&255,(H[i]>>>16)&255,(H[i]>>>8)&255,H[i]&255);
+  return out;
+}
+function checkFor(serial){
+  var d=sha256bytes(SECRET+":"+serial), o="";
+  for(var i=0;i<6;i++) o+=ALPHA.charAt(d[i]&31);
+  return o;
+}
+function validCode(raw){
+  var c=String(raw||"").toUpperCase().replace(/[^0-9A-Z]/g,"");
+  if(c.length!==12) return false;
+  for(var i=0;i<12;i++) if(ALPHA.indexOf(c.charAt(i))<0) return false;
+  return checkFor(c.slice(0,6))===c.slice(6);
+}
+function isUnlocked(){ try{ return localStorage.getItem(UNLOCK_KEY)==="1"; }catch(e){ return false; } }
+function markUnlocked(){ try{ localStorage.setItem(UNLOCK_KEY,"1"); }catch(e){} }
+function paramK(){
+  var m=(location.search||"").match(/[?&]k=([^&#]+)/);
+  return m?decodeURIComponent(m[1]):null;
+}
+function scrubUrl(){
+  try{ if(history.replaceState) history.replaceState(null,"",location.pathname); }catch(e){}
+}
+codeInput.addEventListener('input',function(){
+  var v=codeInput.value.toUpperCase().replace(/[^0-9A-Z]/g,'').slice(0,12);
+  var g=v.match(/.{1,4}/g);
+  codeInput.value=g?g.join('-'):'';
+  codeErr.textContent='';
+});
+function trySubmit(){
+  if(validCode(codeInput.value)){
+    markUnlocked(); scrubUrl();
+    codeErr.textContent='';
+    showHome();
+  }else{
+    codeErr.textContent=t('codeBad');
+    codeInput.classList.remove('shake');
+    void codeInput.offsetWidth;
+    codeInput.classList.add('shake');
+  }
+}
+codeGo.addEventListener('click',trySubmit);
+codeInput.addEventListener('keydown',function(e){ if(e.key==='Enter') trySubmit(); });
+
+function boot(){
+  if(isUnlocked()){ scrubUrl(); showHome(); return; }
+  var k=paramK();
+  if(k && validCode(k)){ markUnlocked(); scrubUrl(); showHome(); return; }
+  showLock();
+}
+function checkForUpdate(){
+  if(!window.fetch||location.protocol==='file:') return;
+  var F='boombox.reloadedFor';
+  fetch(location.href.split('#')[0],{cache:'no-store'}).then(function(r){ return r.ok?r.text():null; })
+  .then(function(txt){
+    if(!txt) return;
+    var m=txt.match(/name="build" content="([^"]+)"/);
+    if(!m) return;
+    if(m[1]===VERSION){ try{ sessionStorage.removeItem(F); }catch(e){} return; }
+    var tried=null; try{ tried=sessionStorage.getItem(F); }catch(e){}
+    if(tried===m[1]) return;
+    try{ sessionStorage.setItem(F,m[1]); }catch(e){}
+    location.reload();
+  })['catch'](function(){});
+}
+
+applyTheme(); applyLang(); boot(); checkForUpdate();
+
+})();
+</script>
+</body>
+</html>
