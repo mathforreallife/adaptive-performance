@@ -26,8 +26,8 @@ jobs:
           $p = Start-Process -FilePath $exe -ArgumentList "--reset","--autotest=25","--screenshot=$out\sandbox.jpg","--log=$out\sandbox.txt" -PassThru
           if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "sandbox hung" }
           Get-Content "$out\sandbox.txt"
-          Write-Host "SCREENSHOT_SANDBOX_BASE64:"
-          [Convert]::ToBase64String([IO.File]::ReadAllBytes("$out\sandbox.jpg"))
+          . ./demo/tools/Print-Screenshot.ps1
+          Print-Screenshot "$out\sandbox.jpg" "SANDBOX" 520
 
       - name: Upload binaries
         uses: actions/upload-artifact@v4
