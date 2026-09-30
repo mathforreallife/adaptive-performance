@@ -6,13 +6,34 @@ on:
   workflow_dispatch:
 
 jobs:
-  probe:
+  build-and-test:
     runs-on: windows-latest
+    timeout-minutes: 20
     steps:
-      - name: Probe runner
+      - uses: actions/checkout@v4
+
+      - name: Build
         shell: pwsh
         run: |
-          Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors | Format-List
-          Get-CimInstance Win32_VideoController | Select-Object Name,AdapterRAM,DriverVersion,CurrentRefreshRate | Format-List
-          (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full').Release
-          [System.Windows.Forms.SystemInformation]::UserInteractive
+          dotnet build demo/src/Sandbox/GAPO.Sandbox.csproj -c Release -nologo
+          if (Test-Path demo/src/Optimiser/GAPO.Optimiser.csproj) { dotnet build demo/src/Optimiser/GAPO.Optimiser.csproj -c Release -nologo }
+
+      - name: Smoke test (sandbox alone, 25 s)
+        shell: pwsh
+        run: |
+          $out = "$env:RUNNER_TEMP\gapo"; New-Item -ItemType Directory -Force $out | Out-Null
+          $exe = Resolve-Path demo/src/Sandbox/bin/Release/net462/GAPO-Sandbox.exe
+          $p = Start-Process -FilePath $exe -ArgumentList "--reset","--autotest=25","--screenshot=$out\sandbox.jpg","--log=$out\sandbox.txt" -PassThru
+          if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "sandbox hung" }
+          Get-Content "$out\sandbox.txt"
+          Write-Host "SCREENSHOT_SANDBOX_BASE64:"
+          [Convert]::ToBase64String([IO.File]::ReadAllBytes("$out\sandbox.jpg"))
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: GAPO-Demo
+          path: |
+            demo/src/Sandbox/bin/Release/net462/GAPO-Sandbox.exe
+            demo/src/Optimiser/bin/Release/net462/GAPO-Optimiser.exe
+          if-no-files-found: warn

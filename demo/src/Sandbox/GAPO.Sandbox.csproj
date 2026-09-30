@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net462</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Prefer32Bit>false</Prefer32Bit>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <AssemblyName>GAPO-Sandbox</AssemblyName>
+    <RootNamespace>Gapo.Sandbox</RootNamespace>
+    <ApplicationIcon>..\..\assets\sandbox.ico</ApplicationIcon>
+    <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
+    <Product>GAPO Sandbox (demo game)</Product>
+    <AssemblyTitle>GAPO Sandbox — deliberately unoptimised demo game</AssemblyTitle>
+    <Version>1.0.0</Version>
+    <Company>Adaptive Performance</Company>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename).cs" />
+  </ItemGroup>
+</Project>
