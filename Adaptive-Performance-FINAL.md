@@ -10,7 +10,7 @@
 This is the **complete handover** for the next build. It contains everything needed to build the commercial product:
 
 - **Part I – Conclusions from the demo.** What was built, what was measured, what worked, what didn't, the problems hit, the Windows/API gotchas, and which decisions to keep or change.
-- **Part II – The product specification.** The original specification, **complete and word for word** (every section, table, list, example and principle), with the demo's findings inserted as clearly marked call-outs.
+- **Part II – The product specification.** The original specification, **complete and word for word** (every section, table, list, example and principle), with the demo's findings inserted as clearly marked call-outs. The only edit to the original text is the §11 score formula, whose characters had been corrupted; it was repaired and is marked ✏️.
 - **Part III – Practical build guide.** Architecture, tech stack, build order, testing (including the mandatory virtual Windows test machine), pitfalls, how to keep the optimiser's own CPU/RAM overhead low, the design system and UI rules, engineering rules, and distribution.
 - **Part IV – Appendices.** The demo's measured results, how the demo maps to the product, a checklist, and a glossary.
 
@@ -222,7 +222,7 @@ After the fix it measured **0.39–0.55 % run average and 0.00–0.06 % inside m
 
 # Part II — The product specification (original, complete, with demo lessons marked)
 
-*Everything below the line is the original specification, kept word for word — every section, table, list and example — with the demo's lessons inserted as marked call-outs. Nothing was removed.*
+*Everything below the line is the original specification, kept word for word — every section, table, list and example — with the demo's lessons inserted as marked call-outs. Nothing was removed; the only edit is the repaired §11 formula (marked ✏️).*
 
 ---
 
