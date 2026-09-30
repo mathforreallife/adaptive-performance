@@ -7,7 +7,7 @@ This repository contains:
 | What | Where |
 |---|---|
 | **Ready-to-run Windows demo** (game + optimiser, no install) | [`demo/release/GAPO-Demo.zip`](demo/release/GAPO-Demo.zip), or the two `.exe` files in [`demo/release/GAPO-Demo/`](demo/release/GAPO-Demo) |
-| **Handover spec for the commercial product**, including the lessons from building this demo | [`Adaptive-Performance-FINAL.md`](Adaptive-Performance-FINAL.md) |
+| **Handover spec for the commercial product**: conclusions from the demo, the complete original spec with marked lessons (🧪 / ✏️ / ➕), a practical build guide (architecture, stack, build order, Windows VM testing, overhead budgets, minimal theme-following design) and the measured results | [`Adaptive-Performance-FINAL.md`](Adaptive-Performance-FINAL.md) |
 | Demo source code (C#, .NET Framework 4.6.2, WinForms, no dependencies) | [`demo/src`](demo/src) |
 | Windows CI that builds and runs the demo end to end | [`.github/workflows/windows-demo.yml`](.github/workflows/windows-demo.yml) |
 
@@ -23,7 +23,9 @@ This repository contains:
 
 The demo is not code-signed, so Windows SmartScreen may say *"Windows protected your PC"*. Click **More info → Run anyway**.
 
-The optimiser shows its own CPU and memory use in the top bar at all times. Keeping that overhead tiny is a core requirement: an optimiser that causes lag has failed.
+The optimiser shows its own CPU and memory use in the top bar at all times. Keeping that overhead tiny is a core requirement: an optimiser that causes lag has failed. On the Windows test machine it used about 0.5 % CPU while optimising, 0.06 % or less inside measurement windows, and under 40 MB of RAM.
+
+The demo's gradient styling is only for this prototype. The commercial product's UI is specified as minimal and flat: one background colour that follows the Windows light/dark theme (see the handover spec, Part III.8).
 
 ## Build from source
 

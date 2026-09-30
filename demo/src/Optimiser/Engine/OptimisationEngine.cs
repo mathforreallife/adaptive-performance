@@ -627,8 +627,11 @@ namespace Gapo.Optimiser.Engine
             {
                 ApplySettings(snapshot, "rollback"); _current = snapshot;
                 log.Decision = Decision.Reverted;
-                log.Reason = "Reverted: the cap didn't hold (" + r.AvgFps.ToString("0") + " FPS) or pacing didn't improve.";
-                rep.PacingNote = "Left uncapped (a " + cap + " FPS cap didn't improve pacing).";
+                bool held = r.AvgFps >= cap * 0.93;
+                log.Reason = held
+                    ? "Reverted: frame-time variation went from " + KnowledgeBase.F(devBefore) + " to " + KnowledgeBase.F(devAfter) + " ms — the cap made pacing no smoother on this PC, so the extra frames are worth more."
+                    : "Reverted: the " + cap + " FPS cap didn't hold (" + r.AvgFps.ToString("0") + " FPS measured).";
+                rep.PacingNote = held ? "Left uncapped: a " + cap + " FPS cap was tested and didn't make frame pacing smoother here." : "Left uncapped: a " + cap + " FPS cap couldn't be held.";
             }
             rep.Experiments.Add(log);
             _stepsDone++;

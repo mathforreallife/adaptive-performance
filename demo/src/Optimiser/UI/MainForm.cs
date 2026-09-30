@@ -128,9 +128,9 @@ namespace Gapo.Optimiser.UI
             double now = _clock.Elapsed.TotalMilliseconds;
             bool measuring = _status != null && _status.Measuring;
             bool countUp = _resultsShownAt >= 0 && now - _resultsShownAt < 1250;
-            // Repaint budget: nothing at all while a measurement window is open, 25 Hz only for the
-            // short result count-up (12 Hz), 2 Hz for the live dashboard and between tests, 1 Hz when idle.
-            _timer.Interval = WindowState == FormWindowState.Minimized ? 1000 : measuring ? 1000 : countUp ? 80 : _link.Connected ? 500 : 1000;
+            // Repaint budget: nothing at all while a measurement window is open, 12 Hz only for the
+            // ~1 s result count-up, 2 Hz between tests, 1 Hz for the live dashboard and when idle.
+            _timer.Interval = WindowState == FormWindowState.Minimized ? 1000 : measuring ? 1000 : countUp ? 80 : _view == View.Running ? 500 : 1000;
 
             if (_engine != null && _engine.Running && _view != View.Running) { _view = View.Running; _details = false; }
             if (_view == View.Running && _engine != null && !_engine.Running)
@@ -142,7 +142,7 @@ namespace Gapo.Optimiser.UI
 
             if (_link.Connected && _monitorPid != _link.Pid) { _monitorPid = _link.Pid; _monitor.SetGame(_link.Pid); }
             else if (!_link.Connected && _monitorPid != 0) { _monitorPid = 0; _monitor.SetGame(0); }
-            if (_link.Connected && !measuring && now - _lastLiveAt >= 450) { _lastLiveAt = now; RefreshLive(now); }
+            if (_link.Connected && !measuring && now - _lastLiveAt >= 900) { _lastLiveAt = now; RefreshLive(now); }
             if (_link.Connected && now - _lastSettingsAt > 2000) { _lastSettingsAt = now; _gameSettings = _link.ReadSettings(); }
             var m = _monitor.Latest;
             if (m != null && m != _lastSample) { _lastSample = m; _selfCpuSum += m.SelfCpuPct; _selfCpuN++; _recentSelf.Enqueue(m.SelfCpuPct); while (_recentSelf.Count > 30) _recentSelf.Dequeue(); }
