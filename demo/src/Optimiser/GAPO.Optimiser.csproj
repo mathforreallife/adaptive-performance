@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net462</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Prefer32Bit>false</Prefer32Bit>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Optimize>true</Optimize>
+    <DebugType>none</DebugType>
+    <AssemblyName>GAPO-Optimiser</AssemblyName>
+    <RootNamespace>Gapo.Optimiser</RootNamespace>
+    <ApplicationIcon>..\..\assets\gapo.ico</ApplicationIcon>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Product>GAPO — Adaptive Performance (demo)</Product>
+    <AssemblyTitle>GAPO Optimiser — adaptive game performance engine (demo)</AssemblyTitle>
+    <Version>1.0.0</Version>
+    <Company>Adaptive Performance</Company>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+    <Reference Include="System.Windows.Forms" />
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Management" />
+    <Compile Include="..\Shared\*.cs" Link="Shared\%(Filename).cs" />
+  </ItemGroup>
+</Project>

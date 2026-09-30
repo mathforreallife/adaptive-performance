@@ -1,4 +1,4 @@
-name: Windows demo build & smoke test
+name: Windows demo build & end-to-end test
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 jobs:
   build-and-test:
     runs-on: windows-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
 
@@ -16,24 +16,52 @@ jobs:
         shell: pwsh
         run: |
           dotnet build demo/src/Sandbox/GAPO.Sandbox.csproj -c Release -nologo
-          if (Test-Path demo/src/Optimiser/GAPO.Optimiser.csproj) { dotnet build demo/src/Optimiser/GAPO.Optimiser.csproj -c Release -nologo }
+          dotnet build demo/src/Optimiser/GAPO.Optimiser.csproj -c Release -nologo
 
-      - name: Smoke test (sandbox alone, 25 s)
+      - name: Sandbox alone (unoptimised, 20 s)
         shell: pwsh
         run: |
           $out = "$env:RUNNER_TEMP\gapo"; New-Item -ItemType Directory -Force $out | Out-Null
           $exe = Resolve-Path demo/src/Sandbox/bin/Release/net462/GAPO-Sandbox.exe
-          $p = Start-Process -FilePath $exe -ArgumentList "--reset","--autotest=25","--screenshot=$out\sandbox.jpg","--log=$out\sandbox.txt" -PassThru
+          $p = Start-Process -FilePath $exe -ArgumentList "--reset","--autotest=20","--screenshot=$out\sandbox-before.jpg","--log=$out\sandbox-before.txt" -PassThru
           if (-not $p.WaitForExit(120000)) { $p.Kill(); throw "sandbox hung" }
-          Get-Content "$out\sandbox.txt"
-          . ./demo/tools/Print-Screenshot.ps1
-          Print-Screenshot "$out\sandbox.jpg" "SANDBOX" 520
+          Get-Content "$out\sandbox-before.txt"
 
-      - name: Upload binaries
+      - name: End-to-end (sandbox + optimiser)
+        shell: pwsh
+        run: |
+          $out = "$env:RUNNER_TEMP\gapo"; $ui = "$out\ui"; New-Item -ItemType Directory -Force $ui | Out-Null
+          $sb = Resolve-Path demo/src/Sandbox/bin/Release/net462/GAPO-Sandbox.exe
+          $op = Resolve-Path demo/src/Optimiser/bin/Release/net462/GAPO-Optimiser.exe
+          $s = Start-Process -FilePath $sb -ArgumentList "--reset","--autotest=200","--screenshot=$out\sandbox-after.jpg","--log=$out\sandbox-after.txt" -PassThru
+          Start-Sleep -Seconds 3
+          $o = Start-Process -FilePath $op -ArgumentList "--autotest=$ui" -PassThru
+          if (-not $o.WaitForExit(330000)) { $o.Kill(); Write-Host "OPTIMISER TIMED OUT" }
+          Get-ChildItem $ui | Format-Table Name, Length
+          if (Test-Path "$ui\autotest-error.txt") { Get-Content "$ui\autotest-error.txt" }
+          if (Test-Path "$ui\autotest-timeout.txt") { Get-Content "$ui\autotest-timeout.txt" }
+          Write-Host "===== REPORT ====="
+          if (Test-Path "$ui\report.txt") { Get-Content "$ui\report.txt" -Encoding UTF8 }
+          Write-Host "===== OVERHEAD ====="
+          if (Test-Path "$ui\overhead.txt") { Get-Content "$ui\overhead.txt" }
+          if (-not $s.WaitForExit(240000)) { $s.Kill(); Write-Host "sandbox kill" }
+          Write-Host "===== SANDBOX AFTER ====="
+          if (Test-Path "$out\sandbox-after.txt") { Get-Content "$out\sandbox-after.txt" }
+
+      - name: Screenshots (compact, for log inspection)
+        shell: pwsh
+        run: |
+          . ./demo/tools/Print-Screenshot.ps1
+          $out = "$env:RUNNER_TEMP\gapo"
+          Print-Screenshot "$out\sandbox-before.jpg" "SANDBOX_BEFORE" 400
+          Print-Screenshot "$out\ui\3-results.png" "RESULTS" 560
+
+      - name: Upload binaries and screenshots
         uses: actions/upload-artifact@v4
         with:
           name: GAPO-Demo
           path: |
             demo/src/Sandbox/bin/Release/net462/GAPO-Sandbox.exe
             demo/src/Optimiser/bin/Release/net462/GAPO-Optimiser.exe
+            ${{ runner.temp }}/gapo/**
           if-no-files-found: warn
