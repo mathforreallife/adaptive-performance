@@ -2060,10 +2060,11 @@ Machine: Windows Server 2025 Datacenter 24H2 (build 26100), AMD EPYC 7763 (1 cor
 | #4 | First end-to-end build | 35.2 / 13.7 | 63.2 / 48.2 | **+80 %** | 27.6 → 12.1 ms | 47.6 → 0 | 5 / 0 | 31 s | ±7.7 % | 2.22 % / 1.67 % ✗ over budget | 42 MB |
 | #5 | UI quiet during windows, cheaper drawing | 46.4 / 19.2 | 63.3 / 53.1 | **+36 %** | 20.2 → 8.9 ms | 21.3 → 0 | 5 / 2 | 38 s | ±2.5 % | **0.39 % / 0.00 %** ✓ | 37 MB |
 | #6 | Connection-race fix, predictive give-back, heavier calibration | 39.1 / 18.0 | 87.9 / 62.0 | **+125 %** | 25.2 → 11.3 ms | 34.8 → 0 | 4 / 1 | 31 s | ±2.5 % | **0.55 % / 0.06 %** ✓ | 36 MB |
+| #7 | Final build (1 Hz dashboard, specific pacing reasons) — same code as the committed release | 41.8 / 18.6 | 63.5 / 56.9 | **+52 %** (cap kept, 64 Hz) | 23.5 → 10.6 ms | 36.1 → 0 | 5 / 0 | 31 s | ±4.1 % | **0.60 % / 0.03 %** ✓ | 36 MB |
 
 Notes:
 
-- The headline is the change in **average FPS**. In runs #4 and #5 a frame cap at the display refresh (64 Hz on this VM) was kept, which caps the headline; in run #6 the cap was measured, found not to make pacing smoother on this VM, and rolled back, so the headline shows the uncapped gain. "Frame work" shows the real reduction in work per frame (2.2–2.3× in every run).
+- The headline is the change in **average FPS**. In runs #4, #5 and #7 a frame cap at the display refresh (64 Hz on this VM) was kept, which caps the headline; in run #6 the cap was measured, found not to make pacing smoother on this VM, and rolled back, so the headline shows the uncapped gain. The pacing decision is borderline on this VM and flips with measurement noise. In the product, borderline decisions should be re-tested over a longer window before being reported. "Frame work" shows the real reduction in work per frame (2.2–2.3× in every run).
 - Run #5's baseline was lighter (46 FPS) because the sandbox's calibration had just gained its *detail* knob. For run #6 the calibration was made slightly heavier (≈ 30 ms Ultra budget); the unoptimised game then ran at 38–39 FPS with a freeze every 10 s — "a tiny bit of lag".
 - "Inside windows" is the optimiser's CPU while a measurement window was open. After the fixes it was 0.00–0.06 % of the PC.
 - Session averages (including the one-off start-up hardware scan and the CI screenshot capture) were 1.1–1.2 %. The peaks (≈ 9–10 %) come from the WMI hardware scan at start-up, which is why that scan runs before anything is measured.
