@@ -48,6 +48,25 @@ jobs:
           Write-Host "===== SANDBOX AFTER ====="
           if (Test-Path "$out\sandbox-after.txt") { Get-Content "$out\sandbox-after.txt" }
 
+      - name: Launch check of the committed release binaries (what users download)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path demo/release/GAPO-Demo/GAPO-Sandbox.exe)) { Write-Host "No committed release binaries"; exit 0 }
+          $out = "$env:RUNNER_TEMP\gapo-release"; New-Item -ItemType Directory -Force "$out\ui" | Out-Null
+          $sb = Resolve-Path demo/release/GAPO-Demo/GAPO-Sandbox.exe
+          $op = Resolve-Path demo/release/GAPO-Demo/GAPO-Optimiser.exe
+          $s = Start-Process -FilePath $sb -ArgumentList "--autotest=40","--log=$out\sandbox.txt" -PassThru
+          Start-Sleep -Seconds 3
+          $o = Start-Process -FilePath $op -ArgumentList "--autotest=$out\ui" -PassThru
+          $deadline = (Get-Date).AddSeconds(35)
+          while ((Get-Date) -lt $deadline -and -not (Test-Path "$out\ui\1-home.png")) { Start-Sleep -Milliseconds 500 }
+          $ok = Test-Path "$out\ui\1-home.png"
+          if (-not $o.HasExited) { $o.Kill() }
+          if (-not $s.WaitForExit(60000)) { $s.Kill() }
+          Get-Content "$out\sandbox.txt"
+          if (-not $ok) { throw "Release optimiser did not reach the connected home screen" }
+          Write-Host "Release binaries: sandbox ran, optimiser scanned hardware and connected to the game."
+
       - name: Screenshots (compact, for log inspection)
         shell: pwsh
         run: |

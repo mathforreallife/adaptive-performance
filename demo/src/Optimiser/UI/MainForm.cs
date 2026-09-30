@@ -66,6 +66,7 @@ namespace Gapo.Optimiser.UI
         MonitorSample _lastSample;
         readonly Queue<float> _recentSelf = new Queue<float>();
         double _paintMs; int _paints;
+        int _monitorPid;
 
         // Autotest (CI)
         readonly string _autotestDir;
@@ -113,7 +114,6 @@ namespace Gapo.Optimiser.UI
 
         void OnConnection(bool connected)
         {
-            _monitor.SetGame(connected ? _link.Pid : 0);
             if (connected) Toast("Connected to " + (_link.Title ?? "game"));
             else if (_engine != null && _engine.Running) _engine.Cancel();
             Invalidate();
@@ -127,10 +127,10 @@ namespace Gapo.Optimiser.UI
         {
             double now = _clock.Elapsed.TotalMilliseconds;
             bool measuring = _status != null && _status.Measuring;
-            bool countUp = _resultsShownAt >= 0 && now - _resultsShownAt < 1400;
+            bool countUp = _resultsShownAt >= 0 && now - _resultsShownAt < 1250;
             // Repaint budget: nothing at all while a measurement window is open, 25 Hz only for the
-            // short result count-up, 2 Hz for the live dashboard and between tests, 1 Hz when idle.
-            _timer.Interval = WindowState == FormWindowState.Minimized ? 1000 : measuring ? 1000 : countUp ? 40 : _link.Connected ? 500 : 1000;
+            // short result count-up (12 Hz), 2 Hz for the live dashboard and between tests, 1 Hz when idle.
+            _timer.Interval = WindowState == FormWindowState.Minimized ? 1000 : measuring ? 1000 : countUp ? 80 : _link.Connected ? 500 : 1000;
 
             if (_engine != null && _engine.Running && _view != View.Running) { _view = View.Running; _details = false; }
             if (_view == View.Running && _engine != null && !_engine.Running)
@@ -140,10 +140,12 @@ namespace Gapo.Optimiser.UI
                 else if (_engine.Report != null && _engine.Report.Error != null) Toast(_engine.Report.Error);
             }
 
+            if (_link.Connected && _monitorPid != _link.Pid) { _monitorPid = _link.Pid; _monitor.SetGame(_link.Pid); }
+            else if (!_link.Connected && _monitorPid != 0) { _monitorPid = 0; _monitor.SetGame(0); }
             if (_link.Connected && !measuring && now - _lastLiveAt >= 450) { _lastLiveAt = now; RefreshLive(now); }
             if (_link.Connected && now - _lastSettingsAt > 2000) { _lastSettingsAt = now; _gameSettings = _link.ReadSettings(); }
             var m = _monitor.Latest;
-            if (m != null && m != _lastSample) { _lastSample = m; _selfCpuSum += m.SelfCpuPct; _selfCpuN++; _recentSelf.Enqueue(m.SelfCpuPct); while (_recentSelf.Count > 10) _recentSelf.Dequeue(); }
+            if (m != null && m != _lastSample) { _lastSample = m; _selfCpuSum += m.SelfCpuPct; _selfCpuN++; _recentSelf.Enqueue(m.SelfCpuPct); while (_recentSelf.Count > 30) _recentSelf.Dequeue(); }
             if (_autotestDir != null) AutotestStep(now);
             if (WindowState != FormWindowState.Minimized && !measuring) Invalidate();
         }
@@ -638,7 +640,7 @@ namespace Gapo.Optimiser.UI
             var gpu = _hw.PrimaryGpu;
             yield return Tuple.Create(Glyph.Gpu, gpu.Name, (gpu.VramBytes > 0 ? OptimisationReport.Gb(gpu.VramBytes) + (gpu.Integrated ? " shared" : " VRAM") : "VRAM not reported") + (gpu.Integrated ? " · integrated" : gpu.Virtual ? " · virtual adapter" : " · dedicated") + (gpu.DriverVersion.Length > 0 ? " · driver " + gpu.DriverVersion : ""));
             var m = _hw.Memory;
-            string mod = m.Modules.Count > 0 ? m.Modules.Count + "× " + OptimisationReport.Gb(m.Modules[0].CapacityBytes) + (m.Modules[0].Type.Length > 0 ? " " + m.Modules[0].Type : "") + (m.Modules[0].ConfiguredMts > 0 ? "-" + m.Modules[0].ConfiguredMts : "") + " · " : "";
+            string mod = m.Modules.Count > 0 ? OptimisationReport.ModuleSummary(m) + " · " : "";
             yield return Tuple.Create(Glyph.Ram, OptimisationReport.Gb(m.TotalBytes) + " memory", mod + m.ChannelMode);
             var game = _hw.Storage.FirstOrDefault(s => s.Role.Contains("Game")) ?? _hw.Storage.FirstOrDefault();
             if (game != null) yield return Tuple.Create(Glyph.Disk, game.Drive + " " + (game.MediaType == "Unknown" ? "drive" : game.MediaType) + (game.BusType.Length > 0 ? " · " + game.BusType : ""), OptimisationReport.Gb(game.FreeBytes) + " free of " + OptimisationReport.Gb(game.TotalBytes) + (game.Model.Length > 0 ? " · " + game.Model : ""));
@@ -822,7 +824,7 @@ namespace Gapo.Optimiser.UI
             var hero = new RectangleF(c.X, c.Y, c.Width, heroH);
             Gfx.Card(g, hero, S, true);
             float p = 24 * S;
-            double t = _resultsShownAt < 0 ? 1 : Math.Min(1, (_clock.Elapsed.TotalMilliseconds - _resultsShownAt) / 1300.0);
+            double t = _resultsShownAt < 0 ? 1 : Math.Min(1, (_clock.Elapsed.TotalMilliseconds - _resultsShownAt) / 1150.0);
             double ease = 1 - Math.Pow(1 - t, 3);
 
             // Big number
@@ -1277,7 +1279,7 @@ namespace Gapo.Optimiser.UI
             y += 10 * S;
             SectionLabel(g, "GAPO's own overhead", x, y); y += 22 * S;
             double avg = _selfCpuN > 0 ? _selfCpuSum / _selfCpuN : m.SelfCpuPct;
-            y += KeyValue(g, x, y, kw, "CPU now / average / peak", m.SelfCpuPct.ToString("0.00") + "% / " + avg.ToString("0.00") + "% / " + _monitor.SelfCpuPeakPct.ToString("0.0") + "%");
+            y += KeyValue(g, x, y, kw, "CPU now / 30 s average / peak", m.SelfCpuPct.ToString("0.00") + "% / " + avg.ToString("0.00") + "% / " + _monitor.SelfCpuPeakPct.ToString("0.0") + "%");
             y += KeyValue(g, x, y, kw, "Memory (private / working set)", (m.SelfPrivateBytes / 1048576.0).ToString("0") + " / " + (m.SelfWorkingSet / 1048576.0).ToString("0") + " MB");
             y += KeyValue(g, x, y, kw, "UI drawing", (_paints > 0 ? (_paintMs / _paints).ToString("0.0") : "–") + " ms per repaint · " + _paints + " repaints");
             y += KeyValue(g, x, y, kw, "Budget", SelfCpuBudgetPct.ToString("0.0") + "% CPU · " + SelfRamBudgetMB.ToString("0") + " MB — exceeding it is treated as a bug");

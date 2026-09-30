@@ -113,6 +113,8 @@ namespace Gapo.Optimiser.Engine
                 sb.AppendLine("      Why:    " + e.Hypothesis);
                 if (e.Kind == ChangeKind.Hitch && e.Before != null)
                     sb.AppendLine(string.Format(ci, "      Result: save freezes {0} in {1:0} s before; see decision for after", e.Before.AutosaveHitches, e.Before.DurationMs / 1000));
+                else if (e.Kind == ChangeKind.QualityRestore && e.Before != null && e.After != null)
+                    sb.AppendLine(string.Format(ci, "      Result: frame work {0:0.0} → {1:0.0} ms with the quality restored", e.Before.MedianWorkMs, e.After.MedianWorkMs));
                 else if (e.Before != null && e.After != null)
                     sb.AppendLine(string.Format(ci, "      Result: frame work {0:0.0} → {1:0.0} ms ({2}%), FPS {3:0.0} → {4:0.0}, visual cost {5}/10, predicted −{6:0.0} ms",
                         e.Before.MedianWorkMs, e.After.MedianWorkMs, Signed(e.GainPct), e.Before.AvgFps, e.After.AvgFps, e.VisualLoss, e.PredictedMs));
@@ -187,7 +189,7 @@ namespace Gapo.Optimiser.Engine
                 yield return "GPU      " + g.Name + (g.VramBytes > 0 ? " · " + Gb(g.VramBytes) + (g.Integrated ? " shared" : " VRAM") : "") + (g.Integrated ? " · integrated" : "") + (g.Virtual ? " · virtual adapter" : "") +
                     (g.DriverVersion.Length > 0 ? " · driver " + g.DriverVersion + (g.DriverDate.Length > 0 ? " (" + g.DriverDate + ")" : "") : "");
             var m = hw.Memory;
-            string mods = m.Modules.Count > 0 ? " · " + m.Modules.Count + "× " + Gb(m.Modules[0].CapacityBytes) + " " + m.Modules[0].Type + (m.Modules[0].ConfiguredMts > 0 ? "-" + m.Modules[0].ConfiguredMts : "") : "";
+            string mods = m.Modules.Count > 0 ? " · " + ModuleSummary(m) : "";
             yield return "Memory   " + Gb(m.TotalBytes) + mods + " · " + m.ChannelMode + " · " + m.LoadPct + "% in use";
             foreach (var s in hw.Storage)
                 yield return "Storage  " + s.Drive + " (" + s.Role + ") " + s.MediaType + (s.BusType.Length > 0 ? " " + s.BusType : "") + (s.Model.Length > 0 ? " · " + s.Model : "") + " · " + Gb(s.FreeBytes) + " free of " + Gb(s.TotalBytes);
@@ -198,6 +200,15 @@ namespace Gapo.Optimiser.Engine
             var o = hw.Os;
             yield return "Windows  " + o.Name + (o.Version.Length > 0 ? " " + o.Version : "") + " (build " + o.Build + ")" + " · Game Mode " + Tri(o.GameMode) + " · HAGS " + Tri(o.Hags);
             yield return "Class    " + ClassName(hw.Class) + " — " + hw.ClassReason;
+        }
+
+        public static string ModuleSummary(MemoryInfo m)
+        {
+            if (m.Modules.Count == 0) return "";
+            var first = m.Modules[0];
+            bool same = m.Modules.TrueForAll(x => x.CapacityBytes == first.CapacityBytes);
+            string sizes = same ? m.Modules.Count + "× " + Gb(first.CapacityBytes) : string.Join(" + ", m.Modules.ConvertAll(x => Gb(x.CapacityBytes)).ToArray());
+            return sizes + (first.Type.Length > 0 ? " " + first.Type : "") + (first.ConfiguredMts > 0 ? "-" + first.ConfiguredMts : "");
         }
 
         static string Tri(bool? b) { return b == null ? "unknown" : (b.Value ? "on" : "off"); }

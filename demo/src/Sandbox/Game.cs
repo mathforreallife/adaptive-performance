@@ -31,6 +31,8 @@ namespace Gapo.Sandbox
         public int BaseW = 480, BaseH = 270, EntityBase = 500;
         public float CalibratedMs;
         public float Detail = 1f;
+        // Unoptimised "Ultra" budget: ~20 ms rendering + ~8.5 ms simulation ≈ 30 ms per frame (≈33-38 FPS).
+        const double RenderTargetMs = 20.0, SimTargetMs = 8.5;
         public bool LoadedOptimisedSettings;
 
         public CameraMode Mode = CameraMode.Autopilot;
@@ -122,7 +124,7 @@ namespace Gapo.Sandbox
 
             // Target ~17 ms of rendering; cost grows roughly with width^1.9. On PCs too slow even at the
             // smallest size, fewer ray-march steps ("Detail") take the rest of the load off.
-            double w = probeW * Math.Pow(17.0 / Math.Max(0.5, renderProbe), 1 / 1.9);
+            double w = probeW * Math.Pow(RenderTargetMs / Math.Max(0.5, renderProbe), 1 / 1.9);
             BaseW = Clamp((int)(w / 32) * 32, 224, 800);
             BaseH = (BaseW * 9 / 16) & ~1;
             Detail = 1f;
@@ -140,8 +142,8 @@ namespace Gapo.Sandbox
                 check.Sort();
                 double m = check[check.Count / 2];
                 renderProbe = m;
-                if (m <= 17.0 * 1.2 || Detail <= 0.45f) break;
-                Detail = Math.Max(0.45f, Detail * (float)(17.0 / m) * 1.05f);
+                if (m <= RenderTargetMs * 1.2 || Detail <= 0.45f) break;
+                Detail = Math.Max(0.45f, Detail * (float)(RenderTargetMs / m) * 1.05f);
             }
 
             // Simulation probe: 300 creatures, all simulated, 8 physics substeps.
@@ -156,7 +158,7 @@ namespace Gapo.Sandbox
             }
             st.Sort();
             double simProbe = st[st.Count / 2];
-            EntityBase = Clamp((int)(300 * Math.Sqrt(7.5 / Math.Max(0.2, simProbe))), 80, 1400);
+            EntityBase = Clamp((int)(300 * Math.Sqrt(SimTargetMs / Math.Max(0.2, simProbe))), 80, 1400);
             CalibratedMs = (float)(renderProbe + simProbe * Math.Pow(EntityBase / 300.0, 2));
             SaveCalibration();
 
@@ -177,7 +179,7 @@ namespace Gapo.Sandbox
                     if (eq > 0) map[line.Substring(0, eq).Trim()] = line.Substring(eq + 1).Trim();
                 }
                 string ver, machine;
-                if (!map.TryGetValue("Version", out ver) || ver != "4") return false;
+                if (!map.TryGetValue("Version", out ver) || ver != "5") return false;
                 if (!map.TryGetValue("Machine", out machine) || machine != MachineKey()) return false;
                 BaseW = Clamp(int.Parse(map["BaseWidth"], CultureInfo.InvariantCulture), 224, 800);
                 BaseH = (BaseW * 9 / 16) & ~1;
@@ -196,7 +198,7 @@ namespace Gapo.Sandbox
                 Directory.CreateDirectory(DemoPaths.DataDir);
                 File.WriteAllText(DemoPaths.CalibrationFile,
                     "; Delete this file (or press F6 in the game) to re-calibrate the demo's workload to this PC.\r\n" +
-                    "Version=4\r\nMachine=" + MachineKey() + "\r\nBaseWidth=" + BaseW.ToString(CultureInfo.InvariantCulture) +
+                    "Version=5\r\nMachine=" + MachineKey() + "\r\nBaseWidth=" + BaseW.ToString(CultureInfo.InvariantCulture) +
                     "\r\nEntities=" + EntityBase.ToString(CultureInfo.InvariantCulture) +
                     "\r\nUltraMs=" + CalibratedMs.ToString("0.0", CultureInfo.InvariantCulture) +
                     "\r\nDetail=" + Detail.ToString("0.00", CultureInfo.InvariantCulture) + "\r\n");

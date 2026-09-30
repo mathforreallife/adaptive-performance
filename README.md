@@ -13,7 +13,7 @@ This repository contains:
 
 ## Run the demo (Windows 10 / 11)
 
-1. Download [`demo/release/GAPO-Demo.zip`](demo/release/GAPO-Demo.zip) and extract it. It's two files, about 200 KB in total.
+1. Download [`demo/release/GAPO-Demo.zip`](demo/release/GAPO-Demo.zip) and extract it. It's two small programs, about 190 KB zipped.
 2. Run **`GAPO-Sandbox.exe`**. This is a simple island sandbox game with deliberately wasteful "Ultra" defaults. It measures your PC for a second at start-up and scales its world so it runs a little laggy on any machine: roughly 30–40 FPS, with a short freeze every 10 s. The FPS counter and frame-time graph are in the top left.
 3. Run **`GAPO-Optimiser.exe`** while the game is running. It scans your hardware, connects to the game and shows live FPS and the current bottleneck. Pick a goal (**Balanced** is a good start) and click **Optimise now**.
 4. Wait about a minute. The optimiser measures a baseline twice (to learn how noisy measurements are on your PC), diagnoses the bottleneck, then tests one change at a time on a repeatable benchmark flight. It keeps what beats the noise and rolls back the rest.

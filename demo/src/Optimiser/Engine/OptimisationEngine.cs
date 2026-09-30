@@ -113,6 +113,7 @@ namespace Gapo.Optimiser.Engine
             {
                 _stepsDone = 0; _experimentsDone = 0; _experimentsLeft = 6; _hitchFixAt = -1; _windows = 0; _frames = 0; _selfInWindows = 0; _selfSamples = 0;
                 Publish(Phase.Preparing, "Getting ready", "Connecting to the game and waiting until it has finished loading.");
+                _monitor.SetGame(_link.Pid);
                 _original = _link.ReadSettings();
                 if (_original == null) throw new InvalidOperationException("Could not read the game's settings file.");
                 _current = _original.Clone();
@@ -532,6 +533,12 @@ namespace Gapo.Optimiser.Engine
                 Check();
                 var restore = RestoreSetting(e.Setting, rep.OriginalSettings);
                 if (restore == null) continue;
+                double cost = e.Before != null && e.After != null ? Math.Max(0, e.Before.MedianWorkMs - e.After.MedianWorkMs) : 0;
+                if (_reference.MedianWorkMs + cost > budget * 0.8)
+                {
+                    rep.NotTouched.Add("Quality give-back — restoring " + e.Setting + " would cost about " + KnowledgeBase.F(cost) + " ms, and only " + KnowledgeBase.F(Math.Max(0, budget * 0.8 - _reference.MedianWorkMs)) + " ms of safe headroom is left.");
+                    continue;
+                }
                 var log = new ExperimentLog { Index = rep.Experiments.Count + 1, Title = "Restore quality: " + e.Setting, Setting = e.Setting, Kind = ChangeKind.QualityRestore, VisualLoss = -e.VisualLoss, Before = _reference,
                     Hypothesis = "There is plenty of headroom (" + KnowledgeBase.F(_reference.MedianWorkMs) + " ms of a " + KnowledgeBase.F(budget) + " ms budget), so GAPO tries to give back the most visible reduction." };
                 Publish(Phase.Testing, log.Title, log.Hypothesis, true);

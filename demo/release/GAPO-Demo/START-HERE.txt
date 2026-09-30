@@ -1,0 +1,36 @@
+GAPO — Adaptive Performance demo
+================================
+
+Two small programs. No installation, no admin rights, nothing to download.
+Works on Windows 10 and Windows 11 (uses the .NET Framework that is built into Windows).
+
+1. Run GAPO-Sandbox.exe
+   A simple island sandbox game. It starts with deliberately wasteful "Ultra" settings and
+   scales itself to your PC, so it runs a little laggy on purpose (around 30-40 FPS with
+   small freezes every 10 seconds). Watch the FPS counter and frame-time graph (top left).
+
+2. Run GAPO-Optimiser.exe (keep the game running)
+   It scans your PC (CPU, graphics, memory, storage, display, power, Windows), connects to
+   the game, and shows the live FPS and the current bottleneck.
+   Pick a goal (Balanced is a good start) and click "Optimise now".
+
+   GAPO then measures a baseline, diagnoses what is holding each frame back, and tests
+   ONE change at a time on the same benchmark flight. It keeps changes that are proven to
+   help and rolls back the ones that don't. This takes about a minute.
+
+3. The result
+   The big number is the improvement in average FPS, measured before vs after.
+   Click "Show more options" to see everything it did: every change it tested with the
+   measured numbers, the diagnosis, your hardware, tips it didn't apply, and a live analyser.
+
+Undo everything: "Revert all" in GAPO, or press F5 in the game.
+
+If Windows shows "Windows protected your PC": click "More info" -> "Run anyway".
+(The demo is not code-signed; a commercial release would be.)
+
+Game controls: W A S D fly · arrows / Q E turn · R / F up/down · Shift faster ·
+left mouse raise terrain · right mouse dig · G spawn creatures · F1 help · F11 fullscreen.
+The camera flies itself if you leave the keys alone.
+
+Files the demo writes: %LOCALAPPDATA%\GAPO-Demo (settings, calibration, save file, reports).
+Delete that folder to reset everything.
