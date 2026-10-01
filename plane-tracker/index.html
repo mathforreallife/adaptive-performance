@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>JFK Plane Tracker</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  body { margin: 0; font-family: system-ui, sans-serif; display: flex; height: 100vh; }
+  #map { flex: 1; }
+  #side { width: 320px; padding: 12px; overflow-y: auto; background: #f4f6f8; box-sizing: border-box; }
+  h2 { margin: 0 0 8px; font-size: 18px; }
+  .plane-icon { font-size: 20px; line-height: 20px; }
+  #details td:first-child { color: #666; padding-right: 8px; }
+  audio { width: 100%; }
+  small { color: #666; }
+  @media (max-width: 700px) { body { flex-direction: column; } #side { width: 100%; height: 45vh; } }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="side">
+  <h2>✈️ JFK Plane Tracker</h2>
+  <small>Planes within 25 nm of JFK. Updates every 10 s. <span id="count"></span></small>
+
+  <h3>🎧 JFK Tower (LiveATC)</h3>
+  <audio controls preload="none" src="https://s1-fmt2.liveatc.net/kjfk_twr"></audio>
+  <small>If it won't play, <a href="https://www.liveatc.net/search/?icao=KJFK" target="_blank">open LiveATC</a>.</small>
+
+  <h3>Selected plane</h3>
+  <div id="details"><small>Click a plane on the map.</small></div>
+</div>
+
+<script>
+const JFK = [40.6413, -73.7781];
+const map = L.map('map').setView(JFK, 10);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© OpenStreetMap | Data: adsb.lol'
+}).addTo(map);
+L.marker(JFK).addTo(map).bindPopup('JFK Airport');
+
+const markers = {};
+let selected = null;
+
+function icon(track) {
+  return L.divIcon({
+    className: '',
+    html: `<div class="plane-icon" style="transform: rotate(${(track || 0) - 45}deg)">✈️</div>`,
+    iconSize: [20, 20]
+  });
+}
+
+function showDetails(p) {
+  const rows = {
+    'Callsign': (p.flight || '').trim() || '—',
+    'Registration': p.r || '—',
+    'Aircraft': p.t || '—',
+    'Altitude': p.alt_baro != null ? p.alt_baro + (p.alt_baro === 'ground' ? '' : ' ft') : '—',
+    'Speed': p.gs != null ? Math.round(p.gs) + ' kt' : '—',
+    'Heading': p.track != null ? Math.round(p.track) + '°' : '—',
+    'Climb rate': p.baro_rate != null ? p.baro_rate + ' ft/min' : '—',
+    'Squawk': p.squawk || '—',
+    'ICAO hex': p.hex
+  };
+  const cs = (p.flight || '').trim();
+  document.getElementById('details').innerHTML =
+    '<table>' + Object.entries(rows).map(([k, v]) => `<tr><td>${k}</td><td><b>${v}</b></td></tr>`).join('') + '</table>' +
+    (cs ? `<p><a href="https://www.flightaware.com/live/flight/${cs}" target="_blank">Route on FlightAware →</a></p>` : '');
+}
+
+async function update() {
+  try {
+    const res = await fetch(`https://api.adsb.lol/v2/lat/${JFK[0]}/lon/${JFK[1]}/dist/25`);
+    const data = await res.json();
+    const planes = data.ac || [];
+    const seen = new Set();
+    for (const p of planes) {
+      if (p.lat == null) continue;
+      seen.add(p.hex);
+      if (markers[p.hex]) {
+        markers[p.hex].setLatLng([p.lat, p.lon]).setIcon(icon(p.track));
+      } else {
+        markers[p.hex] = L.marker([p.lat, p.lon], { icon: icon(p.track) }).addTo(map)
+          .on('click', () => { selected = p.hex; showDetails(markers[p.hex].data); });
+      }
+      markers[p.hex].data = p;
+      markers[p.hex].bindTooltip((p.flight || p.hex).trim());
+      if (selected === p.hex) showDetails(p);
+    }
+    for (const hex in markers) {
+      if (!seen.has(hex)) { map.removeLayer(markers[hex]); delete markers[hex]; }
+    }
+    document.getElementById('count').textContent = `(${seen.size} planes)`;
+  } catch (e) {
+    document.getElementById('count').textContent = '(error loading data)';
+  }
+}
+update();
+setInterval(update, 10000);
+</script>
+</body>
+</html>
