@@ -71,10 +71,14 @@ Two things need the user's decision (asked in chat on 2026-11-12; check whether 
 
 Step 0 results: laptop 23.1 / 23.3 / 23.3 FPS (alone / with agent / alone), agent 0.019–0.054 % CPU, 6.0 MB; CI runner 39.4 / 39.5 / 39.3 FPS, agent 0.064 % CPU, 6.1 MB. Budget: 0.3 % / 40 MB.
 
-Step 1 so far (branch `step-1-telemetry-core`, 111 unit tests passing locally):
+Step 1 so far (branch `step-1-telemetry-core`, PR #2 with base `step-0-test-rig`, 140 unit tests passing, CI green on the runner for the frame-timing commit):
 
-- `src/Gapo.Core/Telemetry/ProcessorLoad.cs` + `src/Gapo.Windows/Telemetry/ProcessorTimesProbe.cs` — per-core load from one `NtQuerySystemInformation(SystemProcessorPerformanceInformation)` call.
-- `src/Gapo.Core/Telemetry/ProcessSnapshot.cs`, `ProcessActivity.cs` + `src/Gapo.Windows/Telemetry/ProcessSnapshotReader.cs` — one `SystemProcessInformation` snapshot: every process (cycle counts, memory, I/O) and the threads of one chosen process; share of machine per process; busiest thread as % of one processor.
+- Per-core load: `Gapo.Core/Telemetry/ProcessorLoad.cs`, `Gapo.Windows/Telemetry/ProcessorTimesProbe.cs`.
+- Process/thread snapshot: `Gapo.Core/Telemetry/ProcessSnapshot.cs`, `ProcessActivity.cs`, `Gapo.Windows/Telemetry/ProcessSnapshotReader.cs`.
+- Frame timing by GAPO's own ETW consumer: `Gapo.Core/FrameTiming/PresentTracker.cs`, `PresentedFrameQueue.cs`, `Gapo.Windows/FrameTiming/EtwNative.cs`, `EtwPresentSession.cs`; agent side `Gapo.Agent/FrameTiming/`. Validated in the rig against the fixture's telemetry (0.0-0.3 % apart on the laptop, 0.1 % on the runner, no events lost; tracing does not slow the game).
+- Game counters and memory: `Gapo.Windows/Processes/GameProcessProbe.cs`, `Gapo.Windows/Telemetry/MemoryStatusProbe.cs`.
+- 1 Hz monitor: `Gapo.Core/Telemetry/SystemMonitor.cs`, agent side `Gapo.Agent/Monitoring/`. The rig asserts the single-threaded fixture uses about one processor, its busiest thread is near 100 % of one, and its autosave writes are seen.
+- Agent with everything on: about 0.14 % CPU, 9.6 MB private (budget 0.3 % / 40 MB).
 
 Build and test locally:
 
@@ -89,13 +93,12 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 
 ## Next actions, in order
 
-1. Frame timing without injection (step 1 core). Build GAPO's own real-time ETW consumer:
-   - `Gapo.Core/FrameTiming`: pure `PresentTracker` — fed present start/stop events (process, thread, swap chain, QPC time, flags), it emits frames with frame time (start to start), CPU busy (previous present end to this present start) and time inside the present call; ignores test presents (flag 0x1); tracks per swap chain. Unit-test it with synthetic event streams.
-   - `Gapo.Windows/FrameTiming`: `EtwPresentSession` via P/Invoke (`StartTraceW`, `EnableTraceEx2`, `OpenTraceW`, `ProcessTrace` on its own thread, `ControlTraceW` stop; real-time mode, QPC timestamps, event-record callback as an unmanaged function pointer). Providers: Microsoft-Windows-DXGI `{CA11C036-0102-4A2D-A6AD-F03CFED5D3C9}` (Present start 42 / stop 43, PresentMultiplaneOverlay 55 / 56) and Microsoft-Windows-D3D9 `{783ACA0A-790E-4D7F-8451-AA850511C6B9}` (Present start 1 / stop 2). Needs admin or *Performance Log Users*; report access-denied as "frame timing unavailable", never crash. Stop a stale session with the same name before starting.
-   - Validate against ground truth: run the fixture game, capture its presents by ETW, compare frame count and mean frame time with the fixture's own JSON result (expect agreement within about 2 %). Add this to the end-to-end rig (the shell on this laptop is elevated and the CI runner is admin). Measure the consumer's overhead with the existing gate.
-   - Record the decision in the spec (changed: own ETW consumer of the events PresentMon uses, PresentMon as cross-check when permitted) and in an ADR.
-2. Game CPU / I/O / memory on a cached handle (`GetProcessIoCounters`, `K32GetProcessMemoryInfo`), memory status (`GlobalMemoryStatusEx`), a 1 Hz monitor in the agent that ties these together, all inside the overhead budget.
-3. Push `step-1-telemetry-core`, open PR #2 (base `step-0-test-rig` unless PR #1 was merged), make CI green, write the lessons into the spec.
+1. Finish step 1:
+   - ETW: pass an event-id filter (`EVENT_FILTER_TYPE_EVENT_ID` through `ENABLE_TRACE_PARAMETERS`) so only present start/stop events are delivered (about 14,000 events per 20 s arrive today, mostly irrelevant); add GPU busy time from Microsoft-Windows-DxgKrnl events and validate it with the fixture's `--scenario=gpu-load` on the laptop's HD 4000; handle "access denied" in the UI wording.
+   - Game detection without the fixture hook: foreground/full-screen process, later the Steam library index (step 5).
+   - ADR 0004 for the frame-timing decision.
+2. Step 2, hardware inventory: one-shot cached scan with a "could not be read" list, AOT-safe (no System.Management): CPU topology via `GetLogicalProcessorInformationEx`, clocks via `CallNtPowerInformation`, RAM modules via SMBIOS (`GetSystemFirmwareTable`), GPU name/VRAM via DXGI, drives via `IOCTL_STORAGE_QUERY_PROPERTY`, display via `EnumDisplaySettings`, power via `GetSystemPowerStatus` and `PowerGetEffectiveOverlayScheme`, OS build from the registry. `docs/research/demo-engine.md` and `demo-sandbox.md` exist; read `demo/src/Optimiser/Hardware/*.cs` directly for the demo's scanner.
+3. Step 3, measurement harness (windows, warm-up detection, A/A noise floor, statistics, ABAB), driven against the fixture; `docs/research/demo-engine.md` has every constant.
 4. Then continue the build order below (step 2 hardware inventory, step 3 measurement harness, ...).
 
 ## Task list (build order, spec III.4)

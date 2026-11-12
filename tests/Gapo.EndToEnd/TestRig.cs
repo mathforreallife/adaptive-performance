@@ -6,7 +6,9 @@ namespace Gapo.EndToEnd;
 
 public sealed record FixtureResult(string Name, int ExitCode, double AverageFps, double OnePercentLowFps, double MedianWorkMs, int Frames, int WarmupFrames, string PresentPath, string Adapter);
 
-public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming);
+public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor);
+
+public sealed record MonitorResult(int Samples, double MeanGameProcessorsUsed, double MeanMachineLoadPercent, double MeanBusiestProcessorPercent, double MeanBackgroundPercent, double MedianBusiestGameThreadPercent, double PeakGameWriteMegabytesPerSecond, double GamePrivateMegabytes);
 
 public sealed record FrameTimingResult(string Availability, long EventsSeen, long EventsLost, int PresentedFrames, double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs, int HookFrames, double HookMedianFrameMs)
 {
@@ -127,8 +129,20 @@ public sealed class TestRig
             root.GetProperty("peakPrivateMegabytes").GetDouble(),
             root.GetProperty("withinBudget").GetBoolean(),
             root.GetProperty("violations").EnumerateArray().Select(violation => violation.GetString() ?? string.Empty).ToList(),
-            ReadFrameTiming(root.GetProperty("frameTiming")));
+            ReadFrameTiming(root.GetProperty("frameTiming")),
+            ReadMonitor(root.GetProperty("monitor")));
     }
+
+    private static MonitorResult ReadMonitor(JsonElement monitor) =>
+        new(
+            monitor.GetProperty("samples").GetInt32(),
+            monitor.GetProperty("meanGameProcessorsUsed").GetDouble(),
+            monitor.GetProperty("meanMachineLoadPercent").GetDouble(),
+            monitor.GetProperty("meanBusiestProcessorPercent").GetDouble(),
+            monitor.GetProperty("meanBackgroundPercent").GetDouble(),
+            monitor.GetProperty("medianBusiestGameThreadPercent").GetDouble(),
+            monitor.GetProperty("peakGameWriteMegabytesPerSecond").GetDouble(),
+            monitor.GetProperty("gamePrivateMegabytes").GetDouble());
 
     private static FrameTimingResult ReadFrameTiming(JsonElement frameTiming) =>
         new(

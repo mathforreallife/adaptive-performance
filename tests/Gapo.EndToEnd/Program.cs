@@ -10,6 +10,10 @@ const double MinimumShareOfFramesSeenByAgent = 0.9;
 const double MinimumShareOfFramesSeenByEventTracing = 0.85;
 const double MaximumFrameTimeDisagreementPercent = 3.0;
 const string FrameTimingAvailable = "Available";
+const int MinimumMonitorSamples = 8;
+const double LowestProcessorsASingleThreadedGameUses = 0.6;
+const double HighestProcessorsASingleThreadedGameUses = 1.6;
+const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
 
 var outputDirectory = Path.GetFullPath(ValueOf("--output") ?? Path.Combine(Path.GetTempPath(), "gapo-end-to-end"));
 var binariesRoot = Path.GetFullPath(ValueOf("--binaries") ?? Path.Combine(AppContext.BaseDirectory, "..", ".."));
@@ -42,6 +46,12 @@ try
     Expect(frameTiming.ShareOfHookFramesSeen >= MinimumShareOfFramesSeenByEventTracing, $"Event tracing saw {frameTiming.PresentedFrames} presented frames while the game reported {frameTiming.HookFrames}.");
     Expect(frameTiming.MedianDifferencePercent <= MaximumFrameTimeDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing measured a median frame time of {frameTiming.MedianFrameMs:0.00} ms; the game itself reported {frameTiming.HookMedianFrameMs:0.00} ms."));
     Print($"frame time  event tracing {frameTiming.MedianFrameMs:0.00} ms median over {frameTiming.PresentedFrames} frames, game's own telemetry {frameTiming.HookMedianFrameMs:0.00} ms over {frameTiming.HookFrames} frames ({frameTiming.MedianDifferencePercent:0.0}% apart); CPU busy {frameTiming.MedianCpuBusyMs:0.00} ms, in present {frameTiming.MedianInPresentMs:0.00} ms; {frameTiming.EventsSeen} events, {frameTiming.EventsLost} lost");
+    var monitor = agent.Monitor;
+    Expect(monitor.Samples >= MinimumMonitorSamples, $"The monitor produced only {monitor.Samples} samples.");
+    Expect(monitor.MeanGameProcessorsUsed is >= LowestProcessorsASingleThreadedGameUses and <= HighestProcessorsASingleThreadedGameUses, string.Create(CultureInfo.InvariantCulture, $"The single-threaded fixture should use about one processor; the monitor measured {monitor.MeanGameProcessorsUsed:0.00}."));
+    Expect(monitor.MedianBusiestGameThreadPercent >= LowestBusiestThreadShareOfASingleThreadedGame, string.Create(CultureInfo.InvariantCulture, $"The fixture's main thread should be close to a full processor; the monitor measured {monitor.MedianBusiestGameThreadPercent:0}%."));
+    Expect(monitor.PeakGameWriteMegabytesPerSecond > 0, "The monitor never saw the fixture's autosave disk writes.");
+    Print($"monitor     game uses {monitor.MeanGameProcessorsUsed:0.00} processors, busiest game thread {monitor.MedianBusiestGameThreadPercent:0}% of one; machine load {monitor.MeanMachineLoadPercent:0}% (busiest processor {monitor.MeanBusiestProcessorPercent:0}%), background {monitor.MeanBackgroundPercent:0.0}%; game {monitor.GamePrivateMegabytes:0} MB, peak disk write {monitor.PeakGameWriteMegabytesPerSecond:0.0} MB/s");
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);

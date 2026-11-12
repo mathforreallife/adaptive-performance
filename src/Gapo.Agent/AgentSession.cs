@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Gapo.Agent.EngineHook;
 using Gapo.Agent.FrameTiming;
+using Gapo.Agent.Monitoring;
 using Gapo.Core.Overhead;
 using Gapo.Core.Statistics;
 using Gapo.Sandbox.Contract;
@@ -31,6 +32,7 @@ public sealed class AgentSession
         var clock = Stopwatch.StartNew();
         using var link = new SandboxLink(options.SandboxMapName);
         using var frameTiming = options.MeasureFrameTiming ? new FrameTimingProbe() : null;
+        using var monitor = new AgentMonitor();
 
         meter.Record(clock.Elapsed, probe.Read(), insideMeasurementWindow: false);
         for (var read = 1; !ShouldStop(link, clock.Elapsed, cancellation); read++)
@@ -41,7 +43,10 @@ public sealed class AgentSession
             frameTiming?.Collect();
             if (read % ReadsPerOverheadSample == 0)
             {
-                meter.Record(clock.Elapsed, probe.Read(), insideMeasurementWindow: false);
+                var own = probe.Read();
+                meter.Record(clock.Elapsed, own, insideMeasurementWindow: false);
+                monitor.Reconcile(link.GameProcessId);
+                monitor.Sample(clock.Elapsed, own);
             }
 
             cancellation.WaitHandle.WaitOne(TelemetryReadInterval);
@@ -60,7 +65,8 @@ public sealed class AgentSession
             budget,
             overhead,
             overhead.Evaluate(budget),
-            frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs));
+            frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs),
+            monitor.Summarise());
     }
 
     private static void ReconcileFrameTiming(SandboxLink link, FrameTimingProbe? frameTiming)
