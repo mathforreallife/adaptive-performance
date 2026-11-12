@@ -1,5 +1,10 @@
 <Solution>
+  <Folder Name="/fixture/">
+    <Project Path="fixture/Gapo.Sandbox.Contract/Gapo.Sandbox.Contract.csproj" />
+    <Project Path="fixture/Gapo.Sandbox/Gapo.Sandbox.csproj" />
+  </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Gapo.Sandbox.Contract.Tests/Gapo.Sandbox.Contract.Tests.csproj" />
     <Project Path="tests/Gapo.SourceRules.Tests/Gapo.SourceRules.Tests.csproj" />
   </Folder>
   <Folder Name="/tools/">

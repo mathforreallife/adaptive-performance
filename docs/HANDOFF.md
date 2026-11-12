@@ -60,11 +60,24 @@ The research workflow script is saved at
 `C:\Users\Kevin\.claude\projects\C--Users-Kevin-Desktop-Project\03b2d8a3-1b4f-4985-b608-67e477eab4b4\workflows\scripts\gapo-understand-wf_e4c9822a-3a0.js`
 (run id `wf_e4c9822a-3a0`, resumable only inside the same session; in a new session just re-create the missing briefs).
 
+## In-progress state (updated 2026-11-12, after the second usage-limit stop)
+
+Branch `step-0-test-rig` (local only, not pushed yet). Commit `8ec17cd` holds the solution skeleton (`Gapo.slnx`, `Directory.Build.props`, central package versions, `global.json` with the Microsoft.Testing.Platform runner) and the no-comments checker `tools/Gapo.SourceRules` with 35 passing tests. Run it with `artifacts/bin/Gapo.SourceRules/release/gapo-source-rules.exe check . --exclude demo --exclude docs`; `strip <dir>` removes C# comments.
+
+Uncommitted, mid-port — the fixture game under `fixture/`:
+
+- `fixture/Gapo.Sandbox.Contract/` — done: `Telemetry.cs` (same 120-byte record and header offsets as the demo, explicit layout, map name parameter, new command `TriggerWarmup = 3`), `SandboxSettings.cs` (properties, atomic save), `SandboxPaths.cs` (data dir `%LOCALAPPDATA%\GAPO-Sandbox`, overridable).
+- `fixture/Gapo.Sandbox/` — demo sources copied, comments stripped, namespace renamed. `Game.cs` and `World.cs` are already patched for: `FixtureOptions`, fixed workload, scenario scaling, streaming (warm-up) control, memory ballast, save size, GPU-load iterations, run statistics. New files written: `FixtureOptions.cs`, `RunStatistics.cs`, `MemoryBallast.cs`, the csproj (net10.0-windows, WinForms, Vortice.Direct3D11 + D3DCompiler 3.8.3), `app.manifest`.
+- Still to write before it compiles: `DxgiPresenter.cs` (D3D11 flip-model swap chain, upload of the composed frame, full-screen pass with a loop of `GpuLoadIterations`, WARP fallback); rewrite `Program.cs` (parse `FixtureOptions`, drop headless mode, exit codes); `Native.cs` (add `AvailablePhysicalMb()` via `GlobalMemoryStatusEx`, drop `IsWindows`); `GameForm.cs` (take options, window size, DXGI or GDI present, JSON result log from `RunStatistics`, `_game.DeleteCalibration()` is now an instance method).
+- Then: add projects to `Gapo.slnx`, contract tests (record size/offsets, settings round trip), a background-load generator exe, run the fixture on this laptop.
+
+Research workflows failed twice on the usage limit and cost a lot; do not re-run them. Decide by direct experiment instead (for example: run PresentMon against the fixture here to see what it reports), and look things up inline only when needed.
+
 ## Next actions, in order
 
-1. Finish the missing research briefs (small batches).
-2. Decide and record in ADRs: solution layout, UI stack, frame-timing path, fixture present path (the fixture must present through a DXGI swap chain if PresentMon cannot see GDI presents), branch/PR convention.
-3. Create branch `step-0-test-rig` and build step 0:
+1. Finish the fixture port listed above; build; run it locally with `--workload=...  --autotest=...`.
+2. Record decisions in ADRs: solution layout, UI stack, frame-timing path, fixture present path, branch/PR convention.
+3. Continue step 0 on branch `step-0-test-rig`:
    - solution skeleton under `src/`, `fixture/`, `tests/`, `tools/`;
    - the no-comments CI checker (`tools/`), run locally and in CI;
    - port of the sandbox as the fixture game (`fixture/`), keeping the telemetry contract, adding scenario switches for every bottleneck class and a fixed-workload mode for CI;
