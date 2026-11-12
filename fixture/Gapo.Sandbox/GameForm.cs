@@ -218,7 +218,7 @@ namespace Gapo.Sandbox
                 if (_presenter != null)
                 {
                     _presenter.Present(_bits, cw, ch, _game.GpuLoadIterations);
-                    _game.PresentWaitMs = _presenter.LastPresentCallMs;
+                    _game.PresentWaitMs = _presenter.LastBlockedMs;
                     _presentPath.Add(composeMs, _presenter.LastUploadMs, _presenter.LastDrawMs, _presenter.LastPresentCallMs);
                 }
                 else Native.BitBlt(hdc, 0, 0, cw, ch, _memDC, 0, 0, Native.SRCCOPY);

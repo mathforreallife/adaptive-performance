@@ -75,6 +75,8 @@ float4 PixelMain(VertexOutput input) : SV_Target
         public bool IsSoftwareAdapter { get; private set; }
         public float LastPresentCallMs { get; private set; }
         public float LastUploadMs { get; private set; }
+        public float LastMapCallMs { get; private set; }
+        public float LastBlockedMs { get { return LastMapCallMs + LastPresentCallMs; } }
         public float LastDrawMs { get; private set; }
 
         DxgiPresenter() { }
@@ -187,6 +189,7 @@ float4 PixelMain(VertexOutput input) : SV_Target
 
             long beforeUpload = System.Diagnostics.Stopwatch.GetTimestamp();
             var mapped = _context.Map(_frameTexture, 0, MapMode.WriteDiscard);
+            LastMapCallMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(beforeUpload).TotalMilliseconds;
             long rowBytes = (long)width * sizeof(int);
             for (int y = 0; y < height; y++)
                 Buffer.MemoryCopy(pixels + (long)y * width, (byte*)mapped.DataPointer + (long)y * mapped.RowPitch, rowBytes, rowBytes);
