@@ -72,6 +72,8 @@ public sealed class SandboxLink : IDisposable
         return total;
     }
 
+    public string SettingsPath => channel?.SettingsPath ?? string.Empty;
+
     public bool GameIsRunningNormally => channel is not null && channel.State == SandboxState.Running;
 
     public int AppliedSettingsRevision => channel?.AppliedRevision ?? 0;

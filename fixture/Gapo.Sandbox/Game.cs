@@ -38,6 +38,7 @@ namespace Gapo.Sandbox
         const int BallastTouchMbPerFrame = 32;
         const string CalibrationVersion = "6";
         public bool LoadedOptimisedSettings;
+        public bool QuitRequested;
         public readonly FixtureOptions Options;
         public readonly RunStatistics Stats = new RunStatistics();
         public readonly MemoryBallast Ballast = new MemoryBallast();
@@ -363,6 +364,7 @@ namespace Gapo.Sandbox
                     else { Mode = CameraMode.Autopilot; _autoT = CameraPath.BenchmarkStart + _benchT; }
                 }
                 else if (cmd == SandboxCommand.RestartBenchmarkPath) _benchT = 0;
+                else if (cmd == SandboxCommand.Quit) QuitRequested = true;
                 else if (cmd == SandboxCommand.TriggerWarmup)
                 {
                     World.RestartStreaming(CamX, CamY);

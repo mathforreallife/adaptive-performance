@@ -83,7 +83,7 @@ public sealed record ExperimentRecord(
     string Reason,
     string? BottleneckAfter)
 {
-    public double MeasuredSavingMs => After is null ? 0 : Before.MedianBusyMs - After.MedianBusyMs;
+    public double MeasuredSavingMs => After is null || Kind == ChangeKind.HitchFix ? 0 : Before.MedianBusyMs - After.MedianBusyMs;
 }
 
 public sealed record OptimisationReport

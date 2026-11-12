@@ -117,7 +117,8 @@ namespace Gapo.Sandbox
             while (_ready && !IsDisposed && !Native.PeekMessage(out msg, IntPtr.Zero, 0, 0, 0))
             {
                 _game.Frame(_input, Present);
-                if (_autotestSeconds > 0 && _game.Now - _started > _autotestSeconds * 1000) { FinishAutotest(); return; }
+                if (_autotestSeconds > 0 && (_game.QuitRequested || _game.Now - _started > _autotestSeconds * 1000)) { FinishAutotest(); return; }
+                if (_autotestSeconds <= 0 && _game.QuitRequested) { Close(); return; }
             }
         }
 

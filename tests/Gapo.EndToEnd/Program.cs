@@ -13,8 +13,9 @@ const double MaximumFrameTimeDisagreementPercent = 3.0;
 const string FrameTimingAvailable = "Available";
 const int MinimumMonitorSamples = 8;
 const double SlowestAcceptableHardwareScanMilliseconds = 1500;
-const int FewestFramesInAMeasurementWindow = 45;
 const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
+const double SmallestExpectedFpsGainPercent = 25;
+const int FewestExpectedKeptChanges = 2;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
@@ -87,24 +88,44 @@ try
 
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
-    var (measuredGame, measuringAgent) = rig.RunFixtureWithBaselineMeasurement("baseline-measurement");
-    Expect(measuredGame.ExitCode == 0, $"The fixture exited with code {measuredGame.ExitCode} during the baseline measurement.");
-    if (measuringAgent.Baseline is { } measured)
+    var (optimisedGame, optimisingAgent) = rig.RunFixtureWithOptimisation("optimise");
+    Expect(optimisedGame.ExitCode == 0, $"The fixture exited with code {optimisedGame.ExitCode} during the optimisation.");
+    Expect(optimisingAgent.WithinBudget && optimisingAgent.ExitCode == 0, "The agent exceeded its overhead budget while optimising: " + string.Join(" ", optimisingAgent.Violations));
+    Expect(optimisingAgent.MeasurementWindowCpuPercent <= LargestCpuInsideMeasurementWindowsPercent, string.Create(CultureInfo.InvariantCulture, $"The agent used {optimisingAgent.MeasurementWindowCpuPercent:0.000}% CPU inside measurement windows."));
+    ExpectDiagnosis(optimisingAgent.Diagnosis, "RenderSingleThread", "the default fixture");
+    Expect(optimisingAgent.Diagnosis is null || optimisingAgent.Diagnosis.SecondaryProblems.Any(problem => problem.StartsWith("Storage hitch", StringComparison.Ordinal)), "The diagnosis did not mention the autosave freezes of the fixture.");
+    if (optimisingAgent.Optimisation is { } optimised)
     {
-        Expect(measured.Succeeded, "The baseline measurement failed: " + measured.FailureReason);
-        Expect(measured.NoiseFloorCanBeTrusted, string.Create(CultureInfo.InvariantCulture, $"The two baseline windows disagreed too much after {measured.Attempts} attempt(s) (noise floor {measured.NoiseFloorPercent:0.0}%)."));
-        Expect(measured.FirstWindowFrames >= FewestFramesInAMeasurementWindow && measured.SecondWindowFrames >= FewestFramesInAMeasurementWindow, $"The baseline windows held {measured.FirstWindowFrames} and {measured.SecondWindowFrames} frames.");
-        Expect(measured.WaitedForWarmupSeconds > 0, "The agent did not wait for the game to finish warming up.");
-        Expect(measuringAgent.MeasurementWindowCpuPercent <= LargestCpuInsideMeasurementWindowsPercent, string.Create(CultureInfo.InvariantCulture, $"The agent used {measuringAgent.MeasurementWindowCpuPercent:0.000}% CPU inside measurement windows."));
-        Print($"baseline    waited {measured.WaitedForWarmupSeconds:0.0} s for warm-up; windows {measured.FirstWindowMedianBusyMs:0.00} and {measured.SecondWindowMedianBusyMs:0.00} ms frame work ({measured.FirstWindowFrames} and {measured.SecondWindowFrames} frames); noise floor ±{measured.NoiseFloorPercent:0.0}% after {measured.Attempts} attempt(s); agent {measuringAgent.MeasurementWindowCpuPercent:0.000}% CPU inside windows");
+        Expect(optimised.Completed, "The optimisation did not complete: " + optimised.Error);
+        Expect(optimised.FpsGainPercent >= SmallestExpectedFpsGainPercent, string.Create(CultureInfo.InvariantCulture, $"The optimisation gained only {optimised.FpsGainPercent:0}% average FPS on the deliberately wasteful fixture."));
+        Expect(optimised.Kept >= FewestExpectedKeptChanges, $"Only {optimised.Kept} change(s) were kept.");
+        Expect(optimised.Experiments.Count > 0 && optimised.Experiments[0].Kind == "HitchFix" && optimised.Experiments[0].Decision == "Kept", "The autosave hitch was not fixed first.");
+        Expect(optimised.Experiments.All(experiment => experiment.Reason.Length > 0), "An experiment has no stated reason.");
+        Expect(optimised.SettingsAfter.TryGetValue("AutosaveSeconds", out var autosave) && autosave == "300", "The final settings do not contain the hitch fix.");
+        Expect(File.ReadAllText(rig.SandboxSettingsPath).Contains("AutosaveSeconds=300", StringComparison.Ordinal), "The settings file of the game does not contain the kept changes.");
+        Print($"optimise    {optimised.FpsGainPercent:+0;-0;0}% average FPS ({optimised.BaselineFps:0.0} → {optimised.FinalFps:0.0}); frame work {optimised.BaselineWorkMs:0.0} → {optimised.FinalWorkMs:0.0} ms ({optimised.WorkReductionFactor:0.0}× less); stutters/min {optimised.BaselineStuttersPerMinute:0.0} → {optimised.FinalStuttersPerMinute:0.0}; kept {optimised.Kept}, rolled back {optimised.RolledBack}; {optimised.MeasurementWindows} windows in {optimised.DurationSeconds:0} s; noise floor ±{optimised.NoiseFloorPercent:0.0}%");
+        Print($"            {optimised.PacingNote}");
+        foreach (var experiment in optimised.Experiments)
+        {
+            Print($"            [{experiment.Decision}] {experiment.Title}: predicted {experiment.PredictedSavingMs:0.0} ms, measured {experiment.MeasuredSavingMs:0.0} ms ({experiment.GainPercent:+0;-0;0}%)");
+        }
+
+        foreach (var note in optimised.NotTouched)
+        {
+            Print($"            not changed: {note}");
+        }
+
+        Print($"            agent while optimising: {optimisingAgent.RunAverageCpuPercent:0.000}% CPU average, {optimisingAgent.MeasurementWindowCpuPercent:0.000}% inside windows, {optimisingAgent.PeakPrivateMegabytes:0.0} MB private");
+        Expect(rig.RevertAll() == 0, "Revert all failed.");
+        var reverted = File.ReadAllText(rig.SandboxSettingsPath);
+        Expect(reverted.Contains("AutosaveSeconds=10 ", StringComparison.Ordinal) && reverted.Contains("RenderThreads=1 ", StringComparison.Ordinal) && reverted.Contains("AntiAliasing=SSAA4x", StringComparison.Ordinal), "Revert all did not restore the original settings file.");
+        Print($"revert all  the settings file of the game is back to its original values");
     }
     else
     {
-        Expect(false, "The agent reported no baseline measurement.");
+        Expect(false, "The agent reported no optimisation result.");
     }
 
-    ExpectDiagnosis(measuringAgent.Diagnosis, "RenderSingleThread", "the default fixture");
-    Expect(measuringAgent.Diagnosis is null || measuringAgent.Diagnosis.SecondaryProblems.Any(problem => problem.StartsWith("Storage hitch", StringComparison.Ordinal)), "The diagnosis did not mention the fixture's autosave freezes.");
     var (_, simulationAgent) = rig.RunFixtureWithBaselineMeasurement("simulation-bound", scenario: "simulation-bound");
     ExpectDiagnosis(simulationAgent.Diagnosis, "CpuMainThread", "the simulation-bound fixture");
     Expect(simulationAgent.Diagnosis is null || simulationAgent.Diagnosis.EngineLimitation.Length > 0, "The simulation-bound diagnosis did not explain the engine limitation.");

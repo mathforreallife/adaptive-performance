@@ -112,17 +112,23 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - CI budget: the repository is private and Windows minutes are limited (each run is 3-5 minutes, billed double). Push once per step, not per commit.
 - The rig now takes about 4 minutes locally (five fixture runs).
 
+## Steps 5-6 state (branch `step-5-6-adapters-and-engine`, stacked on step 4)
+
+- `src/Gapo.Core/Optimisation/` - `GameSettings.cs`, `OptimisationModel.cs` (candidates, goals, records, the `IGameSession` / `IGameKnowledge` / `IChangeJournal` interfaces), `OptimisationEngine.cs`. Tests: `tests/Gapo.Core.Tests/OptimisationEngineTests.cs` with `SimulatedGame.cs`.
+- `src/Gapo.Adapters.Sandbox/` - `SandboxSettingsMap.cs`, `SandboxKnowledge.cs` (all ladders), `StageAccumulator.cs`. Tests in `tests/Gapo.Adapters.Sandbox.Tests`.
+- Agent: `Optimisation/SandboxSession.cs` (the session runs on the agent's own loop: every wait pumps the loop, no extra thread), `Optimisation/FileChangeJournal.cs`, `Optimisation/OptimisationReportJson.cs`. Options: `--optimise=balanced|maximum-fps|quality|smoothness`, `--journal=<path>`, `--ask-game-to-close-when-done` (fixture command `Quit`), `--revert-all`.
+- Rig runs: baseline-1, with-agent, baseline-2, optimise (+ revert all), simulation-bound. About 5 minutes locally.
+- Result on this laptop: 25.2 -> 94.0 FPS (+274 %), or +143 % when the 60 FPS cap is kept; agent 0.29 % CPU while optimising, 0.11 % in windows, 16 MB.
+- Step 5 is only done for the fixture. Not done: the Steam library index, running-game detection without the hook, real-game adapters.
+- Scripts that patch several files at once must be written to `artifacts/rig/*.py` and run once; a script that failed half-way was re-run and applied edits twice. Check `git diff` after any failure before re-running.
+
 ## Next actions, in order
 
-1. Push `step-4-diagnosis`, open PR #5 (base `step-3-measurement-harness`), make CI green.
-2. Step 5, game adapters (`src/Gapo.Core/Adapters` for the interface and pure parts, `src/Gapo.Adapters.*` or a folder in the agent for implementations):
-   - the adapter interface from spec III.2: `Detect`, `ReadSettings`, `WriteSettings` (atomic + backup), `RequiresRestart(setting)`, `Benchmark`, `AntiCheatPolicy`, `SettingLadders` (levels, visual-loss scores, stage mapping);
-   - the fixture adapter first (settings INI through `Gapo.Sandbox.Contract`, hot reload with revision acknowledgement, benchmark via commands); move the baseline measurement onto the adapter interface so nothing in the agent talks to `SandboxLink` directly except the fixture adapter;
-   - Steam library index: registry `HKCU\Software\Valve\Steam` (`SteamPath`), `steamapps/libraryfolders.vdf`, `appmanifest_<id>.acf` (a small KeyValues text parser, pure and unit-tested with sample files), mapping a running process path to an app id; Steam is not installed on this laptop, so test with fabricated library folders;
-   - running-game detection without a hook (process list poll every 5 s via the existing snapshot, match against the library index).
-3. Step 6, experiment engine on the fixture adapter: transactions and crash-safe journal, hitch fix first, value ordering by predicted saving / (visual loss + 0.6), stop at target, quality give-back, pacing last, explanations, Revert all. `docs/research/demo-engine.md` sections 9-14 hold the demo's ladders, constants and wording. This is the first step that produces an FPS before/after number for the product.
-4. Leftovers: step 3 hitch-period observation and ETW-fed windows; step 1 GPU busy time (DxgKrnl), ADR 0004.
-5. Then step 7 (UI).
+1. Push `step-5-6-adapters-and-engine`, open PR #6 (base `step-4-diagnosis`), make CI green. Check PR #5's run too.
+2. Write the end-of-phase summary for the user (what works, FPS before/after, overhead, what is next) if not already given.
+3. Step 7, UI: WinUI 3 app `src/Gapo.App` (check first that it builds with only the .NET SDK: Microsoft.WindowsAppSDK 2.6.5, unpackaged, self-contained); flat design per spec III.8 (tokens, typography, layout, states, copy rules); home view, results view with one honest percentage, "Show more options" with five tabs; own CPU/RAM in the header; follows light/dark/high contrast live; a named pipe between UI and agent (the agent keeps doing the work; the UI only renders when visible); screenshots of every screen in CI. If WinUI 3 cannot be built or run headless on the runner, record the reason in an ADR and fall back to WPF with the same design.
+4. Real games: Steam library index (registry `SteamPath`, `steamapps/libraryfolders.vdf`, `appmanifest_<id>.acf`, a pure KeyValues parser with tests), running-game detection, a settings adapter for one real game with a text config, frame timing by ETW (already built), restart-required settings. Steam is not installed on this laptop.
+5. Leftovers: GPU busy time (DxgKrnl), hitch-period observation, ADR 0004 (frame timing), ADR 0005 (engine and adapter interfaces), README refresh.
 
 ## Task list (build order, spec III.4)
 
@@ -131,8 +137,8 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - [x] 2. Hardware inventory — done (PR #3)
 - [x] 3. Measurement harness — done for the fixture (PR #4)
 - [x] 4. Diagnosis v1 — done for the classes the fixture can show (PR #5)
-- [ ] 5. First three game adapters
-- [ ] 6. Experiment engine
+- [ ] 5. First three game adapters - fixture adapter done (PR #6); real games not started
+- [x] 6. Experiment engine - done on the fixture (PR #6)
 - [ ] 7. UI
 - [ ] 8. Knowledge base + learning
 - [ ] 9. Sensors via vendor SDKs
