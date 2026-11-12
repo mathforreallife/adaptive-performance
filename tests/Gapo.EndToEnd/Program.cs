@@ -103,6 +103,12 @@ try
         Expect(false, "The agent reported no baseline measurement.");
     }
 
+    ExpectDiagnosis(measuringAgent.Diagnosis, "RenderSingleThread", "the default fixture");
+    Expect(measuringAgent.Diagnosis is null || measuringAgent.Diagnosis.SecondaryProblems.Any(problem => problem.StartsWith("Storage hitch", StringComparison.Ordinal)), "The diagnosis did not mention the fixture's autosave freezes.");
+    var (_, simulationAgent) = rig.RunFixtureWithBaselineMeasurement("simulation-bound", scenario: "simulation-bound");
+    ExpectDiagnosis(simulationAgent.Diagnosis, "CpuMainThread", "the simulation-bound fixture");
+    Expect(simulationAgent.Diagnosis is null || simulationAgent.Diagnosis.EngineLimitation.Length > 0, "The simulation-bound diagnosis did not explain the engine limitation.");
+
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
 }
 catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or IOException or JsonException or KeyNotFoundException)
@@ -123,6 +129,22 @@ void Expect(bool condition, string failure)
     if (!condition)
     {
         failures.Add(failure);
+    }
+}
+
+void ExpectDiagnosis(DiagnosisResult? diagnosis, string expectedPrimary, string what)
+{
+    if (diagnosis is null)
+    {
+        failures.Add($"No diagnosis was produced for {what}.");
+        return;
+    }
+
+    Expect(diagnosis.Primary == expectedPrimary, $"The diagnosis for {what} was {diagnosis.Primary}; expected {expectedPrimary}.");
+    Print($"diagnosis   {what}: {diagnosis.Title}. {diagnosis.Summary}");
+    foreach (var problem in diagnosis.SecondaryProblems)
+    {
+        Print($"            also: {problem}");
     }
 }
 

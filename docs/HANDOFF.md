@@ -105,21 +105,32 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - Rig output directories: the old session scratchpad is gone; use `artifacts/rig/<name>` inside the repo (ignored by git).
 - Timing-sensitive unit tests failed twice on loaded machines; keep lower bounds loose (15-20 % of a processor) whenever a test spins a thread.
 
+## Step 4 state (branch `step-4-diagnosis`, stacked on step 3)
+
+- `src/Gapo.Core/Diagnosis/` — `DiagnosisInput.cs`, `BottleneckDiagnosis.cs`, `Diagnostician.cs`; tests in `tests/Gapo.Core.Tests/DiagnosticianTests.cs`.
+- Agent: after a successful baseline it diagnoses from the combined windows, stage medians (`Measurement/StageAccumulator.cs`), the monitor summary, present timing and hardware; the report gets a `diagnosis` object. The rig runs the default fixture (expects `RenderSingleThread` plus the storage-hitch note) and `--scenario=simulation-bound` (expects `CpuMainThread` and the engine-limitation text).
+- CI budget: the repository is private and Windows minutes are limited (each run is 3-5 minutes, billed double). Push once per step, not per commit.
+- The rig now takes about 4 minutes locally (five fixture runs).
+
 ## Next actions, in order
 
-1. Push `step-3-measurement-harness`, open PR #4 (base `step-2-hardware-inventory`), make CI green; also confirm PR #3's CI went green after the test fix.
-2. Finish step 3: hitch observation over at least 14 s (period and size of storage hitches, per revision); a `MeasuredChange` helper that applies one settings change through an adapter interface, waits for the revision acknowledgement, measures, and returns the verdict (this is the seam to step 6); the same harness fed from ETW frames when no hook exists (busy time = CPU busy).
-3. Step 4, diagnosis v1 in `Gapo.Core/Diagnosis`: stage-time classification against the frame budget (simulation / render / present / streaming) when a hook exists; CPU-bound vs waiting-in-present from ETW otherwise; one-thread limit from the monitor (busiest thread vs processors used); background contention; memory pressure; storage hitch; transient. Conditional evidence sentences only. Use the fixture scenarios (`--scenario=...`) as test cases in the rig. `docs/research/demo-engine.md` sections 6-8 hold the demo's rules and wording.
-4. Leftovers from step 1: GPU busy time from Microsoft-Windows-DxgKrnl events validated with `--scenario=gpu-load`; game detection without the fixture hook; ADR 0004 (frame timing).
-5. Then steps 5 (game adapters, Steam library), 6 (experiment engine), 7 (UI).
+1. Push `step-4-diagnosis`, open PR #5 (base `step-3-measurement-harness`), make CI green.
+2. Step 5, game adapters (`src/Gapo.Core/Adapters` for the interface and pure parts, `src/Gapo.Adapters.*` or a folder in the agent for implementations):
+   - the adapter interface from spec III.2: `Detect`, `ReadSettings`, `WriteSettings` (atomic + backup), `RequiresRestart(setting)`, `Benchmark`, `AntiCheatPolicy`, `SettingLadders` (levels, visual-loss scores, stage mapping);
+   - the fixture adapter first (settings INI through `Gapo.Sandbox.Contract`, hot reload with revision acknowledgement, benchmark via commands); move the baseline measurement onto the adapter interface so nothing in the agent talks to `SandboxLink` directly except the fixture adapter;
+   - Steam library index: registry `HKCU\Software\Valve\Steam` (`SteamPath`), `steamapps/libraryfolders.vdf`, `appmanifest_<id>.acf` (a small KeyValues text parser, pure and unit-tested with sample files), mapping a running process path to an app id; Steam is not installed on this laptop, so test with fabricated library folders;
+   - running-game detection without a hook (process list poll every 5 s via the existing snapshot, match against the library index).
+3. Step 6, experiment engine on the fixture adapter: transactions and crash-safe journal, hitch fix first, value ordering by predicted saving / (visual loss + 0.6), stop at target, quality give-back, pacing last, explanations, Revert all. `docs/research/demo-engine.md` sections 9-14 hold the demo's ladders, constants and wording. This is the first step that produces an FPS before/after number for the product.
+4. Leftovers: step 3 hitch-period observation and ETW-fed windows; step 1 GPU busy time (DxgKrnl), ADR 0004.
+5. Then step 7 (UI).
 
 ## Task list (build order, spec III.4)
 
 - [x] 0. Test rig — done (PR #1, waiting for the user to merge)
 - [x] 1. Telemetry core — done except GPU busy time (PR #2)
 - [x] 2. Hardware inventory — done (PR #3)
-- [ ] 3. Measurement harness — in progress (PR #4)
-- [ ] 4. Diagnosis v1
+- [x] 3. Measurement harness — done for the fixture (PR #4)
+- [x] 4. Diagnosis v1 — done for the classes the fixture can show (PR #5)
 - [ ] 5. First three game adapters
 - [ ] 6. Experiment engine
 - [ ] 7. UI

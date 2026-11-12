@@ -6,7 +6,9 @@ namespace Gapo.EndToEnd;
 
 public sealed record FixtureResult(string Name, int ExitCode, double AverageFps, double OnePercentLowFps, double MedianWorkMs, int Frames, int WarmupFrames, string PresentPath, string Adapter);
 
-public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor, HardwareResult Hardware, BaselineResult? Baseline, double MeasurementWindowCpuPercent);
+public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor, HardwareResult Hardware, BaselineResult? Baseline, double MeasurementWindowCpuPercent, DiagnosisResult? Diagnosis);
+
+public sealed record DiagnosisResult(string Primary, string Title, string Summary, string EngineLimitation, IReadOnlyList<string> Evidence, IReadOnlyList<string> SecondaryProblems);
 
 public sealed record BaselineResult(bool Succeeded, string FailureReason, int Attempts, double WaitedForWarmupSeconds, double NoiseFloorPercent, bool NoiseFloorCanBeTrusted, int FirstWindowFrames, int SecondWindowFrames, double FirstWindowMedianBusyMs, double SecondWindowMedianBusyMs);
 
@@ -33,6 +35,7 @@ public sealed class TestRig
     private const double LongEnoughForABaselineSeconds = 45;
 
     private double runSeconds;
+    private string? fixtureScenario;
     private readonly string? workload;
 
     public TestRig(string binariesRoot, string outputDirectory, double runSeconds, string? workload)
@@ -55,8 +58,9 @@ public sealed class TestRig
         return Collect(name, fixture);
     }
 
-    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithBaselineMeasurement(string name)
+    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithBaselineMeasurement(string name, string? scenario = null)
     {
+        fixtureScenario = scenario;
         var configuredSeconds = runSeconds;
         runSeconds = Math.Max(runSeconds, LongEnoughForABaselineSeconds);
         try
@@ -66,6 +70,7 @@ public sealed class TestRig
         finally
         {
             runSeconds = configuredSeconds;
+            fixtureScenario = null;
         }
     }
 
@@ -102,6 +107,11 @@ public sealed class TestRig
         if (workload is not null)
         {
             arguments.Add("--workload=" + workload);
+        }
+
+        if (fixtureScenario is not null)
+        {
+            arguments.Add("--scenario=" + fixtureScenario);
         }
 
         return Start(SandboxExecutable, arguments);
@@ -154,8 +164,18 @@ public sealed class TestRig
             ReadMonitor(root.GetProperty("monitor")),
             ReadHardware(root.GetProperty("hardware")),
             root.TryGetProperty("baseline", out var baseline) ? ReadBaseline(baseline) : null,
-            root.GetProperty("measurementWindowCpuPercent").GetDouble());
+            root.GetProperty("measurementWindowCpuPercent").GetDouble(),
+            root.TryGetProperty("diagnosis", out var diagnosis) ? ReadDiagnosis(diagnosis) : null);
     }
+
+    private static DiagnosisResult ReadDiagnosis(JsonElement diagnosis) =>
+        new(
+            diagnosis.GetProperty("primary").GetString() ?? string.Empty,
+            diagnosis.GetProperty("title").GetString() ?? string.Empty,
+            diagnosis.GetProperty("summary").GetString() ?? string.Empty,
+            diagnosis.GetProperty("engineLimitation").GetString() ?? string.Empty,
+            diagnosis.GetProperty("evidence").EnumerateArray().Select(sentence => sentence.GetString() ?? string.Empty).ToList(),
+            diagnosis.GetProperty("secondaryProblems").EnumerateArray().Select(sentence => sentence.GetString() ?? string.Empty).ToList());
 
     private static BaselineResult ReadBaseline(JsonElement baseline)
     {

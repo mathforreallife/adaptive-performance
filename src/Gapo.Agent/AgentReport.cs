@@ -3,6 +3,7 @@ using Gapo.Agent.FrameTiming;
 using Gapo.Agent.Hardware;
 using Gapo.Agent.Measurement;
 using Gapo.Agent.Monitoring;
+using Gapo.Core.Diagnosis;
 using Gapo.Core.Hardware;
 using Gapo.Core.Overhead;
 
@@ -20,7 +21,8 @@ public sealed record AgentReport(
     FrameTimingReport? FrameTiming,
     MonitorReport Monitor,
     HardwareInventory Hardware,
-    BaselineMeasurement? Baseline)
+    BaselineMeasurement? Baseline,
+    BottleneckDiagnosis? Diagnosis)
 {
     private const int DecimalPlaces = 3;
 
@@ -62,6 +64,11 @@ public sealed record AgentReport(
         if (Baseline is not null)
         {
             BaselineReportJson.Write(json, Baseline);
+        }
+
+        if (Diagnosis is not null)
+        {
+            DiagnosisJson.Write(json, Diagnosis);
         }
         json.WriteEndObject();
     }

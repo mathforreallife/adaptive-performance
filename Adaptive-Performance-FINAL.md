@@ -1666,6 +1666,13 @@ Classify:
 > ➕ **Added** — - Transient (warm-up / shader compilation / background update) — detect and wait.
 > - Single-threaded render/submit (parallelism setting available) — found in the demo; distinct from pixel-bound rendering.
 
+> ➕ **Added (product build, step 4)** — diagnosis v1 is pure, unit-tested code (`src/Gapo.Core/Diagnosis`), fed by the baseline measurement, the monitor and the hardware inventory. It has two paths:
+> - **With stage times from the game** (the fixture's hook, later partner engines): the demo's rules — transient when more than 20 % of frames are warm-up; rendering on one thread; rendering workload with its three costliest passes; main-thread simulation with the engine-limitation text — and the target-reached verdict when frame work is under 92 % of the budget with no save freezes left.
+> - **From outside only** (any game, ETW presents plus the monitor): *waiting to present* when 40 % or more of the frame is spent inside the present call (graphics card, VSync or a cap — and never "target reached" while the frame itself is longer than the budget); *limited by one CPU thread* when the busiest thread is at 85 % or more of a processor while the whole game uses fewer than 1.6; *CPU fully used* at 80 % or more of all processors; otherwise it says that no single limit stands out rather than guessing.
+> - Evidence and secondary problems are each conditional on their own measurement (idle other processors only under 35 %, background apps only from 15 %, the hidden one-thread sentence only with a 25-point gap, memory pressure from 88 % load or under 700 MB free, uneven pacing only when no save freeze explains it, a clock limit under 80 % of maximum).
+>
+> Checked on real Windows by the end-to-end rig with two fixture scenarios on the entry-level laptop: the default fixture → *"Rendering is stuck on one CPU thread — rendering takes 27.9 ms of each 40.5 ms frame, all on 1 of your 4 CPU threads, while the other processors are mostly idle (29 % on average)"*; `--scenario=simulation-bound` → *"CPU main thread (simulation) — the simulation takes 32.3 ms of each 47.7 ms frame (1464 creatures simulated, physics 25.9 ms)"* with the main-thread limitation text; both also reported the autosave freezes (*"froze for up to 230 ms while saving, 4 time(s) in the last 38 s"*).
+
 
 ### Phase 3: Game settings
 
