@@ -1,0 +1,24 @@
+<Window
+    x:Class="Gapo.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Grid x:Name="Root" Background="{ThemeResource GapoBackgroundBrush}">
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="*" />
+    </Grid.RowDefinitions>
+    <Grid Padding="24,16,24,8" ColumnSpacing="16">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+        <ColumnDefinition Width="Auto" />
+      </Grid.ColumnDefinitions>
+      <TextBlock Text="GAPO" Style="{StaticResource GapoTitleStyle}" VerticalAlignment="Center" />
+      <TextBlock x:Name="StatusText" Grid.Column="1" Style="{StaticResource GapoSecondaryStyle}" VerticalAlignment="Center" />
+      <TextBlock x:Name="OverheadText" Grid.Column="2" Style="{StaticResource GapoSecondaryStyle}" VerticalAlignment="Center" AutomationProperties.Name="GAPO's own processor and memory use" />
+    </Grid>
+    <ScrollViewer x:Name="BodyScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+      <ContentPresenter x:Name="Body" Margin="24,8,24,24" HorizontalAlignment="Stretch" />
+    </ScrollViewer>
+  </Grid>
+</Window>

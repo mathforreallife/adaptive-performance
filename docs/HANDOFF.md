@@ -124,13 +124,19 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - CI runner result for the first engine run: 28.2 -> 62.5 FPS (+121 %), then ten experiments measured 0.0 because the present call blocks at the display rate on the software adapter; fixed by counting time inside present as wait and by the engine stop rule (three changes in a row without effect).
 - Scripts that patch several files at once must be written to `artifacts/rig/*.py` and run once; a script that failed half-way was re-run and applied edits twice. Check `git diff` after any failure before re-running.
 
+## Step 7 state (branch `step-7-ui`, stacked on steps 5-6)
+
+- `src/Gapo.App` - WinUI 3 app: `Themes/Tokens.xaml` (design tokens for light, dark, high contrast), `MainWindow`, `Views/ResultsView`, `Views/DetailsView` (five tabs), `Views/HomeView` (no-game state), `Reports/ReportView.cs` (reads the agent's report JSON), `ScreenshotRun.cs`, `AppOptions.cs`. Run: `artifacts/bin/Gapo.App/release_win-x64/GAPO.exe --report=<agent report> [--screenshots=<folder>] [--theme=light|dark]`.
+- The rig runs the app after the optimise run in both themes and expects six PNG files each (`ui-light`, `ui-dark` under the rig output folder).
+- Engine/fixture state: the engine stops when the game already runs at the display rate; on the CI runner the result is 33.1 -> 62.0 FPS (+87 %), four kept, none rolled back. The fixture counts time blocked in `Map` and `Present` as wait.
+- Not done in the UI: live link to the agent (named pipe), home view with live stat tiles and frame-time chart, frame-budget bar, running / warm-up / error states, Revert all / Optimise again / Save report buttons, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, measuring the UI process against its 0.5 % / 80 MB budget.
+
 ## Next actions, in order
 
-1. Push `step-5-6-adapters-and-engine`, open PR #6 (base `step-4-diagnosis`), make CI green. Check PR #5's run too.
-2. Write the end-of-phase summary for the user (what works, FPS before/after, overhead, what is next) if not already given.
-3. Step 7, UI: WinUI 3 app `src/Gapo.App`. **Verified on this laptop on 2026-11-12:** a minimal WinUI 3 app (Microsoft.WindowsAppSDK 2.6.5, `net10.0-windows10.0.19041.0`, `UseWinUI`, `WindowsPackageType=None`, `WindowsAppSDKSelfContained=true`, `RuntimeIdentifier=win-x64`, `Platform=x64`) builds with `dotnet build` and no Visual Studio in 1.5 minutes, runs on Windows 10 22H2, uses 30 MB private memory and 0 % CPU when idle; its output folder is 156 MB (self-contained runtime). The probe project is in `%LOCALAPPDATA%\Temp\gapo-winui-probe` (App.xaml with `XamlControlsResources`, a Window with a Grid). Not yet checked: whether it starts on the GPU-less CI runner, and screenshot capture there. Then: flat design per spec III.8 (tokens, typography, layout, states, copy rules); home view, results view with one honest percentage, "Show more options" with five tabs; own CPU/RAM in the header; follows light/dark/high contrast live; a named pipe between UI and agent (the agent keeps doing the work; the UI only renders when visible); screenshots of every screen in CI. If WinUI 3 cannot be built or run headless on the runner, record the reason in an ADR and fall back to WPF with the same design.
-4. Real games: Steam library index (registry `SteamPath`, `steamapps/libraryfolders.vdf`, `appmanifest_<id>.acf`, a pure KeyValues parser with tests), running-game detection, a settings adapter for one real game with a text config, frame timing by ETW (already built), restart-required settings. Steam is not installed on this laptop.
-5. Leftovers: GPU busy time (DxgKrnl), hitch-period observation, ADR 0004 (frame timing), ADR 0005 (engine and adapter interfaces), README refresh.
+1. Check the CI runs of `step-5-6-adapters-and-engine` and `step-7-ui` (PR #7). If WinUI 3 cannot start or render on the GPU-less runner, make the rig skip UI screenshots when the fixture reports a software adapter and record that in ADR 0004 and the spec.
+2. UI next: an agent status channel (named pipe, newline-delimited JSON: state, live monitor sample at 1 Hz, engine status lines, final report path) and a UI client; home view with live stat tiles, frame-time chart (decimated to 150 points keeping spikes) and the frame-budget bar; an Optimise button with the goal selector that starts `--optimise`; running state with phase progress; Revert all. The UI must not render while a game has focus and must stay within 0.5 % CPU / 80 MB.
+3. Real games: Steam library index and a first real-game adapter (see the earlier list).
+4. Leftovers: GPU busy time (DxgKrnl), ADR for the engine/adapter interfaces and for frame timing, README refresh.
 
 ## Task list (build order, spec III.4)
 
@@ -141,7 +147,7 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - [x] 4. Diagnosis v1 — done for the classes the fixture can show (PR #5)
 - [ ] 5. First three game adapters - fixture adapter done (PR #6); real games not started
 - [x] 6. Experiment engine - done on the fixture (PR #6)
-- [ ] 7. UI
+- [ ] 7. UI - first increment (results and details from a report, PR #7)
 - [ ] 8. Knowledge base + learning
 - [ ] 9. Sensors via vendor SDKs
 - [ ] 10. Latency and network modules

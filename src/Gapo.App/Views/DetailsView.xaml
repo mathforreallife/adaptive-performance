@@ -1,0 +1,139 @@
+<UserControl
+    x:Class="Gapo.App.Views.DetailsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:reports="using:Gapo.App.Reports">
+  <UserControl.Resources>
+    <DataTemplate x:Key="SentenceTemplate" x:DataType="x:String">
+      <TextBlock Text="{x:Bind}" Style="{StaticResource GapoBodyStyle}" />
+    </DataTemplate>
+    <DataTemplate x:Key="FactTemplate" x:DataType="reports:FactLine">
+      <Grid ColumnSpacing="16">
+        <Grid.ColumnDefinitions>
+          <ColumnDefinition Width="200" />
+          <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+        <TextBlock Text="{x:Bind Label}" Style="{StaticResource GapoSecondaryStyle}" />
+        <TextBlock Grid.Column="1" Text="{x:Bind Value}" Style="{StaticResource GapoBodyStyle}" />
+      </Grid>
+    </DataTemplate>
+    <StackLayout x:Key="ListLayout" Spacing="8" />
+  </UserControl.Resources>
+  <StackPanel Spacing="16" MaxWidth="960">
+    <Grid ColumnSpacing="12">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Button Content="Back to the result" Click="OnBackClicked" />
+      <SelectorBar x:Name="Tabs" Grid.Column="1" SelectionChanged="OnTabChanged">
+        <SelectorBarItem Text="What I changed" />
+        <SelectorBarItem Text="Diagnosis" />
+        <SelectorBarItem Text="Your PC" />
+        <SelectorBarItem Text="Tips" />
+        <SelectorBarItem Text="Live analyser" />
+      </SelectorBar>
+    </Grid>
+
+    <StackPanel x:Name="ChangesPanel" Spacing="16">
+      <ItemsRepeater ItemsSource="{x:Bind Report.Experiments}">
+        <ItemsRepeater.Layout>
+          <StackLayout Spacing="16" />
+        </ItemsRepeater.Layout>
+        <ItemsRepeater.ItemTemplate>
+          <DataTemplate x:DataType="reports:ExperimentCard">
+            <Border Style="{StaticResource GapoCardStyle}">
+              <StackPanel Spacing="8">
+                <Grid ColumnSpacing="12">
+                  <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                  </Grid.ColumnDefinitions>
+                  <TextBlock Text="{x:Bind Title}" Style="{StaticResource GapoBodyStyle}" FontWeight="SemiBold" FontSize="16" />
+                  <Border Grid.Column="1" Visibility="{x:Bind Kept}" Background="{ThemeResource GapoGoodTintBrush}" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                    <TextBlock Text="Kept" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoGoodBrush}" />
+                  </Border>
+                  <Border Grid.Column="1" Visibility="{x:Bind RolledBack}" Background="{ThemeResource GapoWarnTintBrush}" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                    <TextBlock Text="Rolled back" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoWarnBrush}" />
+                  </Border>
+                  <Border Grid.Column="1" Visibility="{x:Bind Failed}" Background="{ThemeResource GapoBadTintBrush}" CornerRadius="4" Padding="8,2" VerticalAlignment="Center">
+                    <TextBlock Text="Could not be measured" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoBadBrush}" />
+                  </Border>
+                </Grid>
+                <TextBlock Text="{x:Bind Hypothesis}" Style="{StaticResource GapoSecondaryStyle}" />
+                <TextBlock Text="{x:Bind Measured}" Visibility="{x:Bind HasMeasurement}" Style="{StaticResource GapoBodyStyle}" />
+                <TextBlock Text="{x:Bind Reason}" Style="{StaticResource GapoBodyStyle}" />
+                <TextBlock Text="{x:Bind VisualCost}" Style="{StaticResource GapoSectionLabelStyle}" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsRepeater.ItemTemplate>
+      </ItemsRepeater>
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Considered but not changed" Style="{StaticResource GapoSectionLabelStyle}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.NotChanged}" ItemTemplate="{StaticResource SentenceTemplate}" Layout="{StaticResource ListLayout}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <StackPanel x:Name="DiagnosisPanel" Spacing="16" Visibility="Collapsed">
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Before GAPO changed anything" Style="{StaticResource GapoSectionLabelStyle}" />
+          <TextBlock Text="{x:Bind Report.DiagnosisTitle}" Style="{StaticResource GapoTitleStyle}" />
+          <TextBlock Text="{x:Bind Report.DiagnosisSummary}" Style="{StaticResource GapoBodyStyle}" />
+          <TextBlock Text="{x:Bind Report.EngineLimitation}" Style="{StaticResource GapoSecondaryStyle}" />
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Evidence" Style="{StaticResource GapoSectionLabelStyle}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.Evidence}" ItemTemplate="{StaticResource SentenceTemplate}" Layout="{StaticResource ListLayout}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.OtherProblems}" ItemTemplate="{StaticResource SentenceTemplate}" Layout="{StaticResource ListLayout}" />
+        </StackPanel>
+      </Border>
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="After the changes" Style="{StaticResource GapoSectionLabelStyle}" />
+          <TextBlock Text="{x:Bind Report.BottleneckAfter}" Style="{StaticResource GapoTitleStyle}" />
+          <TextBlock Text="{x:Bind Report.MeasurementQuality}" Style="{StaticResource GapoSecondaryStyle}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <StackPanel x:Name="HardwarePanel" Spacing="16" Visibility="Collapsed">
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="{x:Bind Report.PcClass}" Style="{StaticResource GapoTitleStyle}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.Hardware}" ItemTemplate="{StaticResource FactTemplate}" Layout="{StaticResource ListLayout}" />
+        </StackPanel>
+      </Border>
+      <Border x:Name="UnreadCard" Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="What could not be read" Style="{StaticResource GapoSectionLabelStyle}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.CouldNotBeRead}" ItemTemplate="{StaticResource SentenceTemplate}" Layout="{StaticResource ListLayout}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <StackPanel x:Name="TipsPanel" Spacing="16" Visibility="Collapsed">
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Other things GAPO noticed" Style="{StaticResource GapoSectionLabelStyle}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.OtherProblems}" ItemTemplate="{StaticResource SentenceTemplate}" Layout="{StaticResource ListLayout}" />
+          <TextBlock Style="{StaticResource GapoSecondaryStyle}" Text="GAPO only recommends something when a measurement supports it, and it never changes Windows settings by itself." />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+
+    <StackPanel x:Name="LivePanel" Spacing="16" Visibility="Collapsed">
+      <Border Style="{StaticResource GapoCardStyle}">
+        <StackPanel Spacing="12">
+          <TextBlock Text="Measured while the game ran" Style="{StaticResource GapoSectionLabelStyle}" />
+          <ItemsRepeater ItemsSource="{x:Bind Report.Live}" ItemTemplate="{StaticResource FactTemplate}" Layout="{StaticResource ListLayout}" />
+        </StackPanel>
+      </Border>
+    </StackPanel>
+  </StackPanel>
+</UserControl>
