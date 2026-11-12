@@ -86,7 +86,7 @@ public sealed class ProcessSnapshotReaderTests
         var cyclesPerSecond = ProcessorCycleRate.ReadNominalCyclesPerSecond();
 
         var earlier = Capture(reader, clock, detailedProcessId: 0);
-        var busyUntil = clock.Elapsed + TimeSpan.FromMilliseconds(600);
+        var busyUntil = clock.Elapsed + TimeSpan.FromMilliseconds(1200);
         while (clock.Elapsed < busyUntil)
         {
             Thread.SpinWait(500);
@@ -98,7 +98,7 @@ public sealed class ProcessSnapshotReaderTests
         var percent = ProcessActivity.MachinePercent(before, after, later.CapturedAt - earlier.CapturedAt, Environment.ProcessorCount, cyclesPerSecond);
         var oneProcessorShare = 100.0 / Environment.ProcessorCount;
 
-        Assert.InRange(percent, oneProcessorShare * 0.4, oneProcessorShare * 4.0);
+        Assert.InRange(percent, oneProcessorShare * LowestShareABusyThreadGetsOnALoadedMachine / 100.0, oneProcessorShare * 4.0);
     }
 
     [Fact]
