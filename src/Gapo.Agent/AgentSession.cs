@@ -5,6 +5,7 @@ using Gapo.Agent.Monitoring;
 using Gapo.Core.Overhead;
 using Gapo.Core.Statistics;
 using Gapo.Sandbox.Contract;
+using Gapo.Windows.Hardware;
 using Gapo.Windows.Processes;
 
 namespace Gapo.Agent;
@@ -26,6 +27,8 @@ public sealed class AgentSession
 
     public AgentReport Run(CancellationToken cancellation)
     {
+        var hardware = HardwareScanner.Scan();
+        GC.Collect();
         var background = BackgroundMode.Enter();
         var probe = new OwnProcessProbe();
         var meter = new OverheadMeter(Environment.ProcessorCount);
@@ -66,7 +69,8 @@ public sealed class AgentSession
             overhead,
             overhead.Evaluate(budget),
             frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs),
-            monitor.Summarise());
+            monitor.Summarise(),
+            hardware);
     }
 
     private static void ReconcileFrameTiming(SandboxLink link, FrameTimingProbe? frameTiming)

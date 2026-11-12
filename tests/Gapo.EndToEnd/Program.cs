@@ -12,6 +12,7 @@ const double MinimumShareOfFramesSeenByEventTracing = 0.85;
 const double MaximumFrameTimeDisagreementPercent = 3.0;
 const string FrameTimingAvailable = "Available";
 const int MinimumMonitorSamples = 8;
+const double SlowestAcceptableHardwareScanMilliseconds = 1500;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
@@ -71,6 +72,17 @@ try
     Expect(monitor.MedianBusiestGameThreadPercent >= LowestBusiestThreadShareOfASingleThreadedGame, string.Create(CultureInfo.InvariantCulture, $"The fixture's main thread should be close to a full processor; the monitor measured {monitor.MedianBusiestGameThreadPercent:0}%."));
     Expect(monitor.PeakGameWriteMegabytesPerSecond > 0, "The monitor never saw the fixture's autosave disk writes.");
     Print($"monitor     game uses {monitor.MeanGameProcessorsUsed:0.00} processors, busiest game thread {monitor.MedianBusiestGameThreadPercent:0}% of one; machine load {monitor.MeanMachineLoadPercent:0}% (busiest processor {monitor.MeanBusiestProcessorPercent:0}%), background {monitor.MeanBackgroundPercent:0.0}%; game {monitor.GamePrivateMegabytes:0} MB, peak disk write {monitor.PeakGameWriteMegabytesPerSecond:0.0} MB/s");
+    var hardware = agent.Hardware;
+    Expect(hardware.LogicalProcessors == Environment.ProcessorCount, $"The inventory reports {hardware.LogicalProcessors} logical processors; this machine has {Environment.ProcessorCount}.");
+    Expect(hardware.MemoryMegabytes > 0 && hardware.DisplayWidth > 0 && hardware.WindowsBuild > 0, "The inventory is missing memory, display or Windows facts.");
+    Expect(hardware.GraphicsAdapters.Contains(attached.Adapter), $"The game rendered on '{attached.Adapter}', which the inventory does not list ({string.Join(", ", hardware.GraphicsAdapters)}).");
+    Expect(hardware.ScanMilliseconds <= SlowestAcceptableHardwareScanMilliseconds, string.Create(CultureInfo.InvariantCulture, $"The hardware scan took {hardware.ScanMilliseconds:0} ms."));
+    Print($"hardware    {hardware.Class} PC: {hardware.ProcessorName}, {hardware.Cores} cores / {hardware.LogicalProcessors} threads, {hardware.MemoryMegabytes} MB ({hardware.ChannelMode}), {hardware.PrimaryGraphics}, {hardware.EffectiveRefreshHz} Hz, Windows build {hardware.WindowsBuild}; scanned in {hardware.ScanMilliseconds:0} ms; {hardware.CouldNotBeRead.Count} item(s) could not be read");
+    foreach (var note in hardware.CouldNotBeRead)
+    {
+        Print($"            not read: {note}");
+    }
+
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
