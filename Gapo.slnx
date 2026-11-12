@@ -1,5 +1,6 @@
 <Solution>
   <Folder Name="/fixture/">
+    <Project Path="fixture/Gapo.LoadGenerator/Gapo.LoadGenerator.csproj" />
     <Project Path="fixture/Gapo.Sandbox.Contract/Gapo.Sandbox.Contract.csproj" />
     <Project Path="fixture/Gapo.Sandbox/Gapo.Sandbox.csproj" />
   </Folder>
