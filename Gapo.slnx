@@ -5,11 +5,13 @@
     <Project Path="fixture/Gapo.Sandbox/Gapo.Sandbox.csproj" />
   </Folder>
   <Folder Name="/src/">
+    <Project Path="src/Gapo.Adapters.Sandbox/Gapo.Adapters.Sandbox.csproj" />
     <Project Path="src/Gapo.Agent/Gapo.Agent.csproj" />
     <Project Path="src/Gapo.Core/Gapo.Core.csproj" />
     <Project Path="src/Gapo.Windows/Gapo.Windows.csproj" />
   </Folder>
   <Folder Name="/tests/">
+    <Project Path="tests/Gapo.Adapters.Sandbox.Tests/Gapo.Adapters.Sandbox.Tests.csproj" />
     <Project Path="tests/Gapo.Core.Tests/Gapo.Core.Tests.csproj" />
     <Project Path="tests/Gapo.EndToEnd/Gapo.EndToEnd.csproj" />
     <Project Path="tests/Gapo.Sandbox.Contract.Tests/Gapo.Sandbox.Contract.Tests.csproj" />

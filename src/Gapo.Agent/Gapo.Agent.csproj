@@ -14,6 +14,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Gapo.Core\Gapo.Core.csproj" />
     <ProjectReference Include="..\Gapo.Windows\Gapo.Windows.csproj" />
+    <ProjectReference Include="..\Gapo.Adapters.Sandbox\Gapo.Adapters.Sandbox.csproj" />
     <ProjectReference Include="..\..\fixture\Gapo.Sandbox.Contract\Gapo.Sandbox.Contract.csproj" />
   </ItemGroup>
 </Project>
