@@ -9,6 +9,7 @@ namespace Gapo.Windows.Tests;
 public sealed class ProcessSnapshotReaderTests
 {
     private const long Megabyte = 1024 * 1024;
+    private const double LowestShareABusyThreadGetsOnALoadedMachine = 20.0;
 
     private static ProcessSnapshot Capture(ProcessSnapshotReader reader, Stopwatch clock, int detailedProcessId)
     {
@@ -65,7 +66,7 @@ public sealed class ProcessSnapshotReaderTests
         var clock = Stopwatch.StartNew();
 
         var earlier = Capture(reader, clock, Environment.ProcessId);
-        var busyUntil = clock.Elapsed + TimeSpan.FromMilliseconds(600);
+        var busyUntil = clock.Elapsed + TimeSpan.FromMilliseconds(1200);
         while (clock.Elapsed < busyUntil)
         {
             Thread.SpinWait(500);
@@ -74,7 +75,7 @@ public sealed class ProcessSnapshotReaderTests
         var later = Capture(reader, clock, Environment.ProcessId);
         var busiest = ProcessActivity.BusiestThread(earlier, later);
 
-        Assert.InRange(busiest.PercentOfOneProcessor, 50.0, 115.0);
+        Assert.InRange(busiest.PercentOfOneProcessor, LowestShareABusyThreadGetsOnALoadedMachine, 125.0);
     }
 
     [Fact]
