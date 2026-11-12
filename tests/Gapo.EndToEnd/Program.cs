@@ -7,6 +7,9 @@ const int Failed = 1;
 const double DefaultRunSeconds = 20;
 const int MinimumFrames = 100;
 const double MinimumShareOfFramesSeenByAgent = 0.9;
+const double MinimumShareOfFramesSeenByEventTracing = 0.85;
+const double MaximumFrameTimeDisagreementPercent = 3.0;
+const string FrameTimingAvailable = "Available";
 
 var outputDirectory = Path.GetFullPath(ValueOf("--output") ?? Path.Combine(Path.GetTempPath(), "gapo-end-to-end"));
 var binariesRoot = Path.GetFullPath(ValueOf("--binaries") ?? Path.Combine(AppContext.BaseDirectory, "..", ".."));
@@ -33,6 +36,12 @@ try
     Expect(agent.WithinBudget && agent.ExitCode == 0, "The agent exceeded its overhead budget: " + string.Join(" ", agent.Violations));
     Expect(comparison.AttachedRunIsWithinNoise, string.Create(CultureInfo.InvariantCulture, $"The game ran {comparison.SlowdownPercent:0.0}% slower with the agent attached; the noise floor is {comparison.NoiseFloorPercent:0.0}%."));
 
+    var frameTiming = agent.FrameTiming;
+    Expect(frameTiming.Availability == FrameTimingAvailable, $"Frame timing through event tracing was not available: {frameTiming.Availability}.");
+    Expect(frameTiming.EventsLost == 0, $"Event tracing lost {frameTiming.EventsLost} events.");
+    Expect(frameTiming.ShareOfHookFramesSeen >= MinimumShareOfFramesSeenByEventTracing, $"Event tracing saw {frameTiming.PresentedFrames} presented frames while the game reported {frameTiming.HookFrames}.");
+    Expect(frameTiming.MedianDifferencePercent <= MaximumFrameTimeDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing measured a median frame time of {frameTiming.MedianFrameMs:0.00} ms; the game itself reported {frameTiming.HookMedianFrameMs:0.00} ms."));
+    Print($"frame time  event tracing {frameTiming.MedianFrameMs:0.00} ms median over {frameTiming.PresentedFrames} frames, game's own telemetry {frameTiming.HookMedianFrameMs:0.00} ms over {frameTiming.HookFrames} frames ({frameTiming.MedianDifferencePercent:0.0}% apart); CPU busy {frameTiming.MedianCpuBusyMs:0.00} ms, in present {frameTiming.MedianInPresentMs:0.00} ms; {frameTiming.EventsSeen} events, {frameTiming.EventsLost} lost");
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
@@ -80,6 +89,9 @@ void WriteSummary(FixtureResult firstBaseline, FixtureResult attached, FixtureRe
     json.WriteNumber("agentPeakCpuPercent", agent.PeakCpuPercent);
     json.WriteNumber("agentPeakPrivateMegabytes", agent.PeakPrivateMegabytes);
     json.WriteNumber("agentFramesRead", agent.FramesRead);
+    json.WriteNumber("eventTracingMedianFrameMs", agent.FrameTiming.MedianFrameMs);
+    json.WriteNumber("gameTelemetryMedianFrameMs", agent.FrameTiming.HookMedianFrameMs);
+    json.WriteNumber("eventTracingFrames", agent.FrameTiming.PresentedFrames);
     json.WriteString("presentPath", attached.PresentPath);
     json.WriteString("adapter", attached.Adapter);
     json.WriteBoolean("passed", failures.Count == 0);

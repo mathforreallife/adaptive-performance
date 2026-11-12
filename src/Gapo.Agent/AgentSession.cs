@@ -1,6 +1,9 @@
 using System.Diagnostics;
 using Gapo.Agent.EngineHook;
+using Gapo.Agent.FrameTiming;
 using Gapo.Core.Overhead;
+using Gapo.Core.Statistics;
+using Gapo.Sandbox.Contract;
 using Gapo.Windows.Processes;
 
 namespace Gapo.Agent;
@@ -11,6 +14,9 @@ public sealed class AgentSession
     private const int ReadsPerOverheadSample = 10;
 
     private readonly AgentOptions options;
+    private readonly SeriesSummary hookFrameMs = new();
+    private readonly SeriesSummary hookWorkMs = new();
+    private readonly SeriesSummary hookPresentMs = new();
 
     public AgentSession(AgentOptions options)
     {
@@ -24,12 +30,15 @@ public sealed class AgentSession
         var meter = new OverheadMeter(Environment.ProcessorCount);
         var clock = Stopwatch.StartNew();
         using var link = new SandboxLink(options.SandboxMapName);
+        using var frameTiming = options.MeasureFrameTiming ? new FrameTimingProbe() : null;
 
         meter.Record(clock.Elapsed, probe.Read(), insideMeasurementWindow: false);
         for (var read = 1; !ShouldStop(link, clock.Elapsed, cancellation); read++)
         {
             link.Reconcile();
-            link.ReadNewFrames();
+            ReconcileFrameTiming(link, frameTiming);
+            link.ReadNewFrames(frameTiming is { IsTracking: true } ? RecordHookFrame : null);
+            frameTiming?.Collect();
             if (read % ReadsPerOverheadSample == 0)
             {
                 meter.Record(clock.Elapsed, probe.Read(), insideMeasurementWindow: false);
@@ -38,6 +47,7 @@ public sealed class AgentSession
             cancellation.WaitHandle.WaitOne(TelemetryReadInterval);
         }
 
+        frameTiming?.Collect();
         meter.Record(clock.Elapsed, probe.Read(), insideMeasurementWindow: false);
         var budget = OverheadBudget.For(OptimiserState.GameRunning);
         var overhead = meter.Summarise();
@@ -49,7 +59,33 @@ public sealed class AgentSession
             probe.UsesCycleCounting,
             budget,
             overhead,
-            overhead.Evaluate(budget));
+            overhead.Evaluate(budget),
+            frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs));
+    }
+
+    private static void ReconcileFrameTiming(SandboxLink link, FrameTimingProbe? frameTiming)
+    {
+        if (frameTiming is null)
+        {
+            return;
+        }
+
+        if (link.IsConnected && !frameTiming.IsTracking)
+        {
+            link.SkipBacklog();
+            frameTiming.Track(link.GameProcessId);
+        }
+        else if (!link.IsConnected && frameTiming.IsTracking)
+        {
+            frameTiming.StopTracking();
+        }
+    }
+
+    private void RecordHookFrame(in FrameRecord frame)
+    {
+        hookFrameMs.Add(frame.FrameMs);
+        hookWorkMs.Add(frame.WorkMs);
+        hookPresentMs.Add(frame.PresentMs);
     }
 
     private bool ShouldStop(SandboxLink link, TimeSpan elapsed, CancellationToken cancellation)

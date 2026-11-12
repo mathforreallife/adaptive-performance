@@ -10,7 +10,8 @@ namespace Gapo.Sandbox
 {
     public sealed unsafe class GameForm : Form
     {
-        const int ExitOk = 0, ExitFailed = 3;
+        const int ExitFailed = 3, ExitClosedBeforeAutotestFinished = 5;
+        bool _autotestFinished;
         readonly Game _game;
         readonly FixtureOptions _options;
         readonly InputState _input = new InputState();
@@ -122,6 +123,7 @@ namespace Gapo.Sandbox
 
         void FinishAutotest()
         {
+            _autotestFinished = true;
             _ready = false;
             Application.Idle -= OnIdle;
             try
@@ -149,6 +151,11 @@ namespace Gapo.Sandbox
         {
             _ready = false;
             Application.Idle -= OnIdle;
+            if (_autotestSeconds > 0 && !_autotestFinished && ExitCode == 0)
+            {
+                ExitCode = ExitClosedBeforeAutotestFinished;
+                Program.ReportFailure(_options, "The game window was closed before the auto-test finished.");
+            }
             _game.Dispose();
             if (_presenter != null) { _presenter.Dispose(); _presenter = null; }
             FreeBackBuffer();

@@ -7,21 +7,27 @@ public sealed record AgentOptions(
     string SandboxMapName,
     TimeSpan MaximumRunTime,
     bool StopWhenGameExits,
+    bool MeasureFrameTiming,
     string? ReportPath)
 {
     private const string MapNameOption = "--sandbox-map";
     private const string SecondsOption = "--seconds";
     private const string ReportOption = "--report";
     private const string StopWithGameFlag = "--stop-when-game-exits";
+    private const string FrameTimingFlag = "--frame-timing";
 
     public static AgentOptions Parse(IReadOnlyList<string> arguments)
     {
-        var options = new AgentOptions(TelemetryChannel.DefaultMapName, Timeout.InfiniteTimeSpan, StopWhenGameExits: false, ReportPath: null);
+        var options = new AgentOptions(TelemetryChannel.DefaultMapName, Timeout.InfiniteTimeSpan, StopWhenGameExits: false, MeasureFrameTiming: false, ReportPath: null);
         foreach (var argument in arguments)
         {
             if (argument == StopWithGameFlag)
             {
                 options = options with { StopWhenGameExits = true };
+            }
+            else if (argument == FrameTimingFlag)
+            {
+                options = options with { MeasureFrameTiming = true };
             }
             else if (TryReadValue(argument, MapNameOption, out var mapName))
             {
