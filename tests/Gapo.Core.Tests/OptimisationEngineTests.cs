@@ -224,6 +224,19 @@ public sealed class OptimisationEngineTests
     }
 
     [Fact]
+    public void StopsLoweringVisualsOnceTheGameRunsAtTheDisplayRate()
+    {
+        var (report, game, _) = Optimise(configure: simulated => simulated.WorkNeverGoesBelowMs = 16.6);
+
+        Assert.True(report.Completed);
+        Assert.Contains(report.NotTouched, note => note.StartsWith("Stopped lowering visuals: the game already runs at your display's 60 Hz", StringComparison.Ordinal));
+        Assert.Equal("Ultra", game.Settings[SimulatedGame.Shadows]);
+        Assert.StartsWith("No cap needed: the display already paces the game", report.PacingNote);
+        Assert.DoesNotContain(report.Experiments, experiment => experiment.Kind == ChangeKind.Pacing);
+        Assert.InRange(report.Final.AverageFps, 58, 61);
+    }
+
+    [Fact]
     public void RevertAllPutsTheOriginalSettingsBack()
     {
         var (report, game, engine) = Optimise();

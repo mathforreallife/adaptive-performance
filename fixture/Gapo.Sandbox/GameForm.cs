@@ -18,6 +18,7 @@ namespace Gapo.Sandbox
         readonly double _autotestSeconds;
         readonly string _screenshotPath, _logPath;
         DxgiPresenter _presenter;
+        readonly PresentPathTimes _presentPath = new PresentPathTimes();
         string _presentFallbackReason;
         public int ExitCode { get; private set; }
         bool _ready, _showHud = true, _showHelp, _fullscreen;
@@ -133,7 +134,7 @@ namespace Gapo.Sandbox
                     using (var bmp = Image.FromHbitmap(_dib)) bmp.Save(_screenshotPath, _screenshotPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? ImageFormat.Jpeg : ImageFormat.Png);
                 if (!string.IsNullOrEmpty(_logPath))
                     ResultLog.Write(_logPath, _game, _presenter != null ? "dxgi" : "gdi", _presenter != null ? _presenter.AdapterName : null,
-                        _presenter != null && _presenter.IsSoftwareAdapter, _presentFallbackReason);
+                        _presenter != null && _presenter.IsSoftwareAdapter, _presentFallbackReason, _presentPath);
             }
             catch (Exception ex)
             {
@@ -213,10 +214,12 @@ namespace Gapo.Sandbox
                 fixed (int* src = r.Output)
                     Native.StretchDIBits(_memDC, _dest.X, _dest.Y, dw, dh, 0, 0, r.OutW, r.OutH, (IntPtr)src, ref bmi, 0, Native.SRCCOPY);
                 DrawOverlay(cw, ch);
+                float composeMs = (float)(_game.Now - t0);
                 if (_presenter != null)
                 {
                     _presenter.Present(_bits, cw, ch, _game.GpuLoadIterations);
                     _game.PresentWaitMs = _presenter.LastPresentCallMs;
+                    _presentPath.Add(composeMs, _presenter.LastUploadMs, _presenter.LastDrawMs, _presenter.LastPresentCallMs);
                 }
                 else Native.BitBlt(hdc, 0, 0, cw, ch, _memDC, 0, 0, Native.SRCCOPY);
             }

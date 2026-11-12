@@ -74,6 +74,8 @@ float4 PixelMain(VertexOutput input) : SV_Target
         public string AdapterName { get; private set; }
         public bool IsSoftwareAdapter { get; private set; }
         public float LastPresentCallMs { get; private set; }
+        public float LastUploadMs { get; private set; }
+        public float LastDrawMs { get; private set; }
 
         DxgiPresenter() { }
 
@@ -183,11 +185,14 @@ float4 PixelMain(VertexOutput input) : SV_Target
                 _appliedIterations = pixelLoadIterations;
             }
 
+            long beforeUpload = System.Diagnostics.Stopwatch.GetTimestamp();
             var mapped = _context.Map(_frameTexture, 0, MapMode.WriteDiscard);
             long rowBytes = (long)width * sizeof(int);
             for (int y = 0; y < height; y++)
                 Buffer.MemoryCopy(pixels + (long)y * width, (byte*)mapped.DataPointer + (long)y * mapped.RowPitch, rowBytes, rowBytes);
             _context.Unmap(_frameTexture, 0);
+            LastUploadMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(beforeUpload).TotalMilliseconds;
+            long beforeDraw = System.Diagnostics.Stopwatch.GetTimestamp();
 
             _context.OMSetRenderTargets(_backBufferView);
             _context.RSSetViewport(0, 0, width, height);
@@ -198,6 +203,7 @@ float4 PixelMain(VertexOutput input) : SV_Target
             _context.PSSetSampler(0, _sampler);
             _context.PSSetConstantBuffer(0, _loadBuffer);
             _context.Draw(3, 0);
+            LastDrawMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(beforeDraw).TotalMilliseconds;
             long beforePresentCall = System.Diagnostics.Stopwatch.GetTimestamp();
             _swapChain.Present(0, PresentFlags.None);
             LastPresentCallMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(beforePresentCall).TotalMilliseconds;

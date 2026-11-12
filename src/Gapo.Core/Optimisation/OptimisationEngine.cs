@@ -34,6 +34,8 @@ public sealed class OptimisationEngine
     private const double CapSpreadTolerance = 1.05;
     private const int MostRemainingOptionsNamed = 4;
     private const int ChangesWithoutEffectBeforeStopping = 3;
+    private const double DisplayRateTolerance = 0.03;
+    private const double DisplayRateBusyShare = 0.9;
     private const double NoEffectShareOfNoiseFloor = 0.5;
     private static readonly TimeSpan HitchObservationSpan = TimeSpan.FromSeconds(14);
 
@@ -250,6 +252,12 @@ public sealed class OptimisationEngine
             var next = candidates[0];
             var statistics = reference.Statistics;
             var targetMet = statistics.MedianBusyMs <= budgetMs * TargetMetWorkShare && statistics.Percentile95FrameMs <= budgetMs * TargetMetPercentile95Share;
+            if (goal != Goal.MaximumFps && !targetMet && RunsAtTheDisplayRate(statistics) && next.VisualLoss > 0)
+            {
+                notTouched.Add(Text($"Stopped lowering visuals: the game already runs at your display's {hardware.Display.EffectiveRefreshHz} Hz ({statistics.AverageFps:0} FPS), so further reductions could not show more frames."));
+                return;
+            }
+
             if (goal != Goal.MaximumFps && targetMet && next.VisualLoss > 0)
             {
                 var remaining = candidates.Where(candidate => candidate.VisualLoss > 0).Take(MostRemainingOptionsNamed).Select(candidate => candidate.Title);
@@ -271,7 +279,7 @@ public sealed class OptimisationEngine
             }
 
             var measured = experiments[^1];
-            var hadNoEffect = decision == Decision.RolledBack && Math.Abs(measured.GainPercent) <= noise.FloorFraction * PercentScale * NoEffectShareOfNoiseFloor;
+            var hadNoEffect = decision == Decision.RolledBack && measured.GainPercent <= noise.FloorFraction * PercentScale * NoEffectShareOfNoiseFloor;
             changesWithoutEffect = hadNoEffect ? changesWithoutEffect + 1 : 0;
             if (changesWithoutEffect >= ChangesWithoutEffectBeforeStopping)
             {
@@ -433,6 +441,12 @@ public sealed class OptimisationEngine
         }
 
         var statistics = reference.Statistics;
+        if (RunsAtTheDisplayRate(statistics))
+        {
+            notTouched.Add(Text($"Frame-rate cap: the display already paces the game at about {statistics.AverageFps:0} FPS."));
+            return Text($"No cap needed: the display already paces the game at about {statistics.AverageFps:0} FPS.");
+        }
+
         var sustainedFps = MillisecondsPerSecond / Math.Max(0.1, statistics.Percentile95FrameMs);
         var workFps = MillisecondsPerSecond / Math.Max(0.1, statistics.MedianBusyMs);
         int cap;
@@ -484,6 +498,15 @@ public sealed class OptimisationEngine
 
         Record(candidate, before, result.Statistics, 0, Decision.RolledBack, Text($"Rolled back: the {cap} FPS cap did not hold ({result.Statistics.AverageFps:0} FPS measured)."));
         return Text($"Left uncapped: a {cap} FPS cap could not be held.");
+    }
+
+    private bool RunsAtTheDisplayRate(FrameStatistics statistics)
+    {
+        var refreshPeriodMs = MillisecondsPerSecond / hardware.Display.EffectiveRefreshHz;
+        return statistics.MedianFrameMs >= refreshPeriodMs * (1 - DisplayRateTolerance)
+            && statistics.MedianFrameMs <= refreshPeriodMs * (1 + DisplayRateTolerance)
+            && statistics.MedianBusyMs >= refreshPeriodMs * DisplayRateBusyShare
+            && statistics.Percentile95FrameMs <= refreshPeriodMs * TargetMetPercentile95Share;
     }
 
     private WindowResult ApplyAndMeasure(SettingCandidate candidate, string note)
