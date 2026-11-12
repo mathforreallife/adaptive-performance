@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Gapo.Agent.EngineHook;
 using Gapo.Agent.FrameTiming;
+using Gapo.Agent.Measurement;
 using Gapo.Agent.Monitoring;
 using Gapo.Core.Overhead;
 using Gapo.Core.Statistics;
@@ -19,6 +20,8 @@ public sealed class AgentSession
     private readonly SeriesSummary hookFrameMs = new();
     private readonly SeriesSummary hookWorkMs = new();
     private readonly SeriesSummary hookPresentMs = new();
+    private BaselineMeasurement? baseline;
+    private bool collectHookFrameTimes;
 
     public AgentSession(AgentOptions options)
     {
@@ -36,20 +39,24 @@ public sealed class AgentSession
         using var link = new SandboxLink(options.SandboxMapName);
         using var frameTiming = options.MeasureFrameTiming ? new FrameTimingProbe() : null;
         using var monitor = new AgentMonitor();
+        baseline = options.MeasureBaseline ? new BaselineMeasurement() : null;
 
         meter.Record(clock.Elapsed, probe.Read(), insideMeasurementWindow: false);
         for (var read = 1; !ShouldStop(link, clock.Elapsed, cancellation); read++)
         {
             link.Reconcile();
             ReconcileFrameTiming(link, frameTiming);
-            link.ReadNewFrames(frameTiming is { IsTracking: true } ? RecordHookFrame : null);
+            collectHookFrameTimes = frameTiming is { IsTracking: true };
+            var insideWindow = baseline is { IsInsideWindow: true };
+            link.ReadNewFrames(collectHookFrameTimes || baseline is not null ? ObserveHookFrame : null);
+            baseline?.Advance(link, clock.Elapsed);
             frameTiming?.Collect();
             if (read % ReadsPerOverheadSample == 0)
             {
                 var own = probe.Read();
-                meter.Record(clock.Elapsed, own, insideMeasurementWindow: false);
+                meter.Record(clock.Elapsed, own, insideWindow);
                 monitor.Reconcile(link.GameProcessId);
-                monitor.Sample(clock.Elapsed, own);
+                monitor.Sample(clock.Elapsed, own, allowProcessSnapshot: !insideWindow);
             }
 
             cancellation.WaitHandle.WaitOne(TelemetryReadInterval);
@@ -70,7 +77,8 @@ public sealed class AgentSession
             overhead.Evaluate(budget),
             frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs),
             monitor.Summarise(),
-            hardware);
+            hardware,
+            baseline);
     }
 
     private static void ReconcileFrameTiming(SandboxLink link, FrameTimingProbe? frameTiming)
@@ -91,11 +99,15 @@ public sealed class AgentSession
         }
     }
 
-    private void RecordHookFrame(in FrameRecord frame)
+    private void ObserveHookFrame(in FrameRecord frame)
     {
-        hookFrameMs.Add(frame.FrameMs);
-        hookWorkMs.Add(frame.WorkMs);
-        hookPresentMs.Add(frame.PresentMs);
+        baseline?.OnFrame(frame);
+        if (collectHookFrameTimes)
+        {
+            hookFrameMs.Add(frame.FrameMs);
+            hookWorkMs.Add(frame.WorkMs);
+            hookPresentMs.Add(frame.PresentMs);
+        }
     }
 
     private bool ShouldStop(SandboxLink link, TimeSpan elapsed, CancellationToken cancellation)
@@ -110,6 +122,11 @@ public sealed class AgentSession
             return true;
         }
 
-        return options.StopWhenGameExits && link.HasEverConnected && !link.IsConnected;
+        if (options.StopWhenGameExits && link.HasEverConnected && !link.IsConnected)
+        {
+            return true;
+        }
+
+        return baseline is { IsFinished: true } && !options.StopWhenGameExits;
     }
 }

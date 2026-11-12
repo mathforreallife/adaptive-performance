@@ -13,6 +13,8 @@ const double MaximumFrameTimeDisagreementPercent = 3.0;
 const string FrameTimingAvailable = "Available";
 const int MinimumMonitorSamples = 8;
 const double SlowestAcceptableHardwareScanMilliseconds = 1500;
+const int FewestFramesInAMeasurementWindow = 45;
+const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
@@ -85,6 +87,22 @@ try
 
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
+    var (measuredGame, measuringAgent) = rig.RunFixtureWithBaselineMeasurement("baseline-measurement");
+    Expect(measuredGame.ExitCode == 0, $"The fixture exited with code {measuredGame.ExitCode} during the baseline measurement.");
+    if (measuringAgent.Baseline is { } measured)
+    {
+        Expect(measured.Succeeded, "The baseline measurement failed: " + measured.FailureReason);
+        Expect(measured.NoiseFloorCanBeTrusted, string.Create(CultureInfo.InvariantCulture, $"The two baseline windows disagreed too much after {measured.Attempts} attempt(s) (noise floor {measured.NoiseFloorPercent:0.0}%)."));
+        Expect(measured.FirstWindowFrames >= FewestFramesInAMeasurementWindow && measured.SecondWindowFrames >= FewestFramesInAMeasurementWindow, $"The baseline windows held {measured.FirstWindowFrames} and {measured.SecondWindowFrames} frames.");
+        Expect(measured.WaitedForWarmupSeconds > 0, "The agent did not wait for the game to finish warming up.");
+        Expect(measuringAgent.MeasurementWindowCpuPercent <= LargestCpuInsideMeasurementWindowsPercent, string.Create(CultureInfo.InvariantCulture, $"The agent used {measuringAgent.MeasurementWindowCpuPercent:0.000}% CPU inside measurement windows."));
+        Print($"baseline    waited {measured.WaitedForWarmupSeconds:0.0} s for warm-up; windows {measured.FirstWindowMedianBusyMs:0.00} and {measured.SecondWindowMedianBusyMs:0.00} ms frame work ({measured.FirstWindowFrames} and {measured.SecondWindowFrames} frames); noise floor ±{measured.NoiseFloorPercent:0.0}% after {measured.Attempts} attempt(s); agent {measuringAgent.MeasurementWindowCpuPercent:0.000}% CPU inside windows");
+    }
+    else
+    {
+        Expect(false, "The agent reported no baseline measurement.");
+    }
+
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
 }
 catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or IOException or JsonException or KeyNotFoundException)

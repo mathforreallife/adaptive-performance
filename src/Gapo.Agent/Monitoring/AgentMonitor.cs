@@ -50,7 +50,7 @@ public sealed class AgentMonitor : IDisposable
         }
     }
 
-    public void Sample(TimeSpan at, ProcessUsage own)
+    public void Sample(TimeSpan at, ProcessUsage own, bool allowProcessSnapshot = true)
     {
         processorProbe.Read(processorTimes);
         var reading = default(GameProcessReading);
@@ -58,7 +58,10 @@ public sealed class AgentMonitor : IDisposable
         if (monitor.Record(at, processorTimes, gameProcessId, reading, own, MemoryStatusProbe.Read()) && gameProcessId != NoGame)
         {
             Accumulate(monitor.Latest);
-            ObserveGameThreads(at, gameProcessId);
+            if (allowProcessSnapshot)
+            {
+                ObserveGameThreads(at, gameProcessId);
+            }
         }
     }
 
