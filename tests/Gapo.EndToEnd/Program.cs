@@ -6,6 +6,7 @@ const int Passed = 0;
 const int Failed = 1;
 const double DefaultRunSeconds = 20;
 const int MinimumFrames = 100;
+const int MaximumAttempts = 3;
 const double MinimumShareOfFramesSeenByAgent = 0.9;
 const double MinimumShareOfFramesSeenByEventTracing = 0.85;
 const double MaximumFrameTimeDisagreementPercent = 3.0;
@@ -23,10 +24,28 @@ var failures = new List<string>();
 
 try
 {
-    var firstBaseline = rig.RunFixtureAlone("baseline-1");
-    var (attached, agent) = rig.RunFixtureWithAgent("with-agent");
-    var secondBaseline = rig.RunFixtureAlone("baseline-2");
-    var comparison = OverheadComparison.Between(firstBaseline.AverageFps, secondBaseline.AverageFps, attached.AverageFps);
+    FixtureResult firstBaseline;
+    FixtureResult attached;
+    FixtureResult secondBaseline;
+    AgentResult agent;
+    OverheadComparison comparison;
+    var attempt = 0;
+    do
+    {
+        attempt++;
+        var suffix = attempt == 1 ? string.Empty : "-attempt-" + attempt.ToString(CultureInfo.InvariantCulture);
+        firstBaseline = rig.RunFixtureAlone("baseline-1" + suffix);
+        (attached, agent) = rig.RunFixtureWithAgent("with-agent" + suffix);
+        secondBaseline = rig.RunFixtureAlone("baseline-2" + suffix);
+        comparison = OverheadComparison.Between(firstBaseline.AverageFps, secondBaseline.AverageFps, attached.AverageFps);
+        if (!comparison.BaselinesAgree)
+        {
+            Print($"attempt {attempt}: the two runs without the agent differ by {comparison.BaselineSpreadPercent:0.0}% ({firstBaseline.AverageFps:0.0} and {secondBaseline.AverageFps:0.0} FPS); the machine is too busy to judge overhead");
+        }
+    }
+    while (!comparison.BaselinesAgree && attempt < MaximumAttempts);
+
+    Expect(comparison.BaselinesAgree, string.Create(CultureInfo.InvariantCulture, $"The machine stayed too busy to judge overhead in {attempt} attempts (runs without the agent differed by {comparison.BaselineSpreadPercent:0.0}%)."));
 
     foreach (var run in new[] { firstBaseline, attached, secondBaseline })
     {
@@ -95,6 +114,7 @@ void WriteSummary(FixtureResult firstBaseline, FixtureResult attached, FixtureRe
     json.WriteNumber("attachedFps", attached.AverageFps);
     json.WriteNumber("slowdownPercent", Math.Round(comparison.SlowdownPercent, 3));
     json.WriteNumber("noiseFloorPercent", Math.Round(comparison.NoiseFloorPercent, 3));
+    json.WriteNumber("baselineSpreadPercent", Math.Round(comparison.BaselineSpreadPercent, 3));
     json.WriteNumber("agentRunAverageCpuPercent", agent.RunAverageCpuPercent);
     json.WriteNumber("agentPeakCpuPercent", agent.PeakCpuPercent);
     json.WriteNumber("agentPeakPrivateMegabytes", agent.PeakPrivateMegabytes);

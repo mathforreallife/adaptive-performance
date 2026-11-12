@@ -22,6 +22,26 @@ internal static unsafe partial class EtwNative
     internal const ulong InvalidProcessTraceHandle = ulong.MaxValue;
 
     internal const ushort ThirtyTwoBitHeaderFlag = 0x0020;
+    internal const uint EnableParametersVersion = 2;
+    internal const uint EventIdFilterType = 0x80000200;
+
+    [StructLayout(LayoutKind.Explicit, Size = SizeInBytes)]
+    internal struct EnableParameters
+    {
+        internal const int SizeInBytes = 48;
+
+        [FieldOffset(0)] public uint Version;
+        [FieldOffset(32)] public EventFilterDescriptor* FilterDescriptors;
+        [FieldOffset(40)] public uint FilterDescriptorCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct EventFilterDescriptor
+    {
+        public ulong Pointer;
+        public uint Size;
+        public uint Type;
+    }
 
     [StructLayout(LayoutKind.Explicit, Size = SizeInBytes)]
     internal struct TraceProperties
@@ -81,7 +101,7 @@ internal static unsafe partial class EtwNative
         ulong matchAnyKeyword,
         ulong matchAllKeyword,
         uint timeoutMilliseconds,
-        void* enableParameters);
+        EnableParameters* enableParameters);
 
     [LibraryImport("advapi32.dll", EntryPoint = "OpenTraceW")]
     internal static partial ulong OpenTrace(TraceLogFile* logFile);
