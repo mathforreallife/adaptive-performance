@@ -191,6 +191,9 @@ After the fix it measured **0.39–0.55 % run average and 0.00–0.06 % inside m
 | SmartScreen | Unsigned downloads show "Windows protected your PC" | Code-sign (EV or Azure Trusted Signing). Build reputation. |
 | Settings files | Games overwrite config on exit. Cloud sync (Steam Cloud) restores old files. Some files are checksummed or binary. | Per-game adapters: write when safe, verify after launch, keep backups, respect cloud sync. |
 | Anti-cheat | Injection or memory reads can get users banned | Only files, public APIs and ETW. Get a per-game anti-cheat policy flag from the knowledge base. |
+| ➕ Own CPU time (product build, step 0) | `GetProcessTimes` is charged by timer tick. A process that sleeps on the timer and wakes for microseconds (exactly what a 10 Hz agent does) is almost never running when the tick fires, so its CPU reads **0.00 %** however long it runs. The first product overhead gate "passed" with 0.000 % this way. | `QueryProcessCycleTime` ÷ the nominal clock (`~MHz` under `HKLM\HARDWARE\DESCRIPTION\System\CentralProcessor\0`). The same agent then measured 0.019 % average, 0.35 % peak. Fall back to `GetProcessTimes` only when cycle counts are unavailable, and say which source was used in the report. |
+| ➕ `dotnet test` on .NET 10 (product build, step 0) | With xunit v3 / Microsoft.Testing.Platform projects the SDK refuses the old VSTest path ("Testing with VSTest target is no longer supported"). | Opt in once in `global.json`: `"test": { "runner": "Microsoft.Testing.Platform" }`, then `dotnet test --solution <file>`. No `Microsoft.NET.Test.Sdk` or `xunit.runner.visualstudio` packages. |
+| ➕ `File.Delete` (product build, step 0) | Deleting a file in a directory that does not exist throws `DirectoryNotFoundException` (a missing *file* is silent). The fixture's `--reset` crashed on a fresh data directory; the end-to-end rig caught it on its first run. | Create the data directory before any reset or cleanup. |
 
 ## I.7 Decisions to keep, and decisions to change
 
@@ -1835,6 +1838,12 @@ The coding agent must **set up a virtual Windows test machine and keep building,
 - **Known VM quirks** (from the demo): refresh rate reported as 1 Hz by WMI but 64 Hz by `EnumDisplaySettings`, Hyper-V display adapter, odd memory-module data, 1 core with SMT, below-normal inherited process priority, unspecified disk media type. Code must handle them, and tests must not mistake them for bugs in the product.
 - Physical hardware (III.5 matrix) confirms results before each beta. The VM does not replace it.
 
+> ➕ **Added (product build, step 0)** — the rig as built:
+> - `tests/Gapo.EndToEnd` is one executable that starts the fixture game alone, then with the agent attached, then alone again, reads their JSON result files, and fails on: a non-zero exit, too few frames, the agent not connecting or missing frames, the agent over its overhead budget, or the game running slower with the agent than the A/A noise floor allows. `.github/workflows/windows.yml` builds, runs the no-comments check, the unit tests and this executable on `windows-latest` for every push that touches code, and uploads results and screenshots as artifacts (fetch them with `gh run download`; no base64 in the log needed).
+> - The fixture game (`fixture/Gapo.Sandbox`) presents through a **D3D11 flip-model swap chain**, falling back to WARP and then to GDI, so that it produces real present events for PresentMon and can load a real GPU (`--gpu-load=<iterations>` runs a per-pixel shader loop that scales with resolution scale and anti-aliasing). Scenario switches create each bottleneck class on demand: `--scenario=single-thread-render | simulation-bound | storage-hitch | warm-up | memory-pressure | gpu-load`, plus `--entities`, `--warmup-seconds`, `--save-size-mb`, `--memory-ballast-mb`, `--memory-leave-free-mb`, `--priority=belownormal`, `--no-telemetry`, `--data-dir`, `--map-name`, and the command `TriggerWarmup` to restart streaming mid-run. Background load needs a separate process and is still to be added.
+> - The developer PC has only the .NET SDK (no Visual Studio, no MSVC linker). Everything so far builds and runs with `dotnet build`; NativeAOT publishing needs the MSVC linker, so AOT builds will come from CI. A persistent Windows 11 VM is not realistic on this hardware (unsupported CPU, 2 cores); the physical laptop plus the hosted runner is the rig.
+> - The old demo workflow is now manual-only (`workflow_dispatch`) so it does not spend private-repo Windows minutes on every push.
+
 ## III.7 Keeping the optimiser's own overhead low
 
 The product fails if the optimiser causes lag. Treat overhead like a performance feature with budgets, measurements and regression gates.
@@ -1859,6 +1868,8 @@ The product fails if the optimiser causes lag. Treat overhead like a performance
 - **Bounded buffers.** Frame store ≤ 24,000 records (~3 MB); monitor history 180 samples.
 - **Allocation-free hot paths.** Shared text formats, no LINQ in per-frame code, reused arrays.
 - **Measure yourself and show it.** GAPO's CPU (rolling 10 s average, peak) and private memory in the header. It turns amber with "over budget" when exceeded.
+
+> ➕ **Added (product build, step 0)** — the product's overhead meter (`src/Gapo.Core/Overhead`, fed by `src/Gapo.Windows/Processes/OwnProcessProbe`) reports CPU as a share of the whole PC from **cycle counts**, not tick-based process times (see the I.6 row "Own CPU time"), with a rolling 10 s average, a run average, a separate in-window average, the peak, and private bytes. The budgets of the table above are code (`OverheadBudget.For(state)`) and the agent exits with a non-zero code when it exceeds them, so CI fails like on a failing test. First measurement of the agent skeleton attached to the fixture game on the entry-level laptop (JIT build, below-normal priority, EcoQoS requested, 10 Hz telemetry reads, 1 Hz self-sample): **0.019 % CPU average, 0.35 % peak, 6.0 MB private** against the 0.3 % / 40 MB "game running, dashboard closed" budget. The A/B check ran the fixture alone, with the agent attached, and alone again: 23.1 / 23.3 / 23.3 FPS, so the attached run was inside the ±2.5 % noise floor.
 
 **Additional techniques for the product:**
 
@@ -2035,7 +2046,7 @@ Segoe UI Variable (*Display* for the result number and titles, *Text* for everyt
 
 | Demo file (repo `demo/src/…`) | What it does | Product equivalent |
 |---|---|---|
-| `Shared/Telemetry.cs` | Shared-memory frame ring (4,096 × 128 B records, seqlock), commands, toasts | PresentMon/ETW stream in the telemetry service, plus an optional partner engine-hook SDK |
+| `Shared/Telemetry.cs` | Shared-memory frame ring (4,096 × 120 B records, seqlock), commands, toasts ✏️ *(this row said 128 B; the shipped record is 120 bytes, measured while porting — the product pins the layout with tests)* | PresentMon/ETW stream in the telemetry service, plus an optional partner engine-hook SDK |
 | `Shared/SandboxSettings.cs` | INI settings model, atomic save, tolerant load | One *game adapter* per game |
 | `Sandbox/*` | Fixture game with controllable bottlenecks, calibration, benchmark flight, telemetry | Keep as a **test fixture** and extend it to cover every bottleneck class |
 | `Optimiser/Hardware/HardwareScanner.cs` | One-shot inventory (native APIs + registry + WMI with timeouts, "could not be read" notes, PC class) | Inventory module (cached, rescanned on device/driver change) |
@@ -2090,6 +2101,16 @@ The committed release binaries (`demo/release/GAPO-Demo/*.exe`, the files users 
 ### B.3 Development machine run (Linux, Mono runtime, 4 threads — not Windows)
 
 Same engine, different hardware: render threads 1 → 4 was kept (+40–49 %), then anti-aliasing SSAA → FXAA, simulation distance Unlimited → Far (+35–40 %), physics substeps rolled back (within ±10 % noise), a quality give-back of anti-aliasing tried and rolled back (it would have broken the budget), and a 60 FPS cap. The average FPS went from 13.5–20 to 60 (Mono is several times slower than .NET on Windows, so these absolute numbers are not representative). This shows the hardware-adaptive behaviour: with spare cores the engine parallelises first; without them it removes wasted pixel work first.
+
+### B.4 ➕ Physical entry-level laptop (product build, 12 November 2026)
+
+Machine: Dell Latitude E6430, Intel Core i7-3520M (2 cores / 4 threads, 2.9 GHz), Intel HD Graphics 4000, 16 GB DDR3-1600 dual-channel, SATA SSD, 1600 × 900 at 60 Hz, Windows 10 Pro 22H2 (build 19045). This is the "entry-level 2-core/4-thread PC" the III.7 budgets are written for, and it is the product build's physical test machine next to the GitHub Actions runner.
+
+**The demo, unchanged, on this laptop (goal Balanced, target 60 FPS):** 26.1 → 68.1 average FPS (**+161 %**), 1 % low 11.2 → 58.0, 0.1 % low 9.6 → 56.2, frame work 37.1 → 14.5 ms (2.6× less), stutters 20.2 → 0 per minute, 32 s, 8 windows, noise floor ±2.5 %. Optimiser: 0.33 % CPU run average, 0.00 % inside windows (tick-based figure — see the I.6 row "Own CPU time"), 9.2 % peak, 34 MB private, 45 repaints averaging 14.2 ms. Kept: autosave 10 s → 5 min, render threads 1 → 2 (+22 %), physics substeps 8 → 4 (+13 %), 4× SSAA → FXAA (+42 %). Rolled back: 60 FPS cap (frame-time variation 0.7 → 1.4 ms). Not changed: textures, present mode, process priority (background 6 %). With two real cores the engine parallelised first (render threads), where the 1-core CI VM removed pixel work first — the same hardware-adaptive behaviour as B.3.
+
+**The ported fixture game (.NET 10, D3D11 flip-model present on the HD 4000), unoptimised defaults:** 23–25 FPS, 1 % low 12–13, frame work 39–42 ms (rendering ≈ 31 ms, simulation ≈ 9 ms), one ≈ 85 ms autosave freeze per 10 s. Calibration reached its floor on this machine (base width 224, ray-march detail 0.45), so "Ultra" is heavier here than the 30–40 FPS the calibration aims for. A fixed workload (`--workload=<width>,<entities>,<detail>`) is available for runs that must be comparable.
+
+**Product test rig, step 0 (fixture alone → fixture + agent → fixture alone):** 23.1 / 23.3 / 23.3 FPS; agent 0.019 % CPU average (0.35 % peak, cycle-counted), 6.0 MB private, 456 frames read through the engine hook; gate passed.
 
 ## Appendix C — Definition of done for the MVP
 

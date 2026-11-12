@@ -1,0 +1,54 @@
+using System.Text.Json;
+using Gapo.Core.Overhead;
+
+namespace Gapo.Agent;
+
+public sealed record AgentReport(
+    bool ConnectedToGame,
+    long FramesRead,
+    bool EfficiencyModeEnabled,
+    bool PriorityLowered,
+    bool CpuMeasuredFromCycleCounts,
+    OverheadBudget Budget,
+    OverheadSummary Overhead,
+    OverheadVerdict Verdict)
+{
+    private const int DecimalPlaces = 3;
+
+    public void WriteTo(string path)
+    {
+        var directory = Path.GetDirectoryName(Path.GetFullPath(path));
+        if (!string.IsNullOrEmpty(directory))
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        using var stream = File.Create(path);
+        using var json = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
+        json.WriteStartObject();
+        json.WriteBoolean("connectedToGame", ConnectedToGame);
+        json.WriteNumber("framesRead", FramesRead);
+        json.WriteBoolean("efficiencyModeEnabled", EfficiencyModeEnabled);
+        json.WriteBoolean("priorityLowered", PriorityLowered);
+        json.WriteBoolean("cpuMeasuredFromCycleCounts", CpuMeasuredFromCycleCounts);
+        json.WriteNumber("observedSeconds", Round(Overhead.Observed.TotalSeconds));
+        json.WriteNumber("runAverageCpuPercent", Round(Overhead.RunAverageCpuPercent));
+        json.WriteNumber("measurementWindowCpuPercent", Round(Overhead.MeasurementWindowCpuPercent));
+        json.WriteNumber("peakCpuPercent", Round(Overhead.PeakCpuPercent));
+        json.WriteNumber("privateMegabytes", Round(Overhead.PrivateMegabytes));
+        json.WriteNumber("peakPrivateMegabytes", Round(Overhead.PeakPrivateMegabytes));
+        json.WriteNumber("budgetCpuPercent", Budget.MaximumCpuPercent);
+        json.WriteNumber("budgetPrivateMegabytes", Budget.MaximumPrivateMegabytes);
+        json.WriteBoolean("withinBudget", Verdict.WithinBudget);
+        json.WriteStartArray("violations");
+        foreach (var violation in Verdict.Violations)
+        {
+            json.WriteStringValue(violation);
+        }
+
+        json.WriteEndArray();
+        json.WriteEndObject();
+    }
+
+    private static double Round(double value) => Math.Round(value, DecimalPlaces);
+}

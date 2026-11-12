@@ -27,6 +27,7 @@ namespace Gapo.Sandbox
 
             try
             {
+                Directory.CreateDirectory(options.Paths.DataDirectory);
                 if (options.ResetSettings) File.Delete(options.Paths.SettingsFile);
                 if (options.Recalibrate) File.Delete(options.Paths.CalibrationFile);
                 if (options.BelowNormalPriority)

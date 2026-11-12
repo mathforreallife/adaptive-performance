@@ -2,7 +2,7 @@
 
 Read this first when resuming. It says where the build is, what was decided, and exactly what to do next. Keep it current: update it at the end of every working step and before any long-running operation.
 
-Last updated: 2026-11-12 08:15 (Europe/Madrid), during build-order step 0.
+Last updated: 2026-11-12 (Europe/Madrid), build-order step 0 in CI.
 
 ## The job
 
@@ -60,32 +60,32 @@ The research workflow script is saved at
 `C:\Users\Kevin\.claude\projects\C--Users-Kevin-Desktop-Project\03b2d8a3-1b4f-4985-b608-67e477eab4b4\workflows\scripts\gapo-understand-wf_e4c9822a-3a0.js`
 (run id `wf_e4c9822a-3a0`, resumable only inside the same session; in a new session just re-create the missing briefs).
 
-## In-progress state (updated 2026-11-12, after the second usage-limit stop)
+## In-progress state (updated 2026-11-12, step 0 pushed for its first Windows CI run)
 
-Branch `step-0-test-rig` (local only, not pushed yet). Commit `8ec17cd` holds the solution skeleton (`Gapo.slnx`, `Directory.Build.props`, central package versions, `global.json` with the Microsoft.Testing.Platform runner) and the no-comments checker `tools/Gapo.SourceRules` with 35 passing tests. Run it with `artifacts/bin/Gapo.SourceRules/release/gapo-source-rules.exe check . --exclude demo --exclude docs`; `strip <dir>` removes C# comments.
+Branch `step-0-test-rig`, pushed, PR open against the default branch. What exists and passes locally (89 unit tests, no-comments check, end-to-end rig):
 
-Uncommitted, mid-port — the fixture game under `fixture/`:
+- `tools/Gapo.SourceRules` — no-comments checker (`check . --exclude demo --exclude docs`) and `strip`.
+- `fixture/Gapo.Sandbox.Contract` — telemetry contract (120-byte record, pinned by tests), settings INI, paths.
+- `fixture/Gapo.Sandbox` — the fixture game (WinForms window, software renderer, D3D11 flip-model present with WARP and GDI fallbacks, scenario switches, JSON result log). Run: `artifacts/bin/Gapo.Sandbox/release/GAPO-Sandbox.exe --data-dir=<dir> --reset --autotest=20 --log=<file.json> [--scenario=...] [--workload=W,E,D]`.
+- `src/Gapo.Core` (overhead meter + budgets), `src/Gapo.Windows` (own-process probe using cycle counts, background mode, process liveness), `src/Gapo.Agent` (skeleton: attaches to the fixture's engine hook, reads frames at 10 Hz, measures itself, exits 4 when over budget).
+- `tests/Gapo.EndToEnd` — the rig: fixture alone, fixture + agent, fixture alone; asserts overhead budget and A/B within noise. Run: `artifacts/bin/Gapo.EndToEnd/release/Gapo.EndToEnd.exe --output=<dir> --seconds=20`.
+- `.github/workflows/windows.yml` — build, source rules, unit tests, end-to-end, artifacts. The demo workflow is manual-only now.
 
-- `fixture/Gapo.Sandbox.Contract/` — done: `Telemetry.cs` (same 120-byte record and header offsets as the demo, explicit layout, map name parameter, new command `TriggerWarmup = 3`), `SandboxSettings.cs` (properties, atomic save), `SandboxPaths.cs` (data dir `%LOCALAPPDATA%\GAPO-Sandbox`, overridable).
-- `fixture/Gapo.Sandbox/` — demo sources copied, comments stripped, namespace renamed. `Game.cs` and `World.cs` are already patched for: `FixtureOptions`, fixed workload, scenario scaling, streaming (warm-up) control, memory ballast, save size, GPU-load iterations, run statistics. New files written: `FixtureOptions.cs`, `RunStatistics.cs`, `MemoryBallast.cs`, the csproj (net10.0-windows, WinForms, Vortice.Direct3D11 + D3DCompiler 3.8.3), `app.manifest`.
-- Still to write before it compiles: `DxgiPresenter.cs` (D3D11 flip-model swap chain, upload of the composed frame, full-screen pass with a loop of `GpuLoadIterations`, WARP fallback); rewrite `Program.cs` (parse `FixtureOptions`, drop headless mode, exit codes); `Native.cs` (add `AvailablePhysicalMb()` via `GlobalMemoryStatusEx`, drop `IsWindows`); `GameForm.cs` (take options, window size, DXGI or GDI present, JSON result log from `RunStatistics`, `_game.DeleteCalibration()` is now an instance method).
-- Then: add projects to `Gapo.slnx`, contract tests (record size/offsets, settings round trip), a background-load generator exe, run the fixture on this laptop.
+Build and test locally:
+
+```
+%LOCALAPPDATA%\Microsoft\dotnet\dotnet.exe build Gapo.slnx -c Release
+%LOCALAPPDATA%\Microsoft\dotnet\dotnet.exe test --solution Gapo.slnx -c Release
+```
 
 Research workflows failed twice on the usage limit and cost a lot; do not re-run them. Decide by direct experiment instead (for example: run PresentMon against the fixture here to see what it reports), and look things up inline only when needed.
 
 ## Next actions, in order
 
-1. Finish the fixture port listed above; build; run it locally with `--workload=...  --autotest=...`.
-2. Record decisions in ADRs: solution layout, UI stack, frame-timing path, fixture present path, branch/PR convention.
-3. Continue step 0 on branch `step-0-test-rig`:
-   - solution skeleton under `src/`, `fixture/`, `tests/`, `tools/`;
-   - the no-comments CI checker (`tools/`), run locally and in CI;
-   - port of the sandbox as the fixture game (`fixture/`), keeping the telemetry contract, adding scenario switches for every bottleneck class and a fixed-workload mode for CI;
-   - auto-test modes and screenshot capture;
-   - the overhead meter and the budget gate;
-   - the product Windows workflow (build, tests, end-to-end, overhead gate, screenshots, artifacts); switch the old demo workflow to manual-only to save CI minutes.
-4. Run everything on this laptop and on the Windows runner, fix what breaks, add the lessons to the spec, open the PR, merge when green.
-5. Write the end-of-phase summary, then continue with step 1 (telemetry core).
+1. Check the Windows CI run of the PR (`gh run list -R mathforreallife/adaptive-performance --branch step-0-test-rig`), fix whatever fails on the runner (likely candidates: D3D device creation on the GPU-less VM, timing of the A/B check on 2-4 vCPUs, action versions), add the CI numbers to spec Appendix B, merge the PR when green.
+2. Remaining step-0 items: a background-load generator executable (`fixture/Gapo.LoadGenerator`), ADRs in `docs/adr/` (solution layout, fixture present path, cycle-counted overhead, test rig = hosted runner + this laptop, branch/PR convention), README refresh, end-of-phase summary for the user.
+3. Step 1, telemetry core: get PresentMon working against the fixture on this laptop first (download the console build from the GameTechDev/PresentMon GitHub releases into a scratch folder, run it elevated with CSV to stdout for the fixture's process, confirm it reports the D3D11 presents and CPUBusy/GPUBusy), then decide the integration (console child process vs own ETW consumer), then build: frame-timing source abstraction, per-core load and process snapshot via `NtQuerySystemInformation`, game CPU/IO/memory on cached handles, all at <= 1 Hz except frame events, with the overhead gate still green.
+4. Then continue the build order below.
 
 ## Task list (build order, spec III.4)
 

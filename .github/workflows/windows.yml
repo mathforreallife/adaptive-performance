@@ -1,0 +1,57 @@
+name: Windows build, tests and end-to-end
+
+on:
+  push:
+    branches: ["**"]
+    paths-ignore:
+      - "docs/**"
+      - "demo/**"
+      - "**.md"
+  workflow_dispatch:
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      DOTNET_NOLOGO: "1"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          global-json-file: global.json
+
+      - name: Build
+        run: dotnet build Gapo.slnx -c Release
+
+      - name: Source rules (no comments in product source)
+        run: artifacts\bin\Gapo.SourceRules\release\gapo-source-rules.exe check . --exclude demo --exclude docs
+
+      - name: Unit tests
+        run: dotnet test --solution Gapo.slnx -c Release --no-build
+
+      - name: End-to-end run with the overhead gate
+        run: artifacts\bin\Gapo.EndToEnd\release\Gapo.EndToEnd.exe "--output=${{ runner.temp }}\gapo-end-to-end" --seconds=20
+
+      - name: Print result files
+        if: always()
+        shell: pwsh
+        run: Get-ChildItem "${{ runner.temp }}\gapo-end-to-end" -Filter *.json -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "=====" $_.Name; Get-Content $_.FullName }
+
+      - name: Upload results and screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: end-to-end
+          path: |
+            ${{ runner.temp }}/gapo-end-to-end/*.json
+            ${{ runner.temp }}/gapo-end-to-end/*.png
+            ${{ runner.temp }}/gapo-end-to-end/*.txt
+          if-no-files-found: warn
+          retention-days: 14

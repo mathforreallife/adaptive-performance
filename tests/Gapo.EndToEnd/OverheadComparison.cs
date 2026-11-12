@@ -1,0 +1,25 @@
+namespace Gapo.EndToEnd;
+
+public sealed record OverheadComparison(double BaselineFps, double AttachedFps, double NoiseFloorPercent, double SlowdownPercent)
+{
+    private const double NoiseFloorMultiplier = 2.5;
+    private const double MinimumNoiseFloorPercent = 2.5;
+    private const double MaximumNoiseFloorPercent = 10.0;
+    private const double PercentScale = 100.0;
+
+    public bool AttachedRunIsWithinNoise => SlowdownPercent <= NoiseFloorPercent;
+
+    public static OverheadComparison Between(double firstBaselineFps, double secondBaselineFps, double attachedFps)
+    {
+        var baseline = (firstBaselineFps + secondBaselineFps) / 2;
+        if (baseline <= 0)
+        {
+            return new OverheadComparison(0, attachedFps, MaximumNoiseFloorPercent, PercentScale);
+        }
+
+        var baselineSpreadPercent = Math.Abs(firstBaselineFps - secondBaselineFps) / baseline * PercentScale;
+        var noiseFloor = Math.Clamp(baselineSpreadPercent * NoiseFloorMultiplier, MinimumNoiseFloorPercent, MaximumNoiseFloorPercent);
+        var slowdown = (baseline - attachedFps) / baseline * PercentScale;
+        return new OverheadComparison(baseline, attachedFps, noiseFloor, slowdown);
+    }
+}
