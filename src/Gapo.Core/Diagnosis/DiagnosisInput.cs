@@ -12,7 +12,20 @@ public sealed record StageTimes(
     int RenderThreads,
     int EntitiesSimulated,
     double PhysicsMs,
-    IReadOnlyList<RenderPass> RenderPasses);
+    IReadOnlyList<RenderPass> RenderPasses)
+{
+    public double EntityLogicMs { get; init; }
+
+    public double ParticlesMs { get; init; }
+
+    public int EntitiesTotal { get; init; }
+
+    public int RenderWidth { get; init; }
+
+    public int RenderHeight { get; init; }
+
+    public double PassMs(string name) => RenderPasses.FirstOrDefault(pass => pass.Name == name)?.Milliseconds ?? 0;
+}
 
 public sealed record PresentTiming(double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs);
 
