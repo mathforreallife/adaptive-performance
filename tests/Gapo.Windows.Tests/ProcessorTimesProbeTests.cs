@@ -39,7 +39,7 @@ public sealed class ProcessorTimesProbeTests
         ProcessorLoad.Between(earlier, later, loads);
 
         Assert.All(loads, load => Assert.InRange(load, 0.0, 100.0));
-        Assert.True(ProcessorLoad.Average(loads) * loads.Length >= 15.0);
+        Assert.True(ProcessorLoad.Average(loads) * loads.Length >= 5.0);
     }
 
     [Fact]

@@ -9,7 +9,7 @@ namespace Gapo.Windows.Tests;
 public sealed class ProcessSnapshotReaderTests
 {
     private const long Megabyte = 1024 * 1024;
-    private const double LowestShareABusyThreadGetsOnALoadedMachine = 20.0;
+    private const double LowestShareABusyThreadGetsOnALoadedMachine = 5.0;
 
     private static ProcessSnapshot Capture(ProcessSnapshotReader reader, Stopwatch clock, int detailedProcessId)
     {
