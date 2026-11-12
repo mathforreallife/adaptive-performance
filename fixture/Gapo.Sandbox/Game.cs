@@ -208,6 +208,9 @@ namespace Gapo.Sandbox
                 Detail = Math.Max(0.45f, Detail * (float)(RenderTargetMs / m) * 1.05f);
             }
 
+            Detail = (float)Math.Round(Detail, 2);
+            Renderer.Detail = Detail;
+
             var probeSim = new Simulation(World);
             probeSim.Populate(300);
             var st = new List<double>();

@@ -11,6 +11,8 @@ namespace Gapo.Sandbox
     {
         const int SwapChainBufferCount = 2;
         const int ConstantBufferBytes = 16;
+        const uint MicrosoftVendorId = 0x1414;
+        const uint BasicRenderDriverDeviceId = 0x8C;
         const string ShaderName = "sandbox-present.hlsl";
         const string ShaderSource = @"
 Texture2D frameTexture : register(t0);
@@ -98,7 +100,9 @@ float4 PixelMain(VertexOutput input) : SV_Target
             using (var adapter = dxgiDevice.GetAdapter())
             using (var factory = adapter.GetParent<IDXGIFactory2>())
             {
-                AdapterName = adapter.Description.Description;
+                var adapterDescription = adapter.Description;
+                AdapterName = adapterDescription.Description;
+                if (adapterDescription.VendorId == MicrosoftVendorId && adapterDescription.DeviceId == BasicRenderDriverDeviceId) IsSoftwareAdapter = true;
                 var description = new SwapChainDescription1
                 {
                     Width = (uint)width,
