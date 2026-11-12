@@ -39,6 +39,7 @@ namespace Gapo.Sandbox
         const string CalibrationVersion = "6";
         public bool LoadedOptimisedSettings;
         public bool QuitRequested;
+        public float PresentWaitMs;
         public readonly FixtureOptions Options;
         public readonly RunStatistics Stats = new RunStatistics();
         public readonly MemoryBallast Ballast = new MemoryBallast();
@@ -424,21 +425,24 @@ namespace Gapo.Sandbox
             float renderMs = Renderer.TerrainMs + Renderer.SkyMs + Renderer.ShadowMs + Renderer.WaterMs + Renderer.FogMs + Renderer.SpritesMs + Renderer.PostMs;
 
             float presentMs = present != null ? present() : 0f;
+            float presentWaitMs = Math.Min(presentMs, PresentWaitMs);
+            PresentWaitMs = 0;
+            presentMs -= presentWaitMs;
             double workEnd = Now;
-            float workMs = (float)(workEnd - frameStart);
+            float workMs = (float)(workEnd - frameStart) - presentWaitMs;
 
-            float waitMs = 0;
+            float waitMs = presentWaitMs;
             if (Settings.FrameRateCap > 0)
             {
                 double target = _lastFrameEnd + 1000.0 / Settings.FrameRateCap;
                 if (target < workEnd - 50) target = workEnd;
                 WaitUntil(target);
-                waitMs = (float)(Now - workEnd);
+                waitMs += (float)(Now - workEnd);
             }
             else if (Settings.VSync)
             {
                 try { Native.DwmFlush(); } catch { }
-                waitMs = (float)(Now - workEnd);
+                waitMs += (float)(Now - workEnd);
             }
 
             int gen2 = GC.CollectionCount(2);

@@ -73,6 +73,7 @@ float4 PixelMain(VertexOutput input) : SV_Target
 
         public string AdapterName { get; private set; }
         public bool IsSoftwareAdapter { get; private set; }
+        public float LastPresentCallMs { get; private set; }
 
         DxgiPresenter() { }
 
@@ -197,7 +198,9 @@ float4 PixelMain(VertexOutput input) : SV_Target
             _context.PSSetSampler(0, _sampler);
             _context.PSSetConstantBuffer(0, _loadBuffer);
             _context.Draw(3, 0);
+            long beforePresentCall = System.Diagnostics.Stopwatch.GetTimestamp();
             _swapChain.Present(0, PresentFlags.None);
+            LastPresentCallMs = (float)System.Diagnostics.Stopwatch.GetElapsedTime(beforePresentCall).TotalMilliseconds;
         }
 
         public void Dispose()

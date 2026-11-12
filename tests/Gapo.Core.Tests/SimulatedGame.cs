@@ -43,6 +43,8 @@ public sealed class SimulatedGame : IGameSession, IGameKnowledge, IChangeJournal
 
     public double CapJitterMs { get; set; }
 
+    public double WorkNeverGoesBelowMs { get; set; }
+
     public double ThreadsPredictionFactor { get; set; } = 1.0;
 
     public bool OffersOnlyThreadsAndAntiAliasing { get; set; }
@@ -101,7 +103,7 @@ public sealed class SimulatedGame : IGameSession, IGameKnowledge, IChangeJournal
         }
 
         var disturbance = WindowsMeasured <= DisturbedBaselineWindows && WindowsMeasured % 2 == 1 ? 1.25 : 1.0;
-        var work = WorkMs(Settings) * disturbance;
+        var work = Math.Max(WorkNeverGoesBelowMs, WorkMs(Settings) * disturbance);
         var cap = Settings.Number(Cap);
         var frames = new MeasuredFrame[FramesPerWindow];
         for (var index = 0; index < frames.Length; index++)

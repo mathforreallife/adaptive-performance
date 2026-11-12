@@ -33,6 +33,8 @@ public sealed class OptimisationEngine
     private const double CapHeldShare = 0.93;
     private const double CapSpreadTolerance = 1.05;
     private const int MostRemainingOptionsNamed = 4;
+    private const int ChangesWithoutEffectBeforeStopping = 3;
+    private const double NoEffectShareOfNoiseFloor = 0.5;
     private static readonly TimeSpan HitchObservationSpan = TimeSpan.FromSeconds(14);
 
     private readonly IGameSession session;
@@ -50,6 +52,7 @@ public sealed class OptimisationEngine
     private double targetFps;
     private double budgetMs;
     private int windows;
+    private int changesWithoutEffect;
 
     public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null)
     {
@@ -261,9 +264,19 @@ public sealed class OptimisationEngine
                 continue;
             }
 
-            if (RunExperiment(next, goal) != Decision.Kept)
+            var decision = RunExperiment(next, goal);
+            if (decision != Decision.Kept)
             {
                 blocked.Add(next.Setting);
+            }
+
+            var measured = experiments[^1];
+            var hadNoEffect = decision == Decision.RolledBack && Math.Abs(measured.GainPercent) <= noise.FloorFraction * PercentScale * NoEffectShareOfNoiseFloor;
+            changesWithoutEffect = hadNoEffect ? changesWithoutEffect + 1 : 0;
+            if (changesWithoutEffect >= ChangesWithoutEffectBeforeStopping)
+            {
+                notTouched.Add(Text($"Stopped testing: the last {changesWithoutEffect} changes made no measurable difference to frame work ({statistics.MedianBusyMs:0.0} ms), although each was predicted to help. That usually means something outside these settings limits the frame rate, such as a frame-rate cap, VSync or the display itself."));
+                return;
             }
         }
     }

@@ -212,6 +212,18 @@ public sealed class OptimisationEngineTests
     }
 
     [Fact]
+    public void StopsWhenSeveralChangesInARowMakeNoMeasurableDifference()
+    {
+        var (report, game, _) = Optimise(Goal.MaximumFps, simulated => simulated.WorkNeverGoesBelowMs = 29.9);
+
+        Assert.True(report.Completed);
+        Assert.Contains(report.NotTouched, note => note.StartsWith("Stopped testing: the last 3 changes made no measurable difference", StringComparison.Ordinal));
+        Assert.Equal(3, report.Experiments.Count(experiment => experiment.Kind == ChangeKind.Throughput));
+        Assert.All(report.Experiments.Where(experiment => experiment.Kind == ChangeKind.Throughput), experiment => Assert.Equal(Decision.RolledBack, experiment.Decision));
+        Assert.Equal("1", game.Settings[SimulatedGame.Threads]);
+    }
+
+    [Fact]
     public void RevertAllPutsTheOriginalSettingsBack()
     {
         var (report, game, engine) = Optimise();

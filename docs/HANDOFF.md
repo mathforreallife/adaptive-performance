@@ -120,6 +120,8 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - Rig runs: baseline-1, with-agent, baseline-2, optimise (+ revert all), simulation-bound. About 5 minutes locally.
 - Result on this laptop: 25.2 -> 94.0 FPS (+274 %), or +143 % when the 60 FPS cap is kept; agent 0.29 % CPU while optimising, 0.11 % in windows, 16 MB.
 - Step 5 is only done for the fixture. Not done: the Steam library index, running-game detection without the hook, real-game adapters.
+- Always run `dotnet build Gapo.slnx -c Release` before the end-to-end executable: `dotnet test` does not rebuild the agent, the fixture or the rig.
+- CI runner result for the first engine run: 28.2 -> 62.5 FPS (+121 %), then ten experiments measured 0.0 because the present call blocks at the display rate on the software adapter; fixed by counting time inside present as wait and by the engine stop rule (three changes in a row without effect).
 - Scripts that patch several files at once must be written to `artifacts/rig/*.py` and run once; a script that failed half-way was re-run and applied edits twice. Check `git diff` after any failure before re-running.
 
 ## Next actions, in order

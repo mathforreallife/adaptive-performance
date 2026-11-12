@@ -213,7 +213,11 @@ namespace Gapo.Sandbox
                 fixed (int* src = r.Output)
                     Native.StretchDIBits(_memDC, _dest.X, _dest.Y, dw, dh, 0, 0, r.OutW, r.OutH, (IntPtr)src, ref bmi, 0, Native.SRCCOPY);
                 DrawOverlay(cw, ch);
-                if (_presenter != null) _presenter.Present(_bits, cw, ch, _game.GpuLoadIterations);
+                if (_presenter != null)
+                {
+                    _presenter.Present(_bits, cw, ch, _game.GpuLoadIterations);
+                    _game.PresentWaitMs = _presenter.LastPresentCallMs;
+                }
                 else Native.BitBlt(hdc, 0, 0, cw, ch, _memDC, 0, 0, Native.SRCCOPY);
             }
             finally { Native.ReleaseDC(Handle, hdc); }
