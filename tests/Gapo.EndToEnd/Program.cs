@@ -17,6 +17,7 @@ const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
 const double SmallestExpectedFpsGainPercent = 25;
 const int FewestExpectedKeptChanges = 2;
 const int ExpectedScreenshots = 6;
+const int FewestLiveSamples = 3;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
@@ -89,7 +90,11 @@ try
 
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
-    var (optimisedGame, optimisingAgent) = rig.RunFixtureWithOptimisation("optimise");
+    var (optimisedGame, optimisingAgent, served) = rig.RunFixtureWithOptimisation("optimise");
+    Expect(served.LiveSamples >= FewestLiveSamples && served.ChartPoints > 0, $"The interface received {served.LiveSamples} live samples with at most {served.ChartPoints} chart points.");
+    Expect(served.SawWatching && served.SawOptimising && served.SawFinished, "The interface did not see the watching, optimising and finished states: " + string.Join(" | ", served.StatusTitles));
+    Expect(File.Exists(served.ReportPath), "The report announced to the interface does not exist: " + served.ReportPath);
+    Print($"link        the interface received {served.LiveSamples} live samples (first {served.FirstLiveFps:0.0} FPS, {served.ChartPoints} chart points) and {served.StatusTitles.Count} status lines; report announced at {Path.GetFileName(served.ReportPath)}");
     Expect(optimisedGame.ExitCode == 0, $"The fixture exited with code {optimisedGame.ExitCode} during the optimisation.");
     Expect(optimisingAgent.WithinBudget && optimisingAgent.ExitCode == 0, "The agent exceeded its overhead budget while optimising: " + string.Join(" ", optimisingAgent.Violations));
     Expect(optimisingAgent.MeasurementWindowCpuPercent <= LargestCpuInsideMeasurementWindowsPercent, string.Create(CultureInfo.InvariantCulture, $"The agent used {optimisingAgent.MeasurementWindowCpuPercent:0.000}% CPU inside measurement windows."));

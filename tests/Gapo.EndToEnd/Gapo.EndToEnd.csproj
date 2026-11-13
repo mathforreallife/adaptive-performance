@@ -6,6 +6,7 @@
     <AssemblyName>Gapo.EndToEnd</AssemblyName>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\Gapo.Core\Gapo.Core.csproj" />
     <ProjectReference Include="..\..\src\Gapo.Agent\Gapo.Agent.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\fixture\Gapo.Sandbox\Gapo.Sandbox.csproj" ReferenceOutputAssembly="false" />
     <ProjectReference Include="..\..\src\Gapo.App\Gapo.App.csproj" ReferenceOutputAssembly="false" SkipGetTargetFrameworkProperties="true" />

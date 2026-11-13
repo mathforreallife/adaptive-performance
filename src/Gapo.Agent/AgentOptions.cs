@@ -12,6 +12,9 @@ public sealed record AgentOptions(
     Gapo.Core.Optimisation.Goal? OptimisationGoal,
     bool AskGameToCloseWhenDone,
     bool RevertAll,
+    bool Serve,
+    string PipeName,
+    string ReportsDirectory,
     string JournalPath,
     string? ReportPath)
 {
@@ -25,10 +28,13 @@ public sealed record AgentOptions(
     private const string JournalOption = "--journal";
     private const string CloseGameFlag = "--ask-game-to-close-when-done";
     private const string RevertAllFlag = "--revert-all";
+    private const string ServeFlag = "--serve";
+    private const string PipeNameOption = "--pipe-name";
+    private const string ReportsOption = "--reports-dir";
 
     public static AgentOptions Parse(IReadOnlyList<string> arguments)
     {
-        var options = new AgentOptions(TelemetryChannel.DefaultMapName, Timeout.InfiniteTimeSpan, StopWhenGameExits: false, MeasureFrameTiming: false, MeasureBaseline: false, OptimisationGoal: null, AskGameToCloseWhenDone: false, RevertAll: false, JournalPath: DefaultJournalPath(), ReportPath: null);
+        var options = new AgentOptions(TelemetryChannel.DefaultMapName, Timeout.InfiniteTimeSpan, StopWhenGameExits: false, MeasureFrameTiming: false, MeasureBaseline: false, OptimisationGoal: null, AskGameToCloseWhenDone: false, RevertAll: false, Serve: false, PipeName: DefaultPipeName(), ReportsDirectory: DefaultReportsDirectory(), JournalPath: DefaultJournalPath(), ReportPath: null);
         foreach (var argument in arguments)
         {
             if (argument == StopWithGameFlag)
@@ -38,6 +44,18 @@ public sealed record AgentOptions(
             else if (argument == CloseGameFlag)
             {
                 options = options with { AskGameToCloseWhenDone = true };
+            }
+            else if (argument == ServeFlag)
+            {
+                options = options with { Serve = true };
+            }
+            else if (TryReadValue(argument, PipeNameOption, out var pipeName))
+            {
+                options = options with { PipeName = pipeName };
+            }
+            else if (TryReadValue(argument, ReportsOption, out var reportsDirectory))
+            {
+                options = options with { ReportsDirectory = reportsDirectory };
             }
             else if (argument == RevertAllFlag)
             {
@@ -79,6 +97,15 @@ public sealed record AgentOptions(
 
         return options;
     }
+
+    private static string DefaultPipeName()
+    {
+        using var self = System.Diagnostics.Process.GetCurrentProcess();
+        return Gapo.Core.Protocol.WireFormat.PipeNameFor(self.SessionId);
+    }
+
+    private static string DefaultReportsDirectory() =>
+        Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GAPO", "reports");
 
     private static string DefaultJournalPath() =>
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "GAPO", "change-journal.json");

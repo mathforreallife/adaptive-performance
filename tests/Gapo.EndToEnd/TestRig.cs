@@ -85,13 +85,43 @@ public sealed class TestRig
 
     public string SandboxSettingsPath => Path.Combine(sandboxDataDirectory, "sandbox-settings.ini");
 
-    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithOptimisation(string name)
+    public (FixtureResult Fixture, AgentResult Agent, ServedRun Served) RunFixtureWithOptimisation(string name)
     {
         var configuredSeconds = runSeconds;
         runSeconds = LongestOptimisationSeconds;
+        var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
+        ServedRun? served = null;
+        Exception? clientFailure = null;
+        var client = new Thread(() =>
+        {
+            try
+            {
+                using var link = InterfaceClient.Connect(pipeName);
+                served = link.OptimiseAndWaitForTheReport(Gapo.Core.Optimisation.Goal.Balanced);
+            }
+            catch (Exception exception) when (exception is TimeoutException or IOException or InvalidOperationException)
+            {
+                clientFailure = exception;
+            }
+        })
+        { IsBackground = true, Name = "rig interface client" };
         try
         {
-            return RunFixtureWithAgent(name, "--optimise=balanced", "--ask-game-to-close-when-done", "--journal=" + JournalPath);
+            client.Start();
+            var (fixture, agent) = RunFixtureWithAgent(
+                name,
+                "--serve",
+                "--pipe-name=" + pipeName,
+                "--reports-dir=" + Path.Combine(outputDirectory, "reports"),
+                "--ask-game-to-close-when-done",
+                "--journal=" + JournalPath);
+            client.Join(TimeSpan.FromSeconds(10));
+            if (served is null)
+            {
+                throw new InvalidOperationException("The interface link did not complete: " + (clientFailure?.Message ?? "no report was announced"));
+            }
+
+            return (fixture, agent, served);
         }
         finally
         {
