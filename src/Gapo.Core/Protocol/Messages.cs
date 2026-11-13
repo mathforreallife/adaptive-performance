@@ -32,6 +32,8 @@ public sealed record LiveSampleMessage(
 
 public sealed record ReportReadyMessage(string Path) : AgentMessage;
 
+public sealed record DiagnosisMessage(string GameName, string Bottleneck, string Title, string Summary, IReadOnlyList<string> AlsoNoticed, string Basis) : AgentMessage;
+
 public abstract record UiCommand;
 
 public sealed record OptimiseCommand(Goal Goal) : UiCommand;

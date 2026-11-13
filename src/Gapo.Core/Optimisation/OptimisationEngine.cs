@@ -32,6 +32,7 @@ public sealed class OptimisationEngine
     private const double HalfCapWorkHeadroom = 1.1;
     private const double CapHeldShare = 0.93;
     private const double CapSpreadTolerance = 1.05;
+    private const double InvisibleSpreadShareOfFramePeriod = 0.1;
     private const int MostRemainingOptionsNamed = 4;
     private const int ChangesWithoutEffectBeforeStopping = 3;
     private const double DisplayRateTolerance = 0.03;
@@ -481,7 +482,8 @@ public sealed class OptimisationEngine
         var spreadBefore = before.Statistics.FrameTimeSpreadMs;
         var spreadAfter = result.Statistics.FrameTimeSpreadMs;
         var held = result.Statistics.AverageFps >= cap * CapHeldShare;
-        if (held && spreadAfter <= spreadBefore * CapSpreadTolerance)
+        var invisibleSpreadMs = MillisecondsPerSecond / cap * InvisibleSpreadShareOfFramePeriod;
+        if (held && spreadAfter <= Math.Max(spreadBefore * CapSpreadTolerance, invisibleSpreadMs))
         {
             reference = result;
             journal.TrialEnded(current);
@@ -492,7 +494,7 @@ public sealed class OptimisationEngine
         RollBackTo(snapshot);
         if (held)
         {
-            Record(candidate, before, result.Statistics, 0, Decision.RolledBack, Text($"Rolled back: frame-time variation went from {spreadBefore:0.0} to {spreadAfter:0.0} ms. The cap made pacing no smoother on this PC, so the extra frames are worth more."));
+            Record(candidate, before, result.Statistics, 0, Decision.RolledBack, Text($"Rolled back: frame-time variation went from {spreadBefore:0.0} to {spreadAfter:0.0} ms, more than the {invisibleSpreadMs:0.0} ms that would go unnoticed at {cap} FPS. The cap made pacing less even on this PC, so the extra frames are worth more."));
             return Text($"Left uncapped: a {cap} FPS cap was tested and did not make frame pacing smoother here.");
         }
 

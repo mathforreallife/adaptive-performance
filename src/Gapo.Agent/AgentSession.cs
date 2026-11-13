@@ -46,6 +46,8 @@ public sealed class AgentSession : IDisposable
     private FrameTimingProbe? frameTiming;
     private bool frameTimingIsOnlyForLiveData;
     private string? announcedGame;
+    private ObservedGameDiagnosis? observedDiagnosis;
+    private DiagnosisMessage? latestDiagnosis;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -191,6 +193,10 @@ public sealed class AgentSession : IDisposable
                     : new StatusMessage(AgentState.Watching, "Watching " + gameName, frameTiming is { Availability: FrameTimingAvailability.Available }
                         ? NotSupportedYet
                         : NotSupportedYet + " Frame times are not available either: reading them needs administrator rights or membership of the Performance Log Users group."));
+            if (latestDiagnosis is { } diagnosis && diagnosis.GameName == gameName && !link.IsConnected)
+            {
+                server.Send(diagnosis);
+            }
         }
 
         if (insideWindow)
@@ -263,6 +269,7 @@ public sealed class AgentSession : IDisposable
             WatchForSteamGames();
             monitor.Reconcile(link.IsConnected ? link.GameProcessId : SteamGame?.ProcessId ?? 0);
             monitor.Sample(clock.Elapsed, own, allowProcessSnapshot: !insideWindow);
+            AdvanceObservedDiagnosis();
             PublishLiveSample(insideWindow);
         }
 
@@ -319,8 +326,34 @@ public sealed class AgentSession : IDisposable
         if (steamGames.Poll(clock.Elapsed))
         {
             liveFrames.Clear();
+            latestDiagnosis = null;
+            observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed);
             ReconcileFrameTiming();
         }
+    }
+
+    private void AdvanceObservedDiagnosis()
+    {
+        if (observedDiagnosis is not { IsFinished: false } observing || SteamGame is not { } game || !observing.Advance(clock.Elapsed, monitor, hardware))
+        {
+            return;
+        }
+
+        if (observing.Result is not { } result)
+        {
+            Console.WriteLine($"No diagnosis for {game.Game.Name}: {observing.FailureReason}");
+            return;
+        }
+
+        latestDiagnosis = new DiagnosisMessage(
+            game.Game.Name,
+            result.Primary.ToString(),
+            result.Title,
+            result.Summary,
+            result.SecondaryProblems,
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Observed for {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s while you played, from frame times and processor use, without changing anything. GAPO could not repeat the same scene, so this describes those {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s."));
+        Console.WriteLine($"Diagnosis for {game.Game.Name}: {result.Title}. {result.Summary}");
+        server?.Send(latestDiagnosis);
     }
 
     private void ReconcileFrameTiming()
@@ -363,6 +396,7 @@ public sealed class AgentSession : IDisposable
         if (!link.IsConnected)
         {
             liveFrames.Add(new MeasuredFrame(frame.PresentStartMs, frame.FrameMs, frame.CpuBusyMs, 0, FrameMarks.None));
+            observedDiagnosis?.OnFrame(frame);
         }
     }
 

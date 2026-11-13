@@ -12,6 +12,7 @@ public static class WireFormat
     private const string StatusType = "status";
     private const string SampleType = "sample";
     private const string ReportType = "report";
+    private const string DiagnosisType = "diagnosis";
     private const string OptimiseType = "optimise";
     private const string RevertAllType = "revertAll";
     private const string StopType = "stop";
@@ -54,6 +55,21 @@ public static class WireFormat
             case ReportReadyMessage report:
                 json.WriteString(TypeProperty, ReportType);
                 json.WriteString("path", report.Path);
+                break;
+            case DiagnosisMessage diagnosis:
+                json.WriteString(TypeProperty, DiagnosisType);
+                json.WriteString("gameName", diagnosis.GameName);
+                json.WriteString("bottleneck", diagnosis.Bottleneck);
+                json.WriteString("title", diagnosis.Title);
+                json.WriteString("summary", diagnosis.Summary);
+                json.WriteStartArray("alsoNoticed");
+                foreach (var line in diagnosis.AlsoNoticed)
+                {
+                    json.WriteStringValue(line);
+                }
+
+                json.WriteEndArray();
+                json.WriteString("basis", diagnosis.Basis);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(message), message, "Unknown agent message.");
@@ -109,6 +125,15 @@ public static class WireFormat
                 root.GetProperty("recentFrameMs").EnumerateArray().Select(frame => frame.GetDouble()).ToArray(),
                 !root.TryGetProperty("canOptimise", out var canOptimise) || canOptimise.ValueKind != JsonValueKind.False),
             ReportType => new ReportReadyMessage(Text(root, "path")),
+            DiagnosisType => new DiagnosisMessage(
+                Text(root, "gameName"),
+                Text(root, "bottleneck"),
+                Text(root, "title"),
+                Text(root, "summary"),
+                root.TryGetProperty("alsoNoticed", out var also) && also.ValueKind == JsonValueKind.Array
+                    ? also.EnumerateArray().Select(line => line.GetString() ?? string.Empty).ToArray()
+                    : [],
+                Text(root, "basis")),
             _ => null,
         };
     }

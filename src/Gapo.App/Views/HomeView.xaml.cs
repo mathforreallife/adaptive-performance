@@ -21,6 +21,7 @@ public sealed partial class HomeView : UserControl
     private IReadOnlyList<double> chartValues = [];
     private bool optimising;
     private bool canOptimise = true;
+    private string shownGame = string.Empty;
 
     public HomeView()
     {
@@ -53,6 +54,12 @@ public sealed partial class HomeView : UserControl
         LivePanel.Visibility = sample.GameConnected ? Visibility.Visible : Visibility.Collapsed;
         canOptimise = sample.CanOptimise;
         UpdateControls(sample.GameConnected);
+        if (sample.GameName != shownGame)
+        {
+            shownGame = sample.GameName;
+            DiagnosisPanel.Visibility = Visibility.Collapsed;
+        }
+
         if (!sample.GameConnected)
         {
             GameTitle.Text = "No game is running";
@@ -71,6 +78,17 @@ public sealed partial class HomeView : UserControl
         LoadLine.Text = string.Create(CultureInfo.InvariantCulture, $"The game uses {sample.GameProcessorsUsed:0.0} processors; the whole PC is at {sample.MachineLoadPercent:0} % CPU.");
         chartValues = sample.RecentFrameMs;
         DrawChart();
+    }
+
+    public void ShowDiagnosis(DiagnosisMessage diagnosis)
+    {
+        DiagnosisTitle.Text = diagnosis.Title;
+        DiagnosisSummary.Text = diagnosis.Summary;
+        DiagnosisAlso.Text = string.Join(Environment.NewLine, diagnosis.AlsoNoticed.Select(line => "Also: " + line));
+        DiagnosisAlso.Visibility = diagnosis.AlsoNoticed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DiagnosisBasis.Text = diagnosis.Basis;
+        shownGame = diagnosis.GameName;
+        DiagnosisPanel.Visibility = Visibility.Visible;
     }
 
     private void UpdateControls(bool gameConnected)

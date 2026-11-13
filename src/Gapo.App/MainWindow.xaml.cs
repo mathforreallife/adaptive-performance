@@ -115,6 +115,9 @@ public sealed partial class MainWindow : Window
                 }
 
                 break;
+            case DiagnosisMessage diagnosis:
+                home.ShowDiagnosis(diagnosis);
+                break;
             case ReportReadyMessage ready when File.Exists(ready.Path):
                 ShowReport(ready.Path);
                 break;

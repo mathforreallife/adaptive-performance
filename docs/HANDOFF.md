@@ -139,6 +139,7 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - `src/Gapo.Windows/Games`: `SteamLocator` (registry), `DiskGameFileSource`, `RunningGameFinder` (process snapshot + cached image paths).
 - Agent: `--list-games [--steam-root=<folder>]`. Sample tree builder: `artifacts/rig/make_steamtree.py <folder>`; stand-in running game test: `artifacts/rig/steam_running_test.ps1` (neither is in git).
 - Serve mode watches for a running Steam game (`src/Gapo.Agent/Games/SteamGameWatcher.cs`, 5 s poll) and measures it through event tracing only; `canOptimise=false` on live samples hides Optimise in the interface. Rig phase `RunUnknownSteamGame` (`Gapo.EndToEnd.exe --only=unknown-game`) runs the fixture with `--no-telemetry` from a fake Steam library.
+- Unknown games are diagnosed after warm-up from 20 s of event-tracing frames plus the monitor (`src/Gapo.Agent/Measurement/ObservedGameDiagnosis.cs`, `DiagnosisMessage` on the pipe, "What limits this game" in the home view). The rig expects `CpuOneThreadLimit` for the hook-less fixture.
 - Not done: Epic/GOG libraries, anti-cheat policy list, the first real-game adapter (settings file read/write with restart-required settings), a run against a real Steam installation, an ETW process-id filter so other programs' presents are not delivered to the agent at all.
 
 ## Step 7 state (branch `step-7-ui`, stacked on steps 5-6)
@@ -152,7 +153,7 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 
 1. Make sure the `step-7-live-link` PR is merged and its CI run is green (on the GPU-less runner the interface CPU budget is reported, not enforced; the quarter-of-a-processor ceiling and the 80 MB limit are).
 2. Remaining UI: frame-budget bar, running / warm-up / error states with phase progress, Save report, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, Tips content.
-3. Real games, continued (Steam index, running-game detection and live measurement of an unknown game exist, see "Step 5, real games"): a baseline measurement and diagnosis for an unknown game from event tracing plus the monitor (no hook), then the first real-game adapter and settings that need a restart.
+3. Real games, continued (Steam index, running-game detection, live measurement and an observed diagnosis of an unknown game exist, see "Step 5, real games"): the first real-game adapter (settings file read/write, restart-required settings, anti-cheat policy) and an ETW process-id filter.
 4. Leftovers: GPU busy time (DxgKrnl events; PresentMon reports about 1.0 ms per frame for the fixture, use it as the reference), hitch-period observation, ADRs for frame timing and for the engine/adapter interfaces, README refresh.
 5. Then steps 8-12 of the build order.
 

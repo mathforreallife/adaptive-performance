@@ -6,7 +6,7 @@ using Gapo.Core.Protocol;
 
 namespace Gapo.EndToEnd;
 
-public sealed record UnknownGameRun(int LiveSamplesWithFrames, double MedianLiveFps, bool EverOfferedToOptimise, string WatchingDetail, bool RefusedToOptimise, bool SawTheGameLeave);
+public sealed record UnknownGameRun(int LiveSamplesWithFrames, double MedianLiveFps, bool EverOfferedToOptimise, string WatchingDetail, bool RefusedToOptimise, bool SawTheGameLeave, DiagnosisMessage? Diagnosis);
 
 public sealed record ServedRun(int LiveSamples, double FirstLiveFps, int ChartPoints, IReadOnlyList<string> StatusTitles, bool SawWatching, bool SawOptimising, bool SawFinished, string ReportPath);
 
@@ -76,10 +76,14 @@ public sealed class InterfaceClient : IDisposable
         var offeredToOptimise = false;
         var watchingDetail = string.Empty;
         var refused = false;
+        DiagnosisMessage? diagnosis = null;
         void Observe(AgentMessage message)
         {
             switch (message)
             {
+                case DiagnosisMessage found when found.GameName == expectedName:
+                    diagnosis = found;
+                    break;
                 case StatusMessage { State: AgentState.Watching } status when status.Title == "Watching " + expectedName:
                     watchingDetail = status.Detail;
                     break;
@@ -120,7 +124,7 @@ public sealed class InterfaceClient : IDisposable
         }
 
         var sorted = fps.Order().ToList();
-        return new UnknownGameRun(fps.Count, sorted.Count == 0 ? 0 : sorted[sorted.Count / 2], offeredToOptimise, watchingDetail, refused, left);
+        return new UnknownGameRun(fps.Count, sorted.Count == 0 ? 0 : sorted[sorted.Count / 2], offeredToOptimise, watchingDetail, refused, left, diagnosis);
     }
 
     public void Dispose()

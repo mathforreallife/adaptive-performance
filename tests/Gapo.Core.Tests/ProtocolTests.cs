@@ -38,6 +38,17 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void ADiagnosisSurvivesTheWire()
+    {
+        var sent = new DiagnosisMessage("Some Steam game", "CpuOneThreadLimit", "The game is limited by one CPU thread", "Its busiest thread uses 97% of one processor.", ["Storage hitch: froze for 120 ms while saving."], "Observed for 20 s while the game ran.");
+
+        var received = Assert.IsType<DiagnosisMessage>(WireFormat.DecodeMessage(WireFormat.Encode(sent)));
+
+        Assert.Equal(sent with { AlsoNoticed = [] }, received with { AlsoNoticed = [] });
+        Assert.Equal(sent.AlsoNoticed, received.AlsoNoticed);
+    }
+
+    [Fact]
     public void LiveSampleSurvivesTheWire()
     {
         var sent = new LiveSampleMessage(true, "GAPO Sandbox", 24.9, 40.1, 39.6, 11.2, 0.99, 31, 0.13, 10.5, false, [40.0, 41.5, 120.25]);

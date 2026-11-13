@@ -156,7 +156,7 @@ public sealed class TestRig
         const string GameName = "Fixture Without Its Hook";
         const string GameFolder = "Fixture Without Its Hook";
         const int AppId = 3_000_001;
-        const double GameSeconds = 75;
+        const double GameSeconds = 85;
         var configuredSeconds = runSeconds;
         runSeconds = GameSeconds;
         try
@@ -203,7 +203,7 @@ public sealed class TestRig
                 "--autotest=" + Seconds(GameSeconds),
                 "--log=" + ResultPath(name),
             ]);
-            var served = client.WatchAnUnknownGame(GameName, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(GameSeconds + 20));
+            var served = client.WatchAnUnknownGame(GameName, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(GameSeconds + 20));
             var fixture = Collect(name, game);
             WaitForExit(agent, "agent");
             return new UnknownGameCheck(fixture, served, ReadAgentResult(agentReport, agent.ExitCode), GameName);

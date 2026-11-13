@@ -52,6 +52,14 @@
           </StackPanel>
         </Grid>
 
+        <StackPanel x:Name="DiagnosisPanel" Spacing="4" Visibility="Collapsed">
+          <TextBlock Text="What limits this game" Style="{StaticResource GapoSectionLabelStyle}" />
+          <TextBlock x:Name="DiagnosisTitle" Style="{StaticResource GapoBodyStyle}" FontWeight="SemiBold" />
+          <TextBlock x:Name="DiagnosisSummary" Style="{StaticResource GapoBodyStyle}" />
+          <TextBlock x:Name="DiagnosisAlso" Style="{StaticResource GapoBodyStyle}" Visibility="Collapsed" />
+          <TextBlock x:Name="DiagnosisBasis" Style="{StaticResource GapoSecondaryStyle}" />
+        </StackPanel>
+
         <StackPanel x:Name="ControlsPanel" Spacing="12" Visibility="Collapsed">
           <StackPanel x:Name="GoalPanel" Spacing="4">
             <TextBlock Text="Goal" Style="{StaticResource GapoSectionLabelStyle}" />
