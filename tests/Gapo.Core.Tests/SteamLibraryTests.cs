@@ -230,7 +230,7 @@ public sealed class SteamLibraryTests
         }
         """;
 
-    private sealed class FakeFiles : IGameFileSource
+    internal sealed class FakeFiles : IGameFileSource
     {
         private readonly Dictionary<string, string> texts = new(StringComparer.OrdinalIgnoreCase);
 
@@ -248,6 +248,15 @@ public sealed class SteamLibraryTests
                 .Order(StringComparer.OrdinalIgnoreCase)
                 .ToList();
         }
+
+        public IReadOnlyList<string> ListDirectories(string directory) =>
+            texts.Keys
+                .Where(path => path.StartsWith(directory + @"\", StringComparison.OrdinalIgnoreCase))
+                .Select(path => path[(directory.Length + 1)..].Split('\\')[0])
+                .Where(first => texts.Keys.Any(path => path.StartsWith(directory + @"\" + first + @"\", StringComparison.OrdinalIgnoreCase)))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Select(first => directory + @"\" + first)
+                .ToList();
 
         public bool DirectoryExists(string path) =>
             texts.Keys.Any(file => file.StartsWith(path + @"\", StringComparison.OrdinalIgnoreCase));

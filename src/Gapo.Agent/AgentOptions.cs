@@ -19,8 +19,19 @@ public sealed record AgentOptions(
     string JournalPath,
     string? ReportPath,
     bool ListGames = false,
-    string? SteamRoot = null)
+    string? SteamRoot = null,
+    string? LocalAppData = null,
+    string? Documents = null)
 {
+    private const string LocalAppDataOption = "--local-app-data";
+    private const string DocumentsOption = "--documents";
+
+    public string LocalAppDataFolder => LocalAppData ?? Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+
+    public string DocumentsFolder => Documents ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
+
+    public string IniJournalPath => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(JournalPath)) ?? string.Empty, Path.GetFileNameWithoutExtension(JournalPath) + "-ini.json");
+
     private const string ListGamesFlag = "--list-games";
     private const string SteamRootOption = "--steam-root";
     private const string MapNameOption = "--sandbox-map";
@@ -78,6 +89,14 @@ public sealed record AgentOptions(
             else if (TryReadValue(argument, SteamRootOption, out var steamRoot))
             {
                 options = options with { SteamRoot = steamRoot };
+            }
+            else if (TryReadValue(argument, LocalAppDataOption, out var localAppData))
+            {
+                options = options with { LocalAppData = localAppData };
+            }
+            else if (TryReadValue(argument, DocumentsOption, out var documents))
+            {
+                options = options with { Documents = documents };
             }
             else if (TryReadValue(argument, JournalOption, out var journalPath))
             {

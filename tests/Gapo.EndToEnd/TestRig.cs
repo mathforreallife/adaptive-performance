@@ -12,7 +12,12 @@ public sealed record ExperimentResult(string Title, string Kind, string Decision
 
 public sealed record OptimisationResult(bool Completed, string Error, double FpsGainPercent, double WorkReductionFactor, int Kept, int RolledBack, double BaselineFps, double FinalFps, double BaselineWorkMs, double FinalWorkMs, double BaselineStuttersPerMinute, double FinalStuttersPerMinute, double NoiseFloorPercent, int MeasurementWindows, double DurationSeconds, string PacingNote, IReadOnlyList<ExperimentResult> Experiments, IReadOnlyList<string> NotTouched, IReadOnlyDictionary<string, string> SettingsAfter);
 
-public sealed record UnknownGameCheck(FixtureResult Fixture, UnknownGameRun Served, AgentResult Agent, string GameName);
+public sealed record UnknownGameCheck(FixtureResult Fixture, UnknownGameRun Served, AgentResult Agent, string GameName)
+{
+    public bool SettingsUntouched { get; init; }
+}
+
+public sealed record RestartOptimisationCheck(ServedRestartRun Served, OptimisationResult Report, string OriginalSettings, string OptimisedSettings, string RevertedSettings, int Restarts);
 
 public sealed record InterfaceRun(FixtureResult Fixture, double CpuPercent, double TypicalCpuPercent, double PeakPrivateMegabytes, double MeasuredSeconds, IReadOnlyList<string> Screenshots, int AgentsStarted, bool AgentsExitedWithTheInterface);
 
@@ -151,67 +156,198 @@ public sealed class TestRig
         return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal).ToList() : [];
     }
 
+    public const string UnrealGameName = "Fixture Without Its Hook";
+    public const string OriginalUnrealSettings =
+        "[/Script/Engine.GameUserSettings]\r\n" +
+        "FrameRateLimit=0.000000\r\n" +
+        "bUseVSync=False\r\n" +
+        "\r\n" +
+        "[ScalabilityGroups]\r\n" +
+        "sg.ResolutionQuality=100.000000\r\n" +
+        "sg.ViewDistanceQuality=3\r\n" +
+        "sg.AntiAliasingQuality=3\r\n" +
+        "sg.ShadowQuality=3\r\n" +
+        "sg.PostProcessQuality=3\r\n" +
+        "sg.EffectsQuality=3\r\n" +
+        "sg.FoliageQuality=3\r\n" +
+        "; written by the game\r\n" +
+        "\r\n" +
+        "[Internationalization]\r\n" +
+        "Culture=en\r\n";
+
+    private sealed record UnrealInstall(string SteamRoot, string LocalAppData, string Documents, string ShippingExecutable, string SettingsPath);
+
+    private UnrealInstall BuildUnrealInstall(string name, bool withAntiCheat)
+    {
+        const string GameFolder = "Fixture Without Its Hook";
+        const string ProjectName = "FixtureGame";
+        const int AppId = 3_000_001;
+        var root = Path.Combine(outputDirectory, "steam-" + name);
+        if (Directory.Exists(root))
+        {
+            Directory.Delete(root, recursive: true);
+        }
+
+        var steamRoot = Path.Combine(root, "Steam");
+        var apps = Path.Combine(steamRoot, "steamapps");
+        var installed = Path.Combine(apps, "common", GameFolder);
+        var binaries = Path.Combine(installed, ProjectName, "Binaries", "Win64");
+        var localAppData = Path.Combine(root, "LocalAppData");
+        var settingsFolder = Path.Combine(localAppData, ProjectName, "Saved", "Config", "Windows");
+        Directory.CreateDirectory(Path.Combine(installed, "Engine", "Binaries", "ThirdParty"));
+        Directory.CreateDirectory(settingsFolder);
+        if (withAntiCheat)
+        {
+            Directory.CreateDirectory(Path.Combine(installed, "EasyAntiCheat"));
+        }
+
+        var sandboxFolder = Path.GetDirectoryName(SandboxExecutable)!;
+        foreach (var file in Directory.GetFiles(sandboxFolder, "*", SearchOption.AllDirectories))
+        {
+            var target = Path.Combine(binaries, Path.GetRelativePath(sandboxFolder, file));
+            Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+            File.Copy(file, target);
+        }
+
+        var shippingExecutable = Path.Combine(binaries, ProjectName + "-Win64-Shipping.exe");
+        File.Move(Path.Combine(binaries, Path.GetFileName(SandboxExecutable)), shippingExecutable);
+        var settingsPath = Path.Combine(settingsFolder, "GameUserSettings.ini");
+        File.WriteAllText(settingsPath, OriginalUnrealSettings);
+        var escapedRoot = steamRoot.Replace(@"\", @"\\", StringComparison.Ordinal);
+        File.WriteAllText(Path.Combine(apps, "libraryfolders.vdf"), $"\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{escapedRoot}\"\n\t}}\n}}\n");
+        File.WriteAllText(Path.Combine(apps, $"appmanifest_{AppId}.acf"), $"\"AppState\"\n{{\n\t\"appid\"\t\t\"{AppId}\"\n\t\"name\"\t\t\"{UnrealGameName}\"\n\t\"StateFlags\"\t\t\"4\"\n\t\"installdir\"\t\t\"{GameFolder}\"\n}}\n");
+        return new UnrealInstall(steamRoot, localAppData, Path.Combine(root, "Documents"), shippingExecutable, settingsPath);
+    }
+
+    private Process StartServingAgent(string name, UnrealInstall install, string pipeName, double seconds, string? journal = null)
+    {
+        var arguments = new List<string>
+        {
+            "--serve",
+            "--pipe-name=" + pipeName,
+            "--steam-root=" + install.SteamRoot,
+            "--local-app-data=" + install.LocalAppData,
+            "--documents=" + install.Documents,
+            "--sandbox-map=" + MapNameFor(name),
+            "--seconds=" + Seconds(seconds),
+            "--report=" + Path.Combine(outputDirectory, name + "-agent.json"),
+            "--reports-dir=" + Path.Combine(outputDirectory, "reports-" + name),
+        };
+        if (journal is not null)
+        {
+            arguments.Add("--journal=" + journal);
+        }
+
+        return Start(AgentExecutable, arguments);
+    }
+
+    private Process StartUnrealFixture(string name, UnrealInstall install, double seconds, int session) =>
+        Start(install.ShippingExecutable,
+        [
+            "--data-dir=" + Path.Combine(outputDirectory, name + "-data"),
+            "--no-telemetry",
+            "--autotest=" + Seconds(seconds),
+            "--log=" + ResultPath(name + "-session-" + session.ToString(CultureInfo.InvariantCulture)),
+            "--unreal-settings=" + install.SettingsPath,
+        ]);
+
     public UnknownGameCheck RunUnknownSteamGame(string name)
     {
-        const string GameName = "Fixture Without Its Hook";
-        const string GameFolder = "Fixture Without Its Hook";
-        const int AppId = 3_000_001;
         const double GameSeconds = 85;
         var configuredSeconds = runSeconds;
         runSeconds = GameSeconds;
         try
         {
-            var steamRoot = Path.Combine(outputDirectory, "steam", "Steam");
-            var apps = Path.Combine(steamRoot, "steamapps");
-            var installed = Path.Combine(apps, "common", GameFolder);
-            if (Directory.Exists(Path.Combine(outputDirectory, "steam")))
-            {
-                Directory.Delete(Path.Combine(outputDirectory, "steam"), recursive: true);
-            }
-
-            Directory.CreateDirectory(installed);
-            var sandboxFolder = Path.GetDirectoryName(SandboxExecutable)!;
-            foreach (var file in Directory.GetFiles(sandboxFolder, "*", SearchOption.AllDirectories))
-            {
-                var target = Path.Combine(installed, Path.GetRelativePath(sandboxFolder, file));
-                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
-                File.Copy(file, target);
-            }
-
-            var escapedRoot = steamRoot.Replace(@"\", @"\\", StringComparison.Ordinal);
-            File.WriteAllText(Path.Combine(apps, "libraryfolders.vdf"), $"\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{escapedRoot}\"\n\t}}\n}}\n");
-            File.WriteAllText(Path.Combine(apps, $"appmanifest_{AppId}.acf"), $"\"AppState\"\n{{\n\t\"appid\"\t\t\"{AppId}\"\n\t\"name\"\t\t\"{GameName}\"\n\t\"StateFlags\"\t\t\"4\"\n\t\"installdir\"\t\t\"{GameFolder}\"\n}}\n");
-
+            var install = BuildUnrealInstall(name, withAntiCheat: true);
             var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
-            var agentReport = Path.Combine(outputDirectory, name + "-agent.json");
-            using var agent = Start(AgentExecutable,
-            [
-                "--serve",
-                "--pipe-name=" + pipeName,
-                "--steam-root=" + steamRoot,
-                "--sandbox-map=" + MapNameFor(name),
-                "--seconds=" + Seconds(GameSeconds + 45),
-                "--report=" + agentReport,
-                "--reports-dir=" + Path.Combine(outputDirectory, "reports-" + name),
-            ]);
+            using var agent = StartServingAgent(name, install, pipeName, GameSeconds + 45);
             using var client = InterfaceClient.Connect(pipeName);
-            using var game = Start(Path.Combine(installed, Path.GetFileName(SandboxExecutable)),
-            [
-                "--data-dir=" + Path.Combine(outputDirectory, name + "-data"),
-                "--no-telemetry",
-                "--reset",
-                "--autotest=" + Seconds(GameSeconds),
-                "--log=" + ResultPath(name),
-            ]);
-            var served = client.WatchAnUnknownGame(GameName, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(GameSeconds + 20));
-            var fixture = Collect(name, game);
+            using var game = StartUnrealFixture(name, install, GameSeconds, 1);
+            var served = client.WatchAnUnknownGame(UnrealGameName, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(GameSeconds + 20));
+            var fixture = Collect(name + "-session-1", game);
             WaitForExit(agent, "agent");
-            return new UnknownGameCheck(fixture, served, ReadAgentResult(agentReport, agent.ExitCode), GameName);
+            var untouched = File.ReadAllText(install.SettingsPath) == OriginalUnrealSettings;
+            return new UnknownGameCheck(fixture, served, ReadAgentResult(Path.Combine(outputDirectory, name + "-agent.json"), agent.ExitCode), UnrealGameName) { SettingsUntouched = untouched };
         }
         finally
         {
             runSeconds = configuredSeconds;
         }
+    }
+
+    public RestartOptimisationCheck RunRestartOptimisation(string name)
+    {
+        const double SessionSeconds = 240;
+        const double AgentSeconds = 900;
+        var configuredSeconds = runSeconds;
+        runSeconds = SessionSeconds;
+        try
+        {
+            var install = BuildUnrealInstall(name, withAntiCheat: false);
+            var journal = Path.Combine(outputDirectory, name + "-journal.json");
+            var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
+            using var agent = StartServingAgent(name, install, pipeName, AgentSeconds, journal);
+            using var client = InterfaceClient.Connect(pipeName);
+            var session = 1;
+            var game = StartUnrealFixture(name, install, SessionSeconds, session);
+            var fixtureFps = new List<double>();
+            void RestartTheGame()
+            {
+                game.CloseMainWindow();
+                if (!game.WaitForExit(TimeSpan.FromSeconds(20)))
+                {
+                    game.Kill();
+                    game.WaitForExit();
+                }
+
+                fixtureFps.Add(ReadFixtureFps(name + "-session-" + session.ToString(CultureInfo.InvariantCulture)));
+                game.Dispose();
+                session++;
+                game = StartUnrealFixture(name, install, SessionSeconds, session);
+            }
+
+            ServedRestartRun served;
+            try
+            {
+                served = client.OptimiseThroughRestarts(UnrealGameName, Gapo.Core.Optimisation.Goal.Balanced, RestartTheGame);
+            }
+            finally
+            {
+                game.CloseMainWindow();
+                if (!game.WaitForExit(TimeSpan.FromSeconds(20)))
+                {
+                    game.Kill();
+                }
+
+                game.Dispose();
+            }
+
+            agent.Kill();
+            agent.WaitForExit();
+            var optimised = File.ReadAllText(install.SettingsPath);
+            using var revert = Start(AgentExecutable, ["--revert-all", "--journal=" + journal]);
+            WaitForExit(revert, "agent");
+            var reverted = File.ReadAllText(install.SettingsPath);
+            using var document = JsonDocument.Parse(File.ReadAllText(served.ReportPath));
+            var report = ReadOptimisation(document.RootElement.GetProperty("optimisation"));
+            return new RestartOptimisationCheck(served, report, OriginalUnrealSettings, optimised, reverted, session - 1);
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
+    }
+
+    private double ReadFixtureFps(string name)
+    {
+        var path = ResultPath(name);
+        if (!File.Exists(path))
+        {
+            return 0;
+        }
+
+        using var document = JsonDocument.Parse(File.ReadAllText(path));
+        return document.RootElement.GetProperty("averageFps").GetDouble();
     }
 
     public InterfaceRun RunLiveInterface(string name)

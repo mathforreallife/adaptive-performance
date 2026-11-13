@@ -37,6 +37,12 @@ public sealed class ObservedGameDiagnosis
 
     public BottleneckDiagnosis? Result { get; private set; }
 
+    public FrameStatistics Statistics { get; private set; } = FrameStatistics.Empty;
+
+    public FrameStatistics FirstHalf { get; private set; } = FrameStatistics.Empty;
+
+    public FrameStatistics SecondHalf { get; private set; } = FrameStatistics.Empty;
+
     public string? FailureReason { get; private set; }
 
     public void OnFrame(in PresentedFrame frame)
@@ -81,7 +87,11 @@ public sealed class ObservedGameDiagnosis
             return;
         }
 
-        var statistics = FrameStatistics.From(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(frames));
+        var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(frames);
+        var statistics = FrameStatistics.From(all);
+        Statistics = statistics;
+        FirstHalf = FrameStatistics.From(all[..(all.Length / 2)]);
+        SecondHalf = FrameStatistics.From(all[(all.Length / 2)..]);
         Result = Diagnostician.Diagnose(new DiagnosisInput
         {
             Frames = statistics,

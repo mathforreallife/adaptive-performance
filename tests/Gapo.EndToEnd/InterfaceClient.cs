@@ -8,6 +8,8 @@ namespace Gapo.EndToEnd;
 
 public sealed record UnknownGameRun(int LiveSamplesWithFrames, double MedianLiveFps, bool EverOfferedToOptimise, string WatchingDetail, bool RefusedToOptimise, bool SawTheGameLeave, DiagnosisMessage? Diagnosis);
 
+public sealed record ServedRestartRun(bool OfferedToOptimise, int RestartsAsked, IReadOnlyList<string> StatusTitles, string ReportPath);
+
 public sealed record ServedRun(int LiveSamples, double FirstLiveFps, int ChartPoints, IReadOnlyList<string> StatusTitles, bool SawWatching, bool SawOptimising, bool SawFinished, string ReportPath);
 
 public sealed class InterfaceClient : IDisposable
@@ -15,6 +17,7 @@ public sealed class InterfaceClient : IDisposable
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan GameTimeout = TimeSpan.FromSeconds(150);
     private static readonly TimeSpan OptimisationTimeout = TimeSpan.FromSeconds(330);
+    private static readonly TimeSpan RestartOptimisationTimeout = TimeSpan.FromMinutes(12);
 
     private readonly NamedPipeClientStream pipe;
     private readonly BlockingCollection<AgentMessage> received = new();
@@ -125,6 +128,34 @@ public sealed class InterfaceClient : IDisposable
 
         var sorted = fps.Order().ToList();
         return new UnknownGameRun(fps.Count, sorted.Count == 0 ? 0 : sorted[sorted.Count / 2], offeredToOptimise, watchingDetail, refused, left, diagnosis);
+    }
+
+    public ServedRestartRun OptimiseThroughRestarts(string expectedName, Goal goal, Action restartTheGame)
+    {
+        var titles = new List<string>();
+        var offered = false;
+        var restarts = 0;
+        void Observe(AgentMessage message)
+        {
+            if (message is StatusMessage status)
+            {
+                titles.Add(status.Title);
+                if (status.Title.StartsWith("Restart the game to test", StringComparison.Ordinal))
+                {
+                    restarts++;
+                    restartTheGame();
+                }
+            }
+            else if (message is LiveSampleMessage { GameConnected: true, CanOptimise: true } sample && sample.GameName == expectedName)
+            {
+                offered = true;
+            }
+        }
+
+        WaitFor(message => message is LiveSampleMessage { GameConnected: true, CanOptimise: true, AverageFps: > 0 } sample && sample.GameName == expectedName, GameTimeout, Observe, $"The agent never offered to optimise '{expectedName}'.");
+        writer.WriteLine(WireFormat.Encode(new OptimiseCommand(goal)));
+        var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, RestartOptimisationTimeout, Observe, "The agent never finished the restart-based optimisation.");
+        return new ServedRestartRun(offered, restarts, titles, report.Path);
     }
 
     public void Dispose()

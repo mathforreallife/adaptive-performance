@@ -38,5 +38,17 @@ public sealed class DiskGameFileSource : IGameFileSource
         }
     }
 
+    public IReadOnlyList<string> ListDirectories(string directory)
+    {
+        try
+        {
+            return Directory.GetDirectories(directory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return [];
+        }
+    }
+
     public bool DirectoryExists(string path) => Directory.Exists(path);
 }
