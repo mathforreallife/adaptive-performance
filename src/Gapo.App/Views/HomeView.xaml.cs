@@ -62,7 +62,11 @@ public sealed partial class HomeView : UserControl
 
         if (!sample.GameConnected)
         {
-            GameTitle.Text = "No game is running";
+            if (!optimising)
+            {
+                GameTitle.Text = "No game is running";
+            }
+
             return;
         }
 
@@ -93,7 +97,7 @@ public sealed partial class HomeView : UserControl
 
     private void UpdateControls(bool gameConnected)
     {
-        ControlsPanel.Visibility = gameConnected ? Visibility.Visible : Visibility.Collapsed;
+        ControlsPanel.Visibility = gameConnected || optimising ? Visibility.Visible : Visibility.Collapsed;
         OptimiseButton.Visibility = optimising || !canOptimise ? Visibility.Collapsed : Visibility.Visible;
         GoalPanel.Visibility = canOptimise || optimising ? Visibility.Visible : Visibility.Collapsed;
         StopButton.Visibility = optimising ? Visibility.Visible : Visibility.Collapsed;
