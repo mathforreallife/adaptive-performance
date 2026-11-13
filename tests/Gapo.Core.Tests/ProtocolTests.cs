@@ -18,6 +18,18 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void TheGameProcessAndItsBeforeAndAfterFpsSurviveTheWire()
+    {
+        var sent = new LiveSampleMessage(true, "Some game", 58.2, 17.2, 9.1, 0, 2.4, 40, 0.1, 12, false, [17.0], CanOptimise: true, GameProcessId: 4242, BeforeFps: 25.1, AfterFps: 60.0);
+
+        var received = Assert.IsType<LiveSampleMessage>(WireFormat.DecodeMessage(WireFormat.Encode(sent)));
+
+        Assert.Equal(4242, received.GameProcessId);
+        Assert.Equal(25.1, received.BeforeFps);
+        Assert.Equal(60.0, received.AfterFps);
+    }
+
+    [Fact]
     public void AGameThatCannotBeOptimisedSaysSoOnTheWire()
     {
         var sent = new LiveSampleMessage(true, "Some Steam game", 58.2, 17.2, 9.1, 0, 2.4, 40, 0.1, 12, false, [17.0], CanOptimise: false);
@@ -66,10 +78,18 @@ public sealed class ProtocolTests
     [Fact]
     public void SettingCommandsSurviveTheWire()
     {
-        UiCommand[] sent = [new LockSettingCommand("Shadows", true), new SetSettingCommand("sg.ShadowQuality", "2"), new RevertSettingCommand("Fog")];
+        UiCommand[] sent = [new LockSettingCommand("Shadows", true), new SetSettingCommand("sg.ShadowQuality", "2"), new RevertSettingCommand("Fog"), new AnswerProposalCommand(true), new AnswerProposalCommand(false), new AgentPreferencesCommand(true, false, 90, 3)];
 
         Assert.Equal(sent, sent.Select(command => WireFormat.DecodeCommand(WireFormat.Encode(command))));
         Assert.Null(WireFormat.DecodeCommand("{\"type\":\"set\",\"value\":\"2\"}"));
+    }
+
+    [Fact]
+    public void AProposalSurvivesTheWire()
+    {
+        var sent = new ProposalMessage("Try Shadows: Ultra → High?", "Predicted saving about 6 ms; visual cost 3/10.");
+
+        Assert.Equal(sent, WireFormat.DecodeMessage(WireFormat.Encode(sent)));
     }
 
     [Fact]

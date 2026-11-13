@@ -37,6 +37,15 @@ public sealed partial class HomeView : UserControl
 
     public event Action? GameSettingsRequested;
 
+    public event Action<bool>? ProposalAnswered;
+
+    public void ShowProposal(ProposalMessage proposal)
+    {
+        ProposalTitle.Text = proposal.Title;
+        ProposalDetail.Text = proposal.Detail;
+        ProposalPanel.Visibility = Visibility.Visible;
+    }
+
     public void ShowGameSettingsAvailable(bool available) =>
         GameSettingsButton.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
 
@@ -160,6 +169,16 @@ public sealed partial class HomeView : UserControl
     private void OnRevertClicked(object sender, RoutedEventArgs e) => RevertAllRequested?.Invoke();
 
     private void OnGameSettingsClicked(object sender, RoutedEventArgs e) => GameSettingsRequested?.Invoke();
+
+    private void OnApproveClicked(object sender, RoutedEventArgs e) => Answer(true);
+
+    private void OnSkipClicked(object sender, RoutedEventArgs e) => Answer(false);
+
+    private void Answer(bool approved)
+    {
+        ProposalPanel.Visibility = Visibility.Collapsed;
+        ProposalAnswered?.Invoke(approved);
+    }
 
     private static string Number(double value, string format) => value > 0 ? value.ToString(format, CultureInfo.InvariantCulture) : NoValue;
 }

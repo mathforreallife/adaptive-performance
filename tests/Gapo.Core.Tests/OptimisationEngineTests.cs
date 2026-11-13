@@ -12,11 +12,11 @@ public sealed class OptimisationEngineTests
         Display = new DisplayFacts { Width = 1600, Height = 900, ReportedRefreshHz = 60 },
     };
 
-    private static (OptimisationReport Report, SimulatedGame Game, OptimisationEngine Engine) Optimise(Goal goal = Goal.Balanced, Action<SimulatedGame>? configure = null, IReadOnlySet<string>? lockedSettings = null)
+    private static (OptimisationReport Report, SimulatedGame Game, OptimisationEngine Engine) Optimise(Goal goal = Goal.Balanced, Action<SimulatedGame>? configure = null, IReadOnlySet<string>? lockedSettings = null, OptimisationControls? controls = null)
     {
         var game = new SimulatedGame();
         configure?.Invoke(game);
-        var engine = new OptimisationEngine(game, game, game, SixtyHertzQuadCore, lockedSettings: lockedSettings);
+        var engine = new OptimisationEngine(game, game, game, SixtyHertzQuadCore, controls: controls ?? new OptimisationControls { LockedSettings = lockedSettings ?? new HashSet<string>() });
         return (engine.Run(goal), game, engine);
     }
 
@@ -131,6 +131,39 @@ public sealed class OptimisationEngineTests
         Assert.Equal("0", game.Settings[SimulatedGame.Cap]);
         Assert.Equal("Frame-rate cap left as it is: you locked it.", report.PacingNote);
         Assert.StartsWith("Not changed because you locked them:", report.NotTouched[0], StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ChangesThePlayerSkipsAreNeverAppliedAndTheReportSaysSo()
+    {
+        var asked = new List<string>();
+        var controls = new OptimisationControls
+        {
+            Approve = candidate =>
+            {
+                asked.Add(candidate.Setting);
+                return !candidate.Changes.ContainsKey(SimulatedGame.Cap);
+            },
+        };
+
+        var (report, game, _) = Optimise(configure: simulated => simulated.RenderMs = 14, controls: controls);
+
+        Assert.Contains(OptimisationEngine.FrameCapSetting, asked);
+        Assert.Equal("0", game.Settings[SimulatedGame.Cap]);
+        Assert.Equal("Not capped: you skipped the frame-rate cap.", report.PacingNote);
+        Assert.Contains(report.NotTouched, note => note.StartsWith("You skipped:", StringComparison.Ordinal));
+        Assert.All(report.Experiments, experiment => Assert.Contains(experiment.Setting, asked));
+    }
+
+    [Fact]
+    public void FrameCapsCanBeTurnedOffAndTheTargetChosen()
+    {
+        var (report, game, _) = Optimise(configure: simulated => simulated.RenderMs = 14, controls: new OptimisationControls { AllowFrameCap = false, TargetFps = 30 });
+
+        Assert.Equal("0", game.Settings[SimulatedGame.Cap]);
+        Assert.Equal("Not capped: you turned frame-rate caps off in GAPO's settings.", report.PacingNote);
+        Assert.Equal(30, report.TargetFps);
+        Assert.Equal("the target you chose in GAPO's settings", report.TargetReason);
     }
 
     [Fact]

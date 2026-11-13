@@ -49,6 +49,8 @@ public sealed class OptimisationEngine
     private readonly List<SettingCandidate> keptCandidates = [];
     private readonly List<string> notTouched = [];
     private readonly IReadOnlySet<string> lockedSettings;
+    private readonly OptimisationControls controls;
+    private readonly List<string> skippedByPlayer = [];
     private readonly SortedSet<string> skippedBecauseLocked = new(StringComparer.Ordinal);
     private GameSettings? original;
     private GameSettings current = new([], 0);
@@ -59,9 +61,10 @@ public sealed class OptimisationEngine
     private int windows;
     private int changesWithoutEffect;
 
-    public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null, IReadOnlySet<string>? lockedSettings = null)
+    public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null, OptimisationControls? controls = null)
     {
-        this.lockedSettings = lockedSettings ?? new HashSet<string>();
+        this.controls = controls ?? new OptimisationControls();
+        lockedSettings = this.controls.LockedSettings;
         this.session = session;
         this.knowledge = knowledge;
         this.journal = journal;
@@ -80,8 +83,33 @@ public sealed class OptimisationEngine
         return true;
     }
 
-    private string[] WithLockNote() =>
-        skippedBecauseLocked.Count == 0 ? notTouched.ToArray() : [SettingLocks.Note(skippedBecauseLocked), .. notTouched];
+    private bool PlayerAgrees(SettingCandidate candidate)
+    {
+        if (controls.Approve is not { } approve || approve(candidate))
+        {
+            return true;
+        }
+
+        skippedByPlayer.Add(candidate.Title);
+        return false;
+    }
+
+    private string[] WithLockNote()
+    {
+        var notes = new List<string>();
+        if (skippedBecauseLocked.Count > 0)
+        {
+            notes.Add(SettingLocks.Note(skippedBecauseLocked));
+        }
+
+        if (skippedByPlayer.Count > 0)
+        {
+            notes.Add("You skipped: " + string.Join(", ", skippedByPlayer) + ".");
+        }
+
+        notes.AddRange(notTouched);
+        return notes.ToArray();
+    }
 
     public OptimisationReport Run(Goal goal)
     {
@@ -95,13 +123,14 @@ public sealed class OptimisationEngine
             report("Preparing", "Waiting until the game has finished loading. Measuring now would blame the wrong thing.");
             session.WaitUntilWarm();
             var refresh = hardware.Display.EffectiveRefreshHz;
-            targetFps = goal == Goal.MaximumFps ? Math.Max(refresh, HighestDefaultTargetFps) : Math.Min(refresh, HighestDefaultTargetFps);
+            targetFps = controls.TargetFps > 0 ? controls.TargetFps : goal == Goal.MaximumFps ? Math.Max(refresh, HighestDefaultTargetFps) : Math.Min(refresh, HighestDefaultTargetFps);
             budgetMs = MillisecondsPerSecond / targetFps;
             result = result with
             {
                 OriginalSettings = original,
                 TargetFps = targetFps,
-                TargetReason = goal == Goal.MaximumFps ? "as high as possible"
+                TargetReason = controls.TargetFps > 0 ? "the target you chose in GAPO's settings"
+                    : goal == Goal.MaximumFps ? "as high as possible"
                     : hardware.Display.RefreshIsKnown ? Text($"your {refresh} Hz display")
                     : Text($"refresh rate unknown, {DisplayFacts.AssumedRefreshHz} Hz assumed"),
             };
@@ -218,7 +247,7 @@ public sealed class OptimisationEngine
 
     private Stopwatch? FixHitchesFirst(FrameStatistics hitches)
     {
-        if (knowledge.HitchFix(current, hitches) is not { } fix || SkipWhenLocked(fix))
+        if (knowledge.HitchFix(current, hitches) is not { } fix || SkipWhenLocked(fix) || !PlayerAgrees(fix))
         {
             return null;
         }
@@ -287,6 +316,11 @@ public sealed class OptimisationEngine
             if (goal == Goal.Quality && next.VisualLoss >= QualityGuardVisualLoss && !targetMet)
             {
                 notTouched.Add(Text($"Quality mode: not trying {next.Title} (visual cost {next.VisualLoss:0}/10)."));
+                continue;
+            }
+
+            if (!PlayerAgrees(next))
+            {
                 continue;
             }
 
@@ -490,6 +524,16 @@ public sealed class OptimisationEngine
         if (SkipWhenLocked(candidate))
         {
             return "Frame-rate cap left as it is: you locked it.";
+        }
+
+        if (!controls.AllowFrameCap)
+        {
+            return "Not capped: you turned frame-rate caps off in GAPO's settings.";
+        }
+
+        if (!PlayerAgrees(candidate))
+        {
+            return "Not capped: you skipped the frame-rate cap.";
         }
 
         if (candidate.Changes.All(change => current.Is(change.Key, change.Value)))

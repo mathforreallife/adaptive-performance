@@ -17,6 +17,9 @@ public static class WireFormat
     private const string LockType = "lock";
     private const string SetType = "set";
     private const string RevertSettingType = "revertSetting";
+    private const string ProposalType = "proposal";
+    private const string AnswerType = "answer";
+    private const string PreferencesType = "preferences";
     private const string OptimiseType = "optimise";
     private const string RevertAllType = "revertAll";
     private const string StopType = "stop";
@@ -48,6 +51,9 @@ public static class WireFormat
                 json.WriteNumber("ownMegabytes", Round(sample.OwnMegabytes));
                 json.WriteBoolean("ownUseIsOverBudget", sample.OwnUseIsOverBudget);
                 json.WriteBoolean("canOptimise", sample.CanOptimise);
+                json.WriteNumber("gameProcessId", sample.GameProcessId);
+                json.WriteNumber("beforeFps", Round(sample.BeforeFps));
+                json.WriteNumber("afterFps", Round(sample.AfterFps));
                 json.WriteStartArray("recentFrameMs");
                 foreach (var frame in sample.RecentFrameMs)
                 {
@@ -89,6 +95,11 @@ public static class WireFormat
                 }
 
                 json.WriteEndArray();
+                break;
+            case ProposalMessage proposal:
+                json.WriteString(TypeProperty, ProposalType);
+                json.WriteString("title", proposal.Title);
+                json.WriteString("detail", proposal.Detail);
                 break;
             case DiagnosisMessage diagnosis:
                 json.WriteString(TypeProperty, DiagnosisType);
@@ -138,6 +149,17 @@ public static class WireFormat
                 json.WriteString(TypeProperty, RevertSettingType);
                 json.WriteString("key", revert.Key);
                 break;
+            case AnswerProposalCommand answer:
+                json.WriteString(TypeProperty, AnswerType);
+                json.WriteBoolean("approved", answer.Approved);
+                break;
+            case AgentPreferencesCommand preferences:
+                json.WriteString(TypeProperty, PreferencesType);
+                json.WriteBoolean("askBeforeEachChange", preferences.AskBeforeEachChange);
+                json.WriteBoolean("allowFrameCap", preferences.AllowFrameCap);
+                json.WriteNumber("targetFps", preferences.TargetFps);
+                json.WriteNumber("mostRestarts", preferences.MostRestarts);
+                break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(command), command, "Unknown command.");
         }
@@ -171,7 +193,10 @@ public static class WireFormat
                 Number(root, "ownMegabytes"),
                 root.GetProperty("ownUseIsOverBudget").GetBoolean(),
                 root.GetProperty("recentFrameMs").EnumerateArray().Select(frame => frame.GetDouble()).ToArray(),
-                !root.TryGetProperty("canOptimise", out var canOptimise) || canOptimise.ValueKind != JsonValueKind.False),
+                !root.TryGetProperty("canOptimise", out var canOptimise) || canOptimise.ValueKind != JsonValueKind.False,
+                (int)Number(root, "gameProcessId"),
+                Number(root, "beforeFps"),
+                Number(root, "afterFps")),
             ReportType => new ReportReadyMessage(Text(root, "path")),
             SettingsType => new GameSettingsMessage(
                 Text(root, "gameName"),
@@ -181,6 +206,7 @@ public static class WireFormat
                 root.TryGetProperty("settings", out var list) && list.ValueKind == JsonValueKind.Array
                     ? list.EnumerateArray().Select(ReadSetting).ToArray()
                     : []),
+            ProposalType => new ProposalMessage(Text(root, "title"), Text(root, "detail")),
             DiagnosisType => new DiagnosisMessage(
                 Text(root, "gameName"),
                 Text(root, "bottleneck"),
@@ -211,6 +237,8 @@ public static class WireFormat
             LockType when Text(root, "key").Length > 0 => new LockSettingCommand(Text(root, "key"), Flag(root, "locked")),
             SetType when Text(root, "key").Length > 0 => new SetSettingCommand(Text(root, "key"), Text(root, "value")),
             RevertSettingType when Text(root, "key").Length > 0 => new RevertSettingCommand(Text(root, "key")),
+            AnswerType => new AnswerProposalCommand(Flag(root, "approved")),
+            PreferencesType => new AgentPreferencesCommand(Flag(root, "askBeforeEachChange"), !root.TryGetProperty("allowFrameCap", out var cap) || cap.ValueKind != JsonValueKind.False, (int)Number(root, "targetFps"), (int)Number(root, "mostRestarts")),
             _ => null,
         };
     }

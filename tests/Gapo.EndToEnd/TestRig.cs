@@ -22,6 +22,8 @@ public sealed record RestartOptimisationCheck(ServedRestartRun Served, Optimisat
     public IReadOnlyList<double> SessionFps { get; init; } = [];
 }
 
+public sealed record OverlayRun(bool ShownWithGameInFront, bool HiddenWhenMinimised, bool HiddenWhenSwitchedOff, double WindowCpuPercent, FixtureResult Fixture, string MinimiseNote);
+
 public sealed record InterfaceRun(FixtureResult Fixture, double CpuPercent, double TypicalCpuPercent, double PeakPrivateMegabytes, double MeasuredSeconds, IReadOnlyList<string> Screenshots, int AgentsStarted, bool AgentsExitedWithTheInterface);
 
 public sealed record DiagnosisResult(string Primary, string Title, string Summary, string EngineLimitation, IReadOnlyList<string> Evidence, IReadOnlyList<string> SecondaryProblems);
@@ -109,7 +111,7 @@ public sealed class TestRig
 
     public string SandboxSettingsPath => Path.Combine(sandboxDataDirectory, "sandbox-settings.ini");
 
-    public (SettingControlRun Served, OptimisationResult Report, string AntiAliasingAfter) RunSettingControl(string name)
+    public (SettingControlRun Served, OptimisationResult Report, string AntiAliasingAfter, string PhysicsAfter) RunSettingControl(string name)
     {
         var configuredSeconds = runSeconds;
         runSeconds = LongestOptimisationSeconds;
@@ -145,9 +147,10 @@ public sealed class TestRig
             using var document = JsonDocument.Parse(File.ReadAllText(served.ReportPath));
             var report = ReadOptimisation(document.RootElement.GetProperty("optimisation"));
             var antiAliasing = ReadSetting("AntiAliasing");
+            var physics = ReadSetting("PhysicsSubsteps");
             using var revert = Start(AgentExecutable, ["--revert-all", "--journal=" + journal]);
             WaitForExit(revert, "agent");
-            return (served, report, antiAliasing);
+            return (served, report, antiAliasing, physics);
         }
         finally
         {
@@ -413,6 +416,69 @@ public sealed class TestRig
         using var document = JsonDocument.Parse(File.ReadAllText(path));
         return document.RootElement.GetProperty("averageFps").GetDouble();
     }
+
+    public OverlayRun RunOverlay(string name)
+    {
+        var configuredSeconds = runSeconds;
+        runSeconds = OverlayGameSeconds;
+        try
+        {
+            var shown = RunOverlayOnce(name, overlayEnabled: true, out var hiddenWhenMinimised, out var windowCpu, out var fixture, out var note);
+            var shownWhileOff = RunOverlayOnce(name + "-off", overlayEnabled: false, out _, out _, out _, out _);
+            return new OverlayRun(shown, hiddenWhenMinimised, !shownWhileOff, windowCpu, fixture, note);
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
+    }
+
+    private bool RunOverlayOnce(string name, bool overlayEnabled, out bool hiddenWhenMinimised, out double windowCpuPercent, out FixtureResult fixture, out string minimiseNote)
+    {
+        var directory = Path.Combine(outputDirectory, name);
+        Directory.CreateDirectory(directory);
+        File.WriteAllText(Path.Combine(directory, "game-results.json"), "{ \"sandbox\": { \"beforeFps\": 25.0, \"afterFps\": 60.0, \"when\": \"2026-11-13T12:00:00+00:00\" } }");
+        var preferences = Path.Combine(directory, "preferences.json");
+        File.WriteAllText(preferences, "{ \"overlayEnabled\": " + (overlayEnabled ? "true" : "false") + " }");
+        var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
+        var mapName = MapNameFor(name);
+        using var agent = Start(AgentExecutable, ["--serve", "--pipe-name=" + pipeName, "--sandbox-map=" + mapName, "--seconds=" + Seconds(OverlayGameSeconds + 20), "--journal=" + Path.Combine(directory, "journal.json")]);
+        using var app = Start(AppExecutable, ["--pipe-name=" + pipeName, "--preferences=" + preferences, "--theme=light"]);
+        Thread.Sleep(TimeSpan.FromSeconds(4));
+        using var game = Start(SandboxExecutable, ["--data-dir=" + Path.Combine(directory, "data"), "--map-name=" + mapName, "--reset", "--autotest=" + Seconds(OverlayGameSeconds), "--log=" + ResultPath(name), "--window=960x540"]);
+        Thread.Sleep(OverlaySettleTime);
+        app.Refresh();
+        var processorAtStart = app.TotalProcessorTime;
+        var clock = Stopwatch.StartNew();
+        var shown = false;
+        while (clock.Elapsed < OverlayWatchTime)
+        {
+            shown |= OverlayProbe.OverlayIsVisible();
+            Thread.Sleep(TimeSpan.FromSeconds(1));
+        }
+
+        app.Refresh();
+        windowCpuPercent = (app.TotalProcessorTime - processorAtStart).TotalSeconds / clock.Elapsed.TotalSeconds / Environment.ProcessorCount * PercentScale;
+        game.Refresh();
+        var gameWindow = game.MainWindowHandle;
+        var minimised = OverlayProbe.MinimiseWindow(gameWindow);
+        Thread.Sleep(TimeSpan.FromSeconds(3));
+        hiddenWhenMinimised = !OverlayProbe.OverlayIsVisible();
+        minimiseNote = string.Create(CultureInfo.InvariantCulture, $"game window {gameWindow:X}, minimised: {minimised}, game exited: {game.HasExited}");
+        fixture = Collect(name, game);
+        app.CloseMainWindow();
+        if (!app.WaitForExit(TimeSpan.FromSeconds(15)))
+        {
+            app.Kill();
+        }
+
+        WaitForExit(agent, "agent");
+        return shown;
+    }
+
+    private const double OverlayGameSeconds = 45;
+    private static readonly TimeSpan OverlaySettleTime = TimeSpan.FromSeconds(12);
+    private static readonly TimeSpan OverlayWatchTime = TimeSpan.FromSeconds(15);
 
     public InterfaceRun RunLiveInterface(string name)
     {

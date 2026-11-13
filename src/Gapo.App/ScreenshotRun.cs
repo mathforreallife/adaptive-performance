@@ -39,6 +39,9 @@ public sealed class ScreenshotRun
                     await CaptureAsync("game-settings");
                 }
 
+                window.ShowSettings();
+                await CaptureAsync("settings");
+
                 return;
             }
 
