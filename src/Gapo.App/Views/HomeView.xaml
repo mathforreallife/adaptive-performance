@@ -7,7 +7,7 @@
       <StackPanel Spacing="16">
         <StackPanel Spacing="4">
           <TextBlock x:Name="GameTitle" Text="No game is running" Style="{StaticResource GapoTitleStyle}" />
-          <TextBlock x:Name="StatusDetail" Style="{StaticResource GapoBodyStyle}" Text="Start a game and GAPO will find out what limits it on this PC. It then changes one setting at a time, measures the result on the same scene, and keeps only what demonstrably helps." />
+          <TextBlock x:Name="StatusDetail" Style="{StaticResource GapoBodyStyle}" Text="Start a game and GAPO measures it. Nothing is changed until you press Optimise, read the plan and press Start." />
         </StackPanel>
 
         <Grid x:Name="LivePanel" Visibility="Collapsed" RowSpacing="16">
@@ -60,6 +60,25 @@
           <TextBlock x:Name="DiagnosisBasis" Style="{StaticResource GapoSecondaryStyle}" />
         </StackPanel>
 
+        <Border x:Name="PlanPanel" Visibility="Collapsed" BorderBrush="{ThemeResource GapoAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="16">
+          <StackPanel Spacing="8">
+            <TextBlock x:Name="PlanTitle" Style="{StaticResource GapoBodyStyle}" FontWeight="SemiBold" />
+            <TextBlock x:Name="PlanSummary" Style="{StaticResource GapoBodyStyle}" TextWrapping="Wrap" />
+            <TextBlock x:Name="PlanSteps" Style="{StaticResource GapoSecondaryStyle}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="StartButton" Content="Start" Style="{StaticResource AccentButtonStyle}" Click="OnStartClicked" />
+              <Button x:Name="CancelPlanButton" Content="Cancel" Click="OnCancelPlanClicked" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
+        <StackPanel x:Name="ProgressPanel" Spacing="6" Visibility="Collapsed">
+          <TextBlock Text="Progress" Style="{StaticResource GapoSectionLabelStyle}" />
+          <TextBlock x:Name="ProgressPhase" Style="{StaticResource GapoBodyStyle}" TextWrapping="Wrap" />
+          <ProgressBar x:Name="ProgressMeter" Minimum="0" Maximum="1" AutomationProperties.Name="Optimisation progress" />
+          <TextBlock x:Name="ProgressLine" Style="{StaticResource GapoSecondaryStyle}" TextWrapping="Wrap" />
+        </StackPanel>
+
         <Border x:Name="ProposalPanel" Visibility="Collapsed" BorderBrush="{ThemeResource GapoAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="16">
           <StackPanel Spacing="8">
             <TextBlock x:Name="ProposalTitle" Style="{StaticResource GapoBodyStyle}" FontWeight="SemiBold" />
@@ -82,8 +101,10 @@
             </SelectorBar>
             <TextBlock x:Name="GoalDescription" Style="{StaticResource GapoSecondaryStyle}" />
           </StackPanel>
+          <TextBlock x:Name="OptimiserOffNote" Visibility="Collapsed" Style="{StaticResource GapoSecondaryStyle}" TextWrapping="Wrap" Text="The optimiser is switched off, so GAPO only measures and changes nothing. Switch it on under Settings → Optimisation." />
           <StackPanel Orientation="Horizontal" Spacing="8">
-            <Button x:Name="OptimiseButton" Content="Optimise" Style="{StaticResource AccentButtonStyle}" Click="OnOptimiseClicked" />
+            <Button x:Name="OptimiseButton" Content="Optimise…" Style="{StaticResource AccentButtonStyle}" Click="OnOptimiseClicked" />
+            <Button x:Name="DiagnoseButton" Content="Find out what limits it" Visibility="Collapsed" Click="OnDiagnoseClicked" />
             <Button x:Name="StopButton" Content="Stop" Visibility="Collapsed" Click="OnStopClicked" />
             <Button x:Name="RevertButton" Content="Revert all" Click="OnRevertClicked" />
             <Button x:Name="GameSettingsButton" Content="Game settings" Visibility="Collapsed" Click="OnGameSettingsClicked" />

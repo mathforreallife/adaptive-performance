@@ -59,6 +59,12 @@ public sealed class OptimisationEngine
     private double targetFps;
     private double budgetMs;
     private int windows;
+    private int windowsStillExpected = InitialWindowsExpected;
+    private const int InitialWindowsExpected = 10;
+    private const int WindowsAfterTheLastTest = 2;
+    private const int ValidationWindows = 2;
+
+    public Action<int, int>? WindowMeasured { get; set; }
     private int changesWithoutEffect;
 
     public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null, OptimisationControls? controls = null)
@@ -156,6 +162,7 @@ public sealed class OptimisationEngine
 
             var pacingNote = TunePacing(goal, refresh);
             report("Validating the result", "Measuring the final configuration on the same scene as the baseline.");
+            windowsStillExpected = ValidationWindows;
             var final = WindowResult.Combine(Measure(), Measure());
             VerifyHitchFix(hitchFixClock, hitches);
             reference = final;
@@ -224,7 +231,10 @@ public sealed class OptimisationEngine
     private WindowResult Measure()
     {
         windows++;
-        return session.Measure(current.Revision);
+        windowsStillExpected = Math.Max(0, windowsStillExpected - 1);
+        var result = session.Measure(current.Revision);
+        WindowMeasured?.Invoke(windows, windows + windowsStillExpected);
+        return result;
     }
 
     private BottleneckDiagnosis Diagnose(MonitorSummary monitor, FrameStatistics hitches) =>
@@ -291,6 +301,7 @@ public sealed class OptimisationEngine
                 .Where(candidate => candidate.Kind == ChangeKind.MemoryRelief || candidate.PredictedSavingMs >= smallestWorthTesting)
                 .OrderByDescending(candidate => candidate.Value)
                 .ToList();
+            windowsStillExpected = candidates.Count + WindowsAfterTheLastTest;
             if (candidates.Count == 0)
             {
                 return;

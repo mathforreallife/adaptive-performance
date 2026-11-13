@@ -66,6 +66,8 @@ public sealed partial class MainWindow : Window
             overlay?.Dispose();
         };
         home.OptimiseRequested += goal => link?.Send(new OptimiseCommand(goal));
+        home.PlanRequested += goal => link?.Send(new PlanCommand(goal));
+        home.DiagnoseRequested += () => link?.Send(new DiagnoseCommand());
         home.StopRequested += () => link?.Send(new StopCommand());
         home.RevertAllRequested += () => link?.Send(new RevertAllCommand());
         home.GameSettingsRequested += ShowGameSettings;
@@ -147,6 +149,7 @@ public sealed partial class MainWindow : Window
         }
 
         SendAgentPreferences(chosen);
+        home.ShowOptimiserChoices(chosen.OptimiserEnabled, chosen.DiagnoseAutomatically);
         if (overlay is not null)
         {
             overlay.Enabled = chosen.OverlayEnabled;
@@ -225,6 +228,12 @@ public sealed partial class MainWindow : Window
                 }
 
                 break;
+            case PlanMessage plan:
+                home.ShowPlan(plan);
+                break;
+            case ProgressMessage progress:
+                home.ShowProgress(progress);
+                break;
             case ProposalMessage proposal:
                 home.ShowProposal(proposal);
                 NotifyWhenAway(new StatusMessage(AgentState.Optimising, proposal.Title, "GAPO waits for your answer before it changes anything."), always: true);
@@ -301,7 +310,7 @@ public sealed partial class MainWindow : Window
     }
 
     private void SendAgentPreferences(AppPreferences chosen) =>
-        link?.Send(new AgentPreferencesCommand(chosen.AskBeforeEachChange, chosen.AllowFrameCap, chosen.TargetFps, chosen.MostRestarts));
+        link?.Send(new AgentPreferencesCommand(chosen.AskBeforeEachChange, chosen.AllowFrameCap, chosen.TargetFps, chosen.MostRestarts, chosen.OptimiserEnabled, chosen.DiagnoseAutomatically));
 
     private void NotifyWhenAway(StatusMessage status, bool always = false)
     {

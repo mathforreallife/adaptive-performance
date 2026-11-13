@@ -268,6 +268,19 @@ void CheckSettingControl()
     Expect(report.Experiments.All(experiment => served.Proposals.Any(title => title.Contains(experiment.Title, StringComparison.Ordinal))), "A change was tested without being proposed first.");
     Print($"settings    {first?.Settings.Count ?? 0} settings sent; lock, set (Shadows -> {served.ShadowsInFileAfterSet}), refusal and put back (-> {served.ShadowsInFileAfterPutBack}) all confirmed; optimisation with anti-aliasing locked: {report.FpsGainPercent:+0;-0;0}% average FPS, anti-aliasing still {antiAliasingAfter}; {report.NotTouched.FirstOrDefault()}");
     Print($"            ask-before-change: {served.Proposals.Count} proposals, physics substeps skipped (still {physicsAfter}); {report.PacingNote}");
+    var planned = served.Plan;
+    Expect(planned.WhileSwitchedOff is { CanStart: false }, "With the optimiser switched off the plan still offered to start.");
+    Expect(planned.OptimiseRefusedWhileSwitchedOff, "With the optimiser switched off, Optimise was not refused.");
+    ExpectPlan(planned, restarts: false, "live");
+    Print($"            plan: {planned.Plan.Steps.Count} steps, estimate {planned.Plan.SecondsLow}–{planned.Plan.SecondsHigh} s, took {planned.ActualSeconds:0} s; {planned.Progress.Count} progress messages, last step {planned.Progress.LastOrDefault()?.StepsDone}/{planned.Progress.LastOrDefault()?.StepsExpected}; switched off: plan refused {planned.WhileSwitchedOff is { CanStart: false }}, Optimise refused {planned.OptimiseRefusedWhileSwitchedOff}");
+}
+
+void ExpectPlan(PlanRun planned, bool restarts, string kind)
+{
+    Expect(planned.Plan.CanStart && planned.Plan.Steps.Count >= 3 && planned.Plan.SecondsLow > 0 && planned.Plan.SecondsLow <= planned.Plan.SecondsHigh, $"The {kind} plan is incomplete: can start {planned.Plan.CanStart}, {planned.Plan.Steps.Count} steps, {planned.Plan.SecondsLow}–{planned.Plan.SecondsHigh} s.");
+    Expect(restarts ? planned.Plan.Restarts > 0 : planned.Plan.Restarts == 0, $"The {kind} plan announced {planned.Plan.Restarts} restarts.");
+    Expect(planned.EstimateCovered, string.Create(CultureInfo.InvariantCulture, $"The {kind} optimisation took {planned.ActualSeconds:0} s; the plan estimated {planned.Plan.SecondsLow}–{planned.Plan.SecondsHigh} s."));
+    Expect(planned.ProgressOnlyMovesForward, $"The {kind} progress messages were missing or went backwards ({planned.Progress.Count} received).");
 }
 
 void CheckRestartOptimisation()
@@ -292,6 +305,10 @@ void CheckRestartOptimisation()
 
     Print($"            the game's own FPS per session: {string.Join(", ", check.SessionFps.Select(fps => fps.ToString("0.0", CultureInfo.InvariantCulture)))}; status lines: {string.Join(" | ", check.Served.StatusTitles.Where(title => title.StartsWith("Measuring again", StringComparison.Ordinal)))}");
     Print($"            settings file: {changedLines} line(s) changed; revert all restored it byte for byte: {check.RevertedSettings == check.OriginalSettings}");
+    var planned = check.Served.Plan;
+    ExpectPlan(planned, restarts: true, "restart");
+    Expect(planned.Plan.Restarts >= check.Restarts, $"The plan announced up to {planned.Plan.Restarts} restarts but the game was restarted {check.Restarts} times.");
+    Print($"            plan: up to {planned.Plan.Restarts} restarts, estimate {planned.Plan.SecondsLow}–{planned.Plan.SecondsHigh} s, took {planned.ActualSeconds:0} s; {planned.Progress.Count} progress messages, last step {planned.Progress.LastOrDefault()?.StepsDone}/{planned.Progress.LastOrDefault()?.StepsExpected}");
 }
 
 void CheckLiveInterface()

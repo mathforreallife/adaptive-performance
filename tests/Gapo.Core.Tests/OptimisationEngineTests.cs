@@ -156,6 +156,22 @@ public sealed class OptimisationEngineTests
     }
 
     [Fact]
+    public void ProgressIsReportedAfterEveryMeasurementAndEndsComplete()
+    {
+        var game = new SimulatedGame();
+        var engine = new OptimisationEngine(game, game, game, SixtyHertzQuadCore);
+        var reports = new List<(int Done, int Expected)>();
+        engine.WindowMeasured = (done, expected) => reports.Add((done, expected));
+
+        var report = engine.Run(Goal.Balanced);
+
+        Assert.Equal(report.MeasurementWindows, reports.Count);
+        Assert.Equal(Enumerable.Range(1, reports.Count), reports.Select(entry => entry.Done));
+        Assert.All(reports, entry => Assert.True(entry.Expected >= entry.Done));
+        Assert.Equal(reports[^1].Done, reports[^1].Expected);
+    }
+
+    [Fact]
     public void FrameCapsCanBeTurnedOffAndTheTargetChosen()
     {
         var (report, game, _) = Optimise(configure: simulated => simulated.RenderMs = 14, controls: new OptimisationControls { AllowFrameCap = false, TargetFps = 30 });
