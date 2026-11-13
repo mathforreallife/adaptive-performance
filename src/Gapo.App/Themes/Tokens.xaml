@@ -22,6 +22,7 @@
       <SolidColorBrush x:Key="GapoStagePresentBrush" Color="#6D5BD0" />
       <SolidColorBrush x:Key="GapoStageStreamingBrush" Color="#B7791F" />
       <SolidColorBrush x:Key="GapoStageOtherBrush" Color="#8A909B" />
+      <SolidColorBrush x:Key="SelectorBarItemPillFill" Color="#2563EB" />
       <SolidColorBrush x:Key="AccentButtonBackground" Color="#2563EB" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#1D4FD8" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#1A45BD" />
@@ -52,6 +53,7 @@
       <SolidColorBrush x:Key="GapoStagePresentBrush" Color="#A499F0" />
       <SolidColorBrush x:Key="GapoStageStreamingBrush" Color="#E6B450" />
       <SolidColorBrush x:Key="GapoStageOtherBrush" Color="#7D828D" />
+      <SolidColorBrush x:Key="SelectorBarItemPillFill" Color="#6EA8FE" />
       <SolidColorBrush x:Key="AccentButtonBackground" Color="#6EA8FE" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#86B7FE" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#5C96EC" />

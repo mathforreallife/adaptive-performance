@@ -8,6 +8,8 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <EnableMsixTooling>true</EnableMsixTooling>
+    <TieredPGO>false</TieredPGO>
     <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <Platforms>x64</Platforms>
     <Platform>x64</Platform>
@@ -16,5 +18,9 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gapo.Core\Gapo.Core.csproj" />
+    <ProjectReference Include="..\Gapo.Windows\Gapo.Windows.csproj" />
   </ItemGroup>
 </Project>

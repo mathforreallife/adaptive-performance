@@ -124,6 +124,15 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - CI runner result for the first engine run: 28.2 -> 62.5 FPS (+121 %), then ten experiments measured 0.0 because the present call blocks at the display rate on the software adapter; fixed by counting time inside present as wait and by the engine stop rule (three changes in a row without effect).
 - Scripts that patch several files at once must be written to `artifacts/rig/*.py` and run once; a script that failed half-way was re-run and applied edits twice. Check `git diff` after any failure before re-running.
 
+## State on 2026-11-13 (read this first; older sections below are history)
+
+- **PRs #1-#7 are merged** into the default branch `claude/eloquent-mendel-mn6f48` (the user authorised merging on 2026-11-13: "make operational decisions on the dev including presentmon, merge PRs"). New work goes on a fresh branch off the default branch with one PR per step; merge it yourself once CI is green.
+- **PresentMon is allowed** as a development cross-check. `artifacts/tools/presentmon/PresentMon-2.6.0-x64.exe` (not in git; `gh release download v2.6.0 -R GameTechDev/PresentMon -p "PresentMon-2.6.0-x64.exe"`, Intel-signed). GAPO's own frame timing agrees with it to 0.1 %.
+- **Windows App SDK is pinned to 1.8.260921001.** 2.6.5 makes the window's compositor thread burn a whole logical processor while a game presents (ADR 0004 amendment). Do not upgrade unless the rig's live-interface phase passes on this Windows 10 laptop.
+- Branch `step-7-live-link`: agent serve mode (`--serve`, `--pipe-name`, `--reports-dir`, `--exit-with-process`), `src/Gapo.App/AgentLink.cs`, live `HomeView`, own-use meter in `MainWindow`, rig phase `RunLiveInterface` (`Gapo.EndToEnd.exe --only=interface` runs just that phase after a calibration run).
+- Thread-level CPU probe for the window: `artifacts/rig/threadprobe.ps1` (not in git). Never pipe its output through `Select-Object -First`; that skips its clean-up and leaves windows open.
+- Latest laptop rig run (e2e17): 25.1 -> 60.0 FPS (+139 %), agent 0.39 % CPU optimising / 0.14 % in windows / 16 MB; window live next to the game 0.26 % CPU (median slice) / 37 MB.
+
 ## Step 7 state (branch `step-7-ui`, stacked on steps 5-6)
 
 - `src/Gapo.App` - WinUI 3 app: `Themes/Tokens.xaml` (design tokens for light, dark, high contrast), `MainWindow`, `Views/ResultsView`, `Views/DetailsView` (five tabs), `Views/HomeView` (no-game state), `Reports/ReportView.cs` (reads the agent's report JSON), `ScreenshotRun.cs`, `AppOptions.cs`. Run: `artifacts/bin/Gapo.App/release_win-x64/GAPO.exe --report=<agent report> [--screenshots=<folder>] [--theme=light|dark]`.
@@ -133,21 +142,22 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 
 ## Next actions, in order
 
-1. Check the CI runs of `step-5-6-adapters-and-engine` and `step-7-ui` (PR #7). If WinUI 3 cannot start or render on the GPU-less runner, make the rig skip UI screenshots when the fixture reports a software adapter and record that in ADR 0004 and the spec.
-2. UI next: an agent status channel (named pipe, newline-delimited JSON: state, live monitor sample at 1 Hz, engine status lines, final report path) and a UI client; home view with live stat tiles, frame-time chart (decimated to 150 points keeping spikes) and the frame-budget bar; an Optimise button with the goal selector that starts `--optimise`; running state with phase progress; Revert all. The UI must not render while a game has focus and must stay within 0.5 % CPU / 80 MB.
-3. Real games: Steam library index and a first real-game adapter (see the earlier list).
-4. Leftovers: GPU busy time (DxgKrnl), ADR for the engine/adapter interfaces and for frame timing, README refresh.
+1. Make sure the `step-7-live-link` PR is merged and its CI run is green (on the GPU-less runner the interface CPU budget is reported, not enforced; the quarter-of-a-processor ceiling and the 80 MB limit are).
+2. Remaining UI: frame-budget bar, running / warm-up / error states with phase progress, Save report, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, Tips content.
+3. Real games: Steam library index (`SteamPath` in the registry, `libraryfolders.vdf`, `appmanifest_*.acf`, a pure KeyValues parser with tests), running-game detection without the engine hook, a first real-game adapter, settings that need a restart. Steam is not installed on the laptop; the parser can be built and tested from fixture files first.
+4. Leftovers: GPU busy time (DxgKrnl events; PresentMon reports about 1.0 ms per frame for the fixture, use it as the reference), hitch-period observation, ADRs for frame timing and for the engine/adapter interfaces, README refresh.
+5. Then steps 8-12 of the build order.
 
 ## Task list (build order, spec III.4)
 
-- [x] 0. Test rig — done (PR #1, waiting for the user to merge)
+- [x] 0. Test rig — done (PR #1, merged)
 - [x] 1. Telemetry core — done except GPU busy time (PR #2)
 - [x] 2. Hardware inventory — done (PR #3)
 - [x] 3. Measurement harness — done for the fixture (PR #4)
 - [x] 4. Diagnosis v1 — done for the classes the fixture can show (PR #5)
 - [ ] 5. First three game adapters - fixture adapter done (PR #6); real games not started
 - [x] 6. Experiment engine - done on the fixture (PR #6)
-- [ ] 7. UI - first increment (results and details from a report, PR #7)
+- [ ] 7. UI - results and details (PR #7, merged); live link, home view and interface overhead gate (branch `step-7-live-link`); states, tray, notifications and scaling screenshots still to do
 - [ ] 8. Knowledge base + learning
 - [ ] 9. Sensors via vendor SDKs
 - [ ] 10. Latency and network modules
