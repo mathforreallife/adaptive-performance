@@ -13,7 +13,7 @@ This build has only been tested with GAPO's own test game. This test is the firs
 1. Unzip the folder anywhere (for example `C:\GAPO-test`).
 2. Right-click **GAPO.exe** and choose **Run as administrator**. Frame timing uses Windows event tracing, which needs administrator rights; without them GAPO shows processor use only and says why.
 3. Start a Steam game and play normally. Within about 5 seconds GAPO shows the game's name and live numbers. After the game has settled and about 20 seconds of play, **What limits this game** appears.
-4. For an Unreal Engine game without anti-cheat, **Optimise** is offered. Choose a goal, press Optimise and keep playing. When GAPO says **Restart the game to test: …**, close the game and start it again. It needs up to six restarts and shows the result at the end.
+4. For an Unreal Engine game without anti-cheat, **Optimise** is offered. Choose a goal, press Optimise and keep playing. When GAPO wants the next test it **flashes its taskbar button** and shows **Restart the game to test: …**; close the game and start it again. It needs up to six restarts and shows the result at the end. (Windows does not show notifications for programs running as administrator, so in this test build the flashing taskbar button is the signal. Alt-Tab to GAPO when it flashes.)
 5. To undo everything GAPO changed, press **Revert all**. A copy of the original settings file is also kept next to it as `GameUserSettings.ini.gapo-original`.
 
 ## What to send back
