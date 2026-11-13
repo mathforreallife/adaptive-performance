@@ -42,6 +42,7 @@ public sealed class RestartOptimiser
     private int observedProcessId;
     private int processIdWhenChanged;
     private UnrealCandidate? underTest;
+    private bool measuredAgainInThisSession;
     private FrameStatistics baseline = FrameStatistics.Empty;
     private FrameStatistics reference = FrameStatistics.Empty;
     private double noiseFloorPercent;
@@ -182,10 +183,19 @@ public sealed class RestartOptimiser
     private OptimisationReport? AfterMeasurement(TimeSpan now)
     {
         var candidate = underTest!;
-        underTest = null;
         var measured = observation!.Statistics;
         diagnosisAfter = observation.Result ?? diagnosisAfter;
         var verdict = RestartJudgement.Judge(reference, measured, noiseFloorPercent);
+        if (verdict.LooksDisturbed && !measuredAgainInThisSession)
+        {
+            measuredAgainInThisSession = true;
+            observation = new ObservedGameDiagnosis(now, gpuBusyTicksSoFar);
+            report(AgentState.Optimising, "Measuring again: " + candidate.Title, Text($"Frames took {-verdict.GainPercent:0}% more work after lowering this setting, which a lower setting should not cause; something else probably disturbed those {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s. GAPO measures another {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s in the same session, no restart needed."));
+            return null;
+        }
+
+        underTest = null;
+        measuredAgainInThisSession = false;
         var key = new IniKey(candidate.Setting.Section, candidate.Setting.Key);
         if (verdict.Keep)
         {
@@ -200,7 +210,7 @@ public sealed class RestartOptimiser
         {
             PutBack(candidate);
             experiments.Add(Record(candidate, measured, verdict.GainPercent, Decision.RolledBack, verdict.Reason));
-            changesWithoutEffect++;
+            changesWithoutEffect = verdict.ShowedNoEffect ? changesWithoutEffect + 1 : 0;
             lastChangeWaitsForRestart = true;
         }
 
@@ -211,7 +221,7 @@ public sealed class RestartOptimiser
 
         if (changesWithoutEffect >= ChangesWithoutEffectBeforeStopping)
         {
-            return Finish(now, completed: true, null, Text($"Stopped after {ChangesWithoutEffectBeforeStopping} changes in a row that did not measurably help; the remaining settings are not expected to do better."));
+            return Finish(now, completed: true, null, Text($"Stopped after {ChangesWithoutEffectBeforeStopping} changes in a row that changed frame work by no more than half the noise floor; the remaining settings are expected to matter even less."));
         }
 
         return ProposeNextOrFinish(now);

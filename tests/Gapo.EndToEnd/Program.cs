@@ -245,6 +245,7 @@ void CheckRestartOptimisation()
         Print($"            [{experiment.Decision}] {experiment.Title}: {experiment.GainPercent:+0;-0;0}%");
     }
 
+    Print($"            the game's own FPS per session: {string.Join(", ", check.SessionFps.Select(fps => fps.ToString("0.0", CultureInfo.InvariantCulture)))}; status lines: {string.Join(" | ", check.Served.StatusTitles.Where(title => title.StartsWith("Measuring again", StringComparison.Ordinal)))}");
     Print($"            settings file: {changedLines} line(s) changed; revert all restored it byte for byte: {check.RevertedSettings == check.OriginalSettings}");
 }
 
