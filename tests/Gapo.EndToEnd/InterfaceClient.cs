@@ -6,6 +6,8 @@ using Gapo.Core.Protocol;
 
 namespace Gapo.EndToEnd;
 
+public sealed record UnknownGameRun(int LiveSamplesWithFrames, double MedianLiveFps, bool EverOfferedToOptimise, string WatchingDetail, bool RefusedToOptimise, bool SawTheGameLeave);
+
 public sealed record ServedRun(int LiveSamples, double FirstLiveFps, int ChartPoints, IReadOnlyList<string> StatusTitles, bool SawWatching, bool SawOptimising, bool SawFinished, string ReportPath);
 
 public sealed class InterfaceClient : IDisposable
@@ -66,6 +68,59 @@ public sealed class InterfaceClient : IDisposable
             states.Contains(AgentState.Optimising),
             states.Contains(AgentState.Finished),
             report.Path);
+    }
+
+    public UnknownGameRun WatchAnUnknownGame(string expectedName, TimeSpan watchFor, TimeSpan waitForTheGameToLeave)
+    {
+        var fps = new List<double>();
+        var offeredToOptimise = false;
+        var watchingDetail = string.Empty;
+        var refused = false;
+        void Observe(AgentMessage message)
+        {
+            switch (message)
+            {
+                case StatusMessage { State: AgentState.Watching } status when status.Title == "Watching " + expectedName:
+                    watchingDetail = status.Detail;
+                    break;
+                case StatusMessage { State: AgentState.Watching } status when status.Title == expectedName + " cannot be optimised yet":
+                    refused = true;
+                    break;
+                case LiveSampleMessage { GameConnected: true } sample when sample.GameName == expectedName:
+                    offeredToOptimise |= sample.CanOptimise;
+                    if (sample.AverageFps > 0)
+                    {
+                        fps.Add(sample.AverageFps);
+                    }
+
+                    break;
+            }
+        }
+
+        WaitFor(message => message is LiveSampleMessage { GameConnected: true, AverageFps: > 0 } sample && sample.GameName == expectedName, GameTimeout, Observe, $"The agent never reported '{expectedName}' with frame times to the interface.");
+        var until = DateTime.UtcNow + watchFor;
+        while (DateTime.UtcNow < until)
+        {
+            if (received.TryTake(out var message, TimeSpan.FromMilliseconds(500)))
+            {
+                Observe(message);
+            }
+        }
+
+        writer.WriteLine(WireFormat.Encode(new OptimiseCommand(Goal.Balanced)));
+        WaitFor(_ => refused, TimeSpan.FromSeconds(10), Observe, "The agent did not answer the Optimise command for a game it cannot optimise.");
+        var left = false;
+        try
+        {
+            WaitFor(message => message is LiveSampleMessage { GameConnected: false }, waitForTheGameToLeave, Observe, "The agent did not notice that the game exited.");
+            left = true;
+        }
+        catch (TimeoutException)
+        {
+        }
+
+        var sorted = fps.Order().ToList();
+        return new UnknownGameRun(fps.Count, sorted.Count == 0 ? 0 : sorted[sorted.Count / 2], offeredToOptimise, watchingDetail, refused, left);
     }
 
     public void Dispose()

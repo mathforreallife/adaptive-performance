@@ -20,6 +20,7 @@ public sealed partial class HomeView : UserControl
 
     private IReadOnlyList<double> chartValues = [];
     private bool optimising;
+    private bool canOptimise = true;
 
     public HomeView()
     {
@@ -50,6 +51,7 @@ public sealed partial class HomeView : UserControl
     public void ShowSample(LiveSampleMessage sample)
     {
         LivePanel.Visibility = sample.GameConnected ? Visibility.Visible : Visibility.Collapsed;
+        canOptimise = sample.CanOptimise;
         UpdateControls(sample.GameConnected);
         if (!sample.GameConnected)
         {
@@ -74,7 +76,8 @@ public sealed partial class HomeView : UserControl
     private void UpdateControls(bool gameConnected)
     {
         ControlsPanel.Visibility = gameConnected ? Visibility.Visible : Visibility.Collapsed;
-        OptimiseButton.Visibility = optimising ? Visibility.Collapsed : Visibility.Visible;
+        OptimiseButton.Visibility = optimising || !canOptimise ? Visibility.Collapsed : Visibility.Visible;
+        GoalPanel.Visibility = canOptimise || optimising ? Visibility.Visible : Visibility.Collapsed;
         StopButton.Visibility = optimising ? Visibility.Visible : Visibility.Collapsed;
         RevertButton.IsEnabled = !optimising;
         GoalSelector.IsEnabled = !optimising;

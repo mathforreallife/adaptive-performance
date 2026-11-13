@@ -11,10 +11,12 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     private readonly PresentedFrameQueue queue = new();
     private readonly PresentedFrame[] drained = new PresentedFrame[DrainBatch];
     private readonly EtwPresentSession? session;
+    private readonly bool keepsSummaries;
     private volatile PresentTracker? tracker;
 
-    public FrameTimingProbe()
+    public FrameTimingProbe(bool keepsSummaries = true)
     {
+        this.keepsSummaries = keepsSummaries;
         session = EtwPresentSession.TryStart(this, out var availability);
         Availability = availability;
     }
@@ -22,6 +24,10 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     public FrameTimingAvailability Availability { get; }
 
     public bool IsTracking => tracker is not null;
+
+    public int TrackedProcessId { get; private set; }
+
+    public Action<PresentedFrame>? FrameObserver { get; set; }
 
     public SeriesSummary FrameMs { get; } = new();
 
@@ -35,13 +41,18 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
 
     public void Track(int processId)
     {
+        TrackedProcessId = processId;
         if (session is not null)
         {
             tracker = new PresentTracker(processId, EtwPresentSession.TimestampTicksPerSecond, queue.Enqueue);
         }
     }
 
-    public void StopTracking() => tracker = null;
+    public void StopTracking()
+    {
+        tracker = null;
+        TrackedProcessId = 0;
+    }
 
     public int Collect()
     {
@@ -52,9 +63,14 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
             count = queue.Drain(drained);
             for (var index = 0; index < count; index++)
             {
-                FrameMs.Add(drained[index].FrameMs);
-                CpuBusyMs.Add(drained[index].CpuBusyMs);
-                InPresentMs.Add(drained[index].InPresentMs);
+                if (keepsSummaries)
+                {
+                    FrameMs.Add(drained[index].FrameMs);
+                    CpuBusyMs.Add(drained[index].CpuBusyMs);
+                    InPresentMs.Add(drained[index].InPresentMs);
+                }
+
+                FrameObserver?.Invoke(drained[index]);
             }
 
             total += count;

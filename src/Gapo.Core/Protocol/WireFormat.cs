@@ -42,6 +42,7 @@ public static class WireFormat
                 json.WriteNumber("ownCpuPercent", Round(sample.OwnCpuPercent));
                 json.WriteNumber("ownMegabytes", Round(sample.OwnMegabytes));
                 json.WriteBoolean("ownUseIsOverBudget", sample.OwnUseIsOverBudget);
+                json.WriteBoolean("canOptimise", sample.CanOptimise);
                 json.WriteStartArray("recentFrameMs");
                 foreach (var frame in sample.RecentFrameMs)
                 {
@@ -105,7 +106,8 @@ public static class WireFormat
                 Number(root, "ownCpuPercent"),
                 Number(root, "ownMegabytes"),
                 root.GetProperty("ownUseIsOverBudget").GetBoolean(),
-                root.GetProperty("recentFrameMs").EnumerateArray().Select(frame => frame.GetDouble()).ToArray()),
+                root.GetProperty("recentFrameMs").EnumerateArray().Select(frame => frame.GetDouble()).ToArray(),
+                !root.TryGetProperty("canOptimise", out var canOptimise) || canOptimise.ValueKind != JsonValueKind.False),
             ReportType => new ReportReadyMessage(Text(root, "path")),
             _ => null,
         };

@@ -53,7 +53,7 @@
         </Grid>
 
         <StackPanel x:Name="ControlsPanel" Spacing="12" Visibility="Collapsed">
-          <StackPanel Spacing="4">
+          <StackPanel x:Name="GoalPanel" Spacing="4">
             <TextBlock Text="Goal" Style="{StaticResource GapoSectionLabelStyle}" />
             <SelectorBar x:Name="GoalSelector" SelectionChanged="OnGoalChanged">
               <SelectorBarItem Text="Balanced" />

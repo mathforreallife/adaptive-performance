@@ -27,7 +27,8 @@ public sealed record LiveSampleMessage(
     double OwnCpuPercent,
     double OwnMegabytes,
     bool OwnUseIsOverBudget,
-    IReadOnlyList<double> RecentFrameMs) : AgentMessage;
+    IReadOnlyList<double> RecentFrameMs,
+    bool CanOptimise = true) : AgentMessage;
 
 public sealed record ReportReadyMessage(string Path) : AgentMessage;
 

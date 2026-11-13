@@ -24,6 +24,7 @@ const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
 const double LargestShareOfOneProcessorTheInterfaceMayUse = 0.25;
 const double PercentScale = 100.0;
+const double LargestLiveFpsDisagreementPercent = 10.0;
 const string SoftwareAdapterName = "Basic Render";
 
 var outputDirectory = Path.GetFullPath(ValueOf("--output") ?? Path.Combine(Path.GetTempPath(), "gapo-end-to-end"));
@@ -39,6 +40,11 @@ try
     {
         rig.RunFixtureAlone("calibration");
         CheckLiveInterface();
+    }
+    else if (ValueOf("--only") == "unknown-game")
+    {
+        rig.RunFixtureAlone("calibration");
+        CheckUnknownSteamGame();
     }
     else
     {
@@ -170,11 +176,30 @@ void CheckEverything()
     }
 
     CheckLiveInterface();
+    CheckUnknownSteamGame();
     var (_, simulationAgent) = rig.RunFixtureWithBaselineMeasurement("simulation-bound", scenario: "simulation-bound");
     ExpectDiagnosis(simulationAgent.Diagnosis, "CpuMainThread", "the simulation-bound fixture");
     Expect(simulationAgent.Diagnosis is null || simulationAgent.Diagnosis.EngineLimitation.Length > 0, "The simulation-bound diagnosis did not explain the engine limitation.");
 
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
+}
+
+void CheckUnknownSteamGame()
+{
+    var check = rig.RunUnknownSteamGame("unknown-game");
+    var served = check.Served;
+    var budget = OverheadBudget.For(OptimiserState.DashboardOpen);
+    var disagreement = check.Fixture.AverageFps <= 0 ? PercentScale : Math.Abs(served.MedianLiveFps - check.Fixture.AverageFps) / check.Fixture.AverageFps * PercentScale;
+    Expect(check.Fixture.ExitCode == 0, $"The fixture run as an unknown Steam game exited with code {check.Fixture.ExitCode}.");
+    Expect(served.LiveSamplesWithFrames >= FewestLiveSamples, $"The interface received only {served.LiveSamplesWithFrames} live samples with frame times for the unknown game.");
+    Expect(disagreement <= LargestLiveFpsDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing showed {served.MedianLiveFps:0.0} FPS for the unknown game; the game itself measured {check.Fixture.AverageFps:0.0} FPS."));
+    Expect(!served.EverOfferedToOptimise, "The interface was offered Optimise for a game GAPO has no settings knowledge of.");
+    Expect(served.RefusedToOptimise, "The agent did not refuse to optimise a game it does not know.");
+    Expect(served.WatchingDetail.Contains("cannot change anything", StringComparison.Ordinal), "The interface was not told why the game cannot be optimised: " + served.WatchingDetail);
+    Expect(served.SawTheGameLeave, "The agent did not notice that the unknown game exited.");
+    Expect(!check.Agent.ConnectedToGame, "The agent connected to the fixture's engine hook although the fixture ran without it.");
+    Expect(check.Agent.RunAverageCpuPercent <= budget.MaximumCpuPercent && check.Agent.PeakPrivateMegabytes <= budget.MaximumPrivateMegabytes, string.Create(CultureInfo.InvariantCulture, $"The agent used {check.Agent.RunAverageCpuPercent:0.000}% CPU and {check.Agent.PeakPrivateMegabytes:0.0} MB while watching an unknown game; the budget with the interface open is {budget.MaximumCpuPercent:0.0}% / {budget.MaximumPrivateMegabytes:0} MB."));
+    Print($"unknown     '{check.GameName}' found through the Steam library and the process list, measured through event tracing only: {served.MedianLiveFps:0.0} FPS live vs {check.Fixture.AverageFps:0.0} FPS from the game ({disagreement:0.0}% apart) over {served.LiveSamplesWithFrames} samples; Optimise {(served.RefusedToOptimise ? "refused with a reason" : "NOT refused")}; exit {(served.SawTheGameLeave ? "noticed" : "missed")}; agent {check.Agent.RunAverageCpuPercent:0.000}% CPU, {check.Agent.PeakPrivateMegabytes:0.0} MB");
 }
 
 void CheckLiveInterface()

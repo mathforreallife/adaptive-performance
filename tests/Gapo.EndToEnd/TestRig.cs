@@ -12,6 +12,8 @@ public sealed record ExperimentResult(string Title, string Kind, string Decision
 
 public sealed record OptimisationResult(bool Completed, string Error, double FpsGainPercent, double WorkReductionFactor, int Kept, int RolledBack, double BaselineFps, double FinalFps, double BaselineWorkMs, double FinalWorkMs, double BaselineStuttersPerMinute, double FinalStuttersPerMinute, double NoiseFloorPercent, int MeasurementWindows, double DurationSeconds, string PacingNote, IReadOnlyList<ExperimentResult> Experiments, IReadOnlyList<string> NotTouched, IReadOnlyDictionary<string, string> SettingsAfter);
 
+public sealed record UnknownGameCheck(FixtureResult Fixture, UnknownGameRun Served, AgentResult Agent, string GameName);
+
 public sealed record InterfaceRun(FixtureResult Fixture, double CpuPercent, double TypicalCpuPercent, double PeakPrivateMegabytes, double MeasuredSeconds, IReadOnlyList<string> Screenshots, int AgentsStarted, bool AgentsExitedWithTheInterface);
 
 public sealed record DiagnosisResult(string Primary, string Title, string Summary, string EngineLimitation, IReadOnlyList<string> Evidence, IReadOnlyList<string> SecondaryProblems);
@@ -147,6 +149,69 @@ public sealed class TestRig
         using var app = Start(AppExecutable, ["--report=" + Path.Combine(outputDirectory, agentReportName), "--screenshots=" + directory, "--theme=" + theme]);
         WaitForExit(app, "user interface");
         return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal).ToList() : [];
+    }
+
+    public UnknownGameCheck RunUnknownSteamGame(string name)
+    {
+        const string GameName = "Fixture Without Its Hook";
+        const string GameFolder = "Fixture Without Its Hook";
+        const int AppId = 3_000_001;
+        const double GameSeconds = 75;
+        var configuredSeconds = runSeconds;
+        runSeconds = GameSeconds;
+        try
+        {
+            var steamRoot = Path.Combine(outputDirectory, "steam", "Steam");
+            var apps = Path.Combine(steamRoot, "steamapps");
+            var installed = Path.Combine(apps, "common", GameFolder);
+            if (Directory.Exists(Path.Combine(outputDirectory, "steam")))
+            {
+                Directory.Delete(Path.Combine(outputDirectory, "steam"), recursive: true);
+            }
+
+            Directory.CreateDirectory(installed);
+            var sandboxFolder = Path.GetDirectoryName(SandboxExecutable)!;
+            foreach (var file in Directory.GetFiles(sandboxFolder, "*", SearchOption.AllDirectories))
+            {
+                var target = Path.Combine(installed, Path.GetRelativePath(sandboxFolder, file));
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.Copy(file, target);
+            }
+
+            var escapedRoot = steamRoot.Replace(@"\", @"\\", StringComparison.Ordinal);
+            File.WriteAllText(Path.Combine(apps, "libraryfolders.vdf"), $"\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{escapedRoot}\"\n\t}}\n}}\n");
+            File.WriteAllText(Path.Combine(apps, $"appmanifest_{AppId}.acf"), $"\"AppState\"\n{{\n\t\"appid\"\t\t\"{AppId}\"\n\t\"name\"\t\t\"{GameName}\"\n\t\"StateFlags\"\t\t\"4\"\n\t\"installdir\"\t\t\"{GameFolder}\"\n}}\n");
+
+            var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
+            var agentReport = Path.Combine(outputDirectory, name + "-agent.json");
+            using var agent = Start(AgentExecutable,
+            [
+                "--serve",
+                "--pipe-name=" + pipeName,
+                "--steam-root=" + steamRoot,
+                "--sandbox-map=" + MapNameFor(name),
+                "--seconds=" + Seconds(GameSeconds + 45),
+                "--report=" + agentReport,
+                "--reports-dir=" + Path.Combine(outputDirectory, "reports-" + name),
+            ]);
+            using var client = InterfaceClient.Connect(pipeName);
+            using var game = Start(Path.Combine(installed, Path.GetFileName(SandboxExecutable)),
+            [
+                "--data-dir=" + Path.Combine(outputDirectory, name + "-data"),
+                "--no-telemetry",
+                "--reset",
+                "--autotest=" + Seconds(GameSeconds),
+                "--log=" + ResultPath(name),
+            ]);
+            var served = client.WatchAnUnknownGame(GameName, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(GameSeconds + 20));
+            var fixture = Collect(name, game);
+            WaitForExit(agent, "agent");
+            return new UnknownGameCheck(fixture, served, ReadAgentResult(agentReport, agent.ExitCode), GameName);
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
     }
 
     public InterfaceRun RunLiveInterface(string name)
@@ -351,7 +416,7 @@ public sealed class TestRig
             root.GetProperty("peakPrivateMegabytes").GetDouble(),
             root.GetProperty("withinBudget").GetBoolean(),
             root.GetProperty("violations").EnumerateArray().Select(violation => violation.GetString() ?? string.Empty).ToList(),
-            ReadFrameTiming(root.GetProperty("frameTiming")),
+            root.TryGetProperty("frameTiming", out var frameTiming) ? ReadFrameTiming(frameTiming) : new FrameTimingResult("NotRequested", 0, 0, 0, 0, 0, 0, 0, 0),
             ReadMonitor(root.GetProperty("monitor")),
             ReadHardware(root.GetProperty("hardware")),
             root.TryGetProperty("baseline", out var baseline) ? ReadBaseline(baseline) : null,

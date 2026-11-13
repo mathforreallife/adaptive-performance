@@ -18,6 +18,26 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void AGameThatCannotBeOptimisedSaysSoOnTheWire()
+    {
+        var sent = new LiveSampleMessage(true, "Some Steam game", 58.2, 17.2, 9.1, 0, 2.4, 40, 0.1, 12, false, [17.0], CanOptimise: false);
+
+        var received = Assert.IsType<LiveSampleMessage>(WireFormat.DecodeMessage(WireFormat.Encode(sent)));
+
+        Assert.False(received.CanOptimise);
+    }
+
+    [Fact]
+    public void AnOlderAgentWithoutTheFlagMeansTheGameCanBeOptimised()
+    {
+        const string line = "{\"type\":\"sample\",\"gameConnected\":true,\"gameName\":\"x\",\"ownUseIsOverBudget\":false,\"recentFrameMs\":[]}";
+
+        var received = Assert.IsType<LiveSampleMessage>(WireFormat.DecodeMessage(line));
+
+        Assert.True(received.CanOptimise);
+    }
+
+    [Fact]
     public void LiveSampleSurvivesTheWire()
     {
         var sent = new LiveSampleMessage(true, "GAPO Sandbox", 24.9, 40.1, 39.6, 11.2, 0.99, 31, 0.13, 10.5, false, [40.0, 41.5, 120.25]);
