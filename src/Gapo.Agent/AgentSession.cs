@@ -52,6 +52,7 @@ public sealed class AgentSession : IDisposable
     private DiagnosisMessage? latestDiagnosis;
     private RecognisedGame? recognisedGame;
     private RestartOptimiser? restartOptimiser;
+    private SettingLockStore? settingLocks;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -157,6 +158,19 @@ public sealed class AgentSession : IDisposable
                 case OptimiseCommand:
                     server.Send(new StatusMessage(AgentState.NoGame, "No game is running", "Start a game first; GAPO measures the game while it runs."));
                     break;
+                case LockSettingCommand lockSetting when SettingsControl() is { } lockControl:
+                    Locks.SetLocked(lockControl.GameKey, lockSetting.Key, lockSetting.Locked);
+                    SendGameSettings();
+                    break;
+                case SetSettingCommand or RevertSettingCommand when restartOptimiser is not null:
+                    server.Send(new StatusMessage(AgentState.Optimising, "Wait until the optimisation finishes", "GAPO is testing settings right now; change them yourself once it is done, or press Stop."));
+                    break;
+                case SetSettingCommand set when SettingsControl() is { } setControl:
+                    ReportSettingChange(setControl, set.Key, setControl.Set(set.Key, set.Value), reverted: false);
+                    break;
+                case RevertSettingCommand revert when SettingsControl() is { } revertControl:
+                    ReportSettingChange(revertControl, revert.Key, revertControl.Revert(revert.Key), reverted: true);
+                    break;
                 case RevertAllCommand:
                     if (restartOptimiser is not null)
                     {
@@ -169,6 +183,7 @@ public sealed class AgentSession : IDisposable
                         link.IsConnected || SteamGame is not null ? AgentState.Watching : AgentState.NoGame,
                         reverted ? "Every change was reverted" : "Nothing to revert",
                         reverted ? "The game is back to its original settings." : "GAPO has no recorded changes for this game."));
+                    SendGameSettings();
                     break;
             }
         }
@@ -185,6 +200,52 @@ public sealed class AgentSession : IDisposable
             optimisation.Completed ? "Done" : "Optimisation stopped",
             optimisation.Completed ? string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{optimisation.FpsGainPercent:+0;-0;0} % average FPS") : optimisation.Error ?? string.Empty));
         server?.Send(new ReportReadyMessage(path));
+        SendGameSettings();
+    }
+
+    private const string SandboxGameKey = "sandbox";
+
+    private SettingLockStore Locks => settingLocks ??= new SettingLockStore(options.SettingLocksPath);
+
+    private static string SteamGameKey(RunningGame game) => "steam:" + game.Game.AppId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+    private IGameSettingsControl? SettingsControl()
+    {
+        if (link.IsConnected)
+        {
+            return new SandboxSettingsControl(SandboxKnowledge.GameName, link.SettingsPath, options.JournalPath);
+        }
+
+        return SteamGame is { } game && recognisedGame is { } recognised
+            ? new UnrealSettingsControl(SteamGameKey(game), game.Game.Name, recognised.SettingsPath, recognised.AntiCheat, options.IniJournalPath)
+            : null;
+    }
+
+    private void SendGameSettings()
+    {
+        if (server is not { HasClient: true } || SettingsControl() is not { } control)
+        {
+            return;
+        }
+
+        var busy = optimisationSession is not null || restartOptimiser is not null;
+        server.Send(new GameSettingsMessage(
+            control.GameName,
+            control.CanChange && !busy,
+            control.AppliesAtRestart,
+            busy ? "GAPO is testing settings right now; you can change them once it is done." : control.Note,
+            control.Read(Locks.LockedFor(control.GameKey))));
+    }
+
+    private void ReportSettingChange(IGameSettingsControl control, string key, string? error, bool reverted)
+    {
+        var label = control.Read(Locks.LockedFor(control.GameKey)).FirstOrDefault(setting => setting.Key == key) is { } state
+            ? state.Label + " is now " + (state.Choices.FirstOrDefault(choice => SettingDefinition.SameValue(choice.Value, state.Value))?.Label ?? state.Value)
+            : key;
+        server?.Send(error is null
+            ? new StatusMessage(AgentState.Watching, reverted ? "Put back: " + label : "Changed: " + label, control.AppliesAtRestart ? "The game applies it the next time you start it." : "The game applies it straight away.")
+            : new StatusMessage(AgentState.Watching, "Not changed", error));
+        SendGameSettings();
     }
 
     private void ReportProgress(string title, string detail)
@@ -218,6 +279,8 @@ public sealed class AgentSession : IDisposable
             {
                 server.Send(diagnosis);
             }
+
+            SendGameSettings();
         }
 
         if (insideWindow)
@@ -251,7 +314,7 @@ public sealed class AgentSession : IDisposable
         stopRequested = false;
         optimisationSession = new SandboxSession(link, monitor, Pump);
         var journal = new FileChangeJournal(options.JournalPath, () => link.SettingsPath);
-        var engine = new OptimisationEngine(optimisationSession, new SandboxKnowledge(), journal, hardware, ReportProgress);
+        var engine = new OptimisationEngine(optimisationSession, new SandboxKnowledge(), journal, hardware, ReportProgress, Locks.LockedFor(SandboxGameKey));
         var report = engine.Run(goal);
         optimisationSession = null;
         if (options.AskGameToCloseWhenDone)
@@ -439,7 +502,8 @@ public sealed class AgentSession : IDisposable
             (state, title, detail) => ReportProgressAs(state, title, detail),
             clock.Elapsed,
             game.ProcessId,
-            GpuBusyTicksSoFar);
+            GpuBusyTicksSoFar,
+            Locks.LockedFor(SteamGameKey(game)));
     }
 
     private long GpuBusyTicksSoFar() => frameTiming?.GpuBusyTicksOfTrackedProcess ?? 0;

@@ -32,6 +32,7 @@ namespace Gapo.Sandbox
         [DllImport("winmm.dll")] public static extern uint timeBeginPeriod(uint ms);
         [DllImport("winmm.dll")] public static extern uint timeEndPeriod(uint ms);
         [DllImport("dwmapi.dll")] public static extern int DwmFlush();
+        [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
         [DllImport("dwmapi.dll")] public static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
 
         public static void UseDarkTitleBar(IntPtr hwnd)

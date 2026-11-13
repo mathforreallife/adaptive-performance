@@ -30,6 +30,8 @@ public sealed record AgentOptions(
 
     public string DocumentsFolder => Documents ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+    public string SettingLocksPath => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(JournalPath)) ?? string.Empty, "setting-locks.json");
+
     public string IniJournalPath => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(JournalPath)) ?? string.Empty, Path.GetFileNameWithoutExtension(JournalPath) + "-ini.json");
 
     private const string ListGamesFlag = "--list-games";

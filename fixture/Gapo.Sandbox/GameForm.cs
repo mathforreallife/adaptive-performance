@@ -156,7 +156,7 @@ namespace Gapo.Sandbox
             if (_autotestSeconds > 0 && !_autotestFinished && ExitCode == 0)
             {
                 ExitCode = ExitClosedBeforeAutotestFinished;
-                Program.ReportFailure(_options, "The game window was closed before the auto-test finished.");
+                Program.ReportFailure(_options, "The game window was closed before the auto-test finished (close reason: " + e.CloseReason + ", foreground window: " + (Native.GetForegroundWindow() == Handle ? "this game" : "another window") + ").");
                 if (!string.IsNullOrEmpty(_logPath))
                 {
                     try

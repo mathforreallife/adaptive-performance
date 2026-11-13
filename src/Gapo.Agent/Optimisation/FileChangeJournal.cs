@@ -32,9 +32,24 @@ public sealed class FileChangeJournal : IChangeJournal
 
     public void Begin(GameSettings original)
     {
-        this.original = original;
-        Write(new JournalContent(JournalState.Committed, settingsPath(), string.Empty, original, original));
+        var path = settingsPath();
+        this.original = Read(journalPath) is { } existing && string.Equals(existing.SettingsPath, path, StringComparison.OrdinalIgnoreCase)
+            ? existing.Original
+            : original;
+        Write(new JournalContent(JournalState.Committed, path, string.Empty, this.original, original));
     }
+
+    public static GameSettings? OriginalFor(string journalPath, string settingsPath) =>
+        Read(journalPath) is { } content && string.Equals(content.SettingsPath, settingsPath, StringComparison.OrdinalIgnoreCase) ? content.Original : null;
+
+    public static void RecordManualChange(string journalPath, string settingsPath, GameSettings before, GameSettings after)
+    {
+        var journal = new FileChangeJournal(journalPath, () => settingsPath);
+        journal.Begin(before);
+        journal.TrialEnded(after);
+    }
+
+    public static void WriteSettingsFile(string settingsPath, GameSettings settings, string modifiedBy) => WriteToGame(settingsPath, settings, modifiedBy);
 
     public void TrialStarted(GameSettings lastCommitted, SettingCandidate candidate) =>
         Write(new JournalContent(JournalState.TrialInFlight, settingsPath(), candidate.Setting, original ?? lastCommitted, lastCommitted));

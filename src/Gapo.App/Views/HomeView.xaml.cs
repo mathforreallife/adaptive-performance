@@ -35,6 +35,11 @@ public sealed partial class HomeView : UserControl
 
     public event Action? RevertAllRequested;
 
+    public event Action? GameSettingsRequested;
+
+    public void ShowGameSettingsAvailable(bool available) =>
+        GameSettingsButton.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
+
     public Goal SelectedGoal => Goals[Math.Max(0, GoalSelector.Items.IndexOf(GoalSelector.SelectedItem))];
 
     public void ShowStatus(StatusMessage status)
@@ -153,6 +158,8 @@ public sealed partial class HomeView : UserControl
     private void OnStopClicked(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
 
     private void OnRevertClicked(object sender, RoutedEventArgs e) => RevertAllRequested?.Invoke();
+
+    private void OnGameSettingsClicked(object sender, RoutedEventArgs e) => GameSettingsRequested?.Invoke();
 
     private static string Number(double value, string format) => value > 0 ? value.ToString(format, CultureInfo.InvariantCulture) : NoValue;
 }

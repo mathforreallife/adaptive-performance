@@ -13,6 +13,10 @@ public static class WireFormat
     private const string SampleType = "sample";
     private const string ReportType = "report";
     private const string DiagnosisType = "diagnosis";
+    private const string SettingsType = "settings";
+    private const string LockType = "lock";
+    private const string SetType = "set";
+    private const string RevertSettingType = "revertSetting";
     private const string OptimiseType = "optimise";
     private const string RevertAllType = "revertAll";
     private const string StopType = "stop";
@@ -56,6 +60,36 @@ public static class WireFormat
                 json.WriteString(TypeProperty, ReportType);
                 json.WriteString("path", report.Path);
                 break;
+            case GameSettingsMessage settings:
+                json.WriteString(TypeProperty, SettingsType);
+                json.WriteString("gameName", settings.GameName);
+                json.WriteBoolean("canChange", settings.CanChange);
+                json.WriteBoolean("appliesAtRestart", settings.AppliesAtRestart);
+                json.WriteString("note", settings.Note);
+                json.WriteStartArray("settings");
+                foreach (var setting in settings.Settings)
+                {
+                    json.WriteStartObject();
+                    json.WriteString("key", setting.Key);
+                    json.WriteString("label", setting.Label);
+                    json.WriteString("value", setting.Value);
+                    json.WriteString("original", setting.OriginalValue);
+                    json.WriteBoolean("locked", setting.Locked);
+                    json.WriteStartArray("choices");
+                    foreach (var choice in setting.Choices)
+                    {
+                        json.WriteStartObject();
+                        json.WriteString("value", choice.Value);
+                        json.WriteString("label", choice.Label);
+                        json.WriteEndObject();
+                    }
+
+                    json.WriteEndArray();
+                    json.WriteEndObject();
+                }
+
+                json.WriteEndArray();
+                break;
             case DiagnosisMessage diagnosis:
                 json.WriteString(TypeProperty, DiagnosisType);
                 json.WriteString("gameName", diagnosis.GameName);
@@ -89,6 +123,20 @@ public static class WireFormat
                 break;
             case StopCommand:
                 json.WriteString(TypeProperty, StopType);
+                break;
+            case LockSettingCommand lockSetting:
+                json.WriteString(TypeProperty, LockType);
+                json.WriteString("key", lockSetting.Key);
+                json.WriteBoolean("locked", lockSetting.Locked);
+                break;
+            case SetSettingCommand set:
+                json.WriteString(TypeProperty, SetType);
+                json.WriteString("key", set.Key);
+                json.WriteString("value", set.Value);
+                break;
+            case RevertSettingCommand revert:
+                json.WriteString(TypeProperty, RevertSettingType);
+                json.WriteString("key", revert.Key);
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(command), command, "Unknown command.");
@@ -125,6 +173,14 @@ public static class WireFormat
                 root.GetProperty("recentFrameMs").EnumerateArray().Select(frame => frame.GetDouble()).ToArray(),
                 !root.TryGetProperty("canOptimise", out var canOptimise) || canOptimise.ValueKind != JsonValueKind.False),
             ReportType => new ReportReadyMessage(Text(root, "path")),
+            SettingsType => new GameSettingsMessage(
+                Text(root, "gameName"),
+                Flag(root, "canChange"),
+                Flag(root, "appliesAtRestart"),
+                Text(root, "note"),
+                root.TryGetProperty("settings", out var list) && list.ValueKind == JsonValueKind.Array
+                    ? list.EnumerateArray().Select(ReadSetting).ToArray()
+                    : []),
             DiagnosisType => new DiagnosisMessage(
                 Text(root, "gameName"),
                 Text(root, "bottleneck"),
@@ -146,11 +202,15 @@ public static class WireFormat
             return null;
         }
 
+        var root = document.RootElement;
         return type.GetString() switch
         {
-            OptimiseType => new OptimiseCommand(Enum.TryParse<Goal>(Text(document.RootElement, "goal"), out var goal) ? goal : Goal.Balanced),
+            OptimiseType => new OptimiseCommand(Enum.TryParse<Goal>(Text(root, "goal"), out var goal) ? goal : Goal.Balanced),
             RevertAllType => new RevertAllCommand(),
             StopType => new StopCommand(),
+            LockType when Text(root, "key").Length > 0 => new LockSettingCommand(Text(root, "key"), Flag(root, "locked")),
+            SetType when Text(root, "key").Length > 0 => new SetSettingCommand(Text(root, "key"), Text(root, "value")),
+            RevertSettingType when Text(root, "key").Length > 0 => new RevertSettingCommand(Text(root, "key")),
             _ => null,
         };
     }
@@ -182,6 +242,20 @@ public static class WireFormat
 
     private static string Text(JsonElement root, string property) =>
         root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
+
+    private static bool Flag(JsonElement root, string property) =>
+        root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
+
+    private static SettingState ReadSetting(JsonElement setting) =>
+        new(
+            Text(setting, "key"),
+            Text(setting, "label"),
+            Text(setting, "value"),
+            Text(setting, "original"),
+            Flag(setting, "locked"),
+            setting.TryGetProperty("choices", out var choices) && choices.ValueKind == JsonValueKind.Array
+                ? choices.EnumerateArray().Select(choice => new SettingChoice(Text(choice, "value"), Text(choice, "label"))).ToArray()
+                : []);
 
     private static double Number(JsonElement root, string property) =>
         root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.Number ? value.GetDouble() : 0;

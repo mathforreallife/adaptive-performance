@@ -75,6 +75,7 @@
             <Button x:Name="OptimiseButton" Content="Optimise" Style="{StaticResource AccentButtonStyle}" Click="OnOptimiseClicked" />
             <Button x:Name="StopButton" Content="Stop" Visibility="Collapsed" Click="OnStopClicked" />
             <Button x:Name="RevertButton" Content="Revert all" Click="OnRevertClicked" />
+            <Button x:Name="GameSettingsButton" Content="Game settings" Visibility="Collapsed" Click="OnGameSettingsClicked" />
           </StackPanel>
         </StackPanel>
       </StackPanel>

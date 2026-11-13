@@ -8,6 +8,17 @@ namespace Gapo.EndToEnd;
 
 public sealed record UnknownGameRun(int LiveSamplesWithFrames, double MedianLiveFps, bool EverOfferedToOptimise, string WatchingDetail, bool RefusedToOptimise, bool SawTheGameLeave, DiagnosisMessage? Diagnosis);
 
+public sealed record SettingControlRun(
+    GameSettingsMessage? First,
+    bool LockAppeared,
+    bool SetAppeared,
+    string SetStatus,
+    string ShadowsInFileAfterSet,
+    bool PutBackAppeared,
+    string ShadowsInFileAfterPutBack,
+    bool RefusedAnUnknownValue,
+    string ReportPath);
+
 public sealed record ServedRestartRun(bool OfferedToOptimise, int RestartsAsked, IReadOnlyList<string> StatusTitles, string ReportPath);
 
 public sealed record ServedRun(int LiveSamples, double FirstLiveFps, int ChartPoints, IReadOnlyList<string> StatusTitles, bool SawWatching, bool SawOptimising, bool SawFinished, string ReportPath);
@@ -156,6 +167,37 @@ public sealed class InterfaceClient : IDisposable
         writer.WriteLine(WireFormat.Encode(new OptimiseCommand(goal)));
         var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, RestartOptimisationTimeout, Observe, "The agent never finished the restart-based optimisation.");
         return new ServedRestartRun(offered, restarts, titles, report.Path);
+    }
+
+    public SettingControlRun ExerciseSettingControl(Func<string, string> readSettingFile)
+    {
+        void Ignore(AgentMessage message)
+        {
+        }
+
+        var first = (GameSettingsMessage)WaitFor(message => message is GameSettingsMessage { Settings.Count: > 0 }, GameTimeout, Ignore, "The agent never sent the game's settings.");
+        writer.WriteLine(WireFormat.Encode(new LockSettingCommand("AntiAliasing", true)));
+        var locked = WaitFor(message => message is GameSettingsMessage settings && settings.Settings.Any(setting => setting.Key == "AntiAliasing" && setting.Locked), TimeSpan.FromSeconds(10), Ignore, "Locking anti-aliasing was not confirmed.");
+        writer.WriteLine(WireFormat.Encode(new SetSettingCommand("Shadows", "High")));
+        var setStatus = string.Empty;
+        WaitFor(message =>
+        {
+            if (message is StatusMessage status)
+            {
+                setStatus = status.Title;
+            }
+
+            return message is GameSettingsMessage settings && settings.Settings.Any(setting => setting.Key == "Shadows" && setting.Value == "High");
+        }, TimeSpan.FromSeconds(10), Ignore, "Setting shadows to High was not confirmed.");
+        var afterSet = readSettingFile("Shadows");
+        writer.WriteLine(WireFormat.Encode(new SetSettingCommand("Shadows", "Purple")));
+        var refused = WaitFor(message => message is StatusMessage { Title: "Not changed" }, TimeSpan.FromSeconds(10), Ignore, "An unknown value was not refused.") is StatusMessage;
+        writer.WriteLine(WireFormat.Encode(new RevertSettingCommand("Shadows")));
+        WaitFor(message => message is GameSettingsMessage settings && settings.Settings.Any(setting => setting.Key == "Shadows" && !setting.ChangedFromOriginal), TimeSpan.FromSeconds(10), Ignore, "Putting shadows back was not confirmed.");
+        var afterPutBack = readSettingFile("Shadows");
+        writer.WriteLine(WireFormat.Encode(new OptimiseCommand(Goal.Balanced)));
+        var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, OptimisationTimeout, Ignore, "The agent never announced a finished report after the setting tests.");
+        return new SettingControlRun(first, locked is not null, true, setStatus, afterSet, true, afterPutBack, refused, report.Path);
     }
 
     public void Dispose()

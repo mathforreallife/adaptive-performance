@@ -23,6 +23,13 @@
       <SolidColorBrush x:Key="GapoStageStreamingBrush" Color="#B7791F" />
       <SolidColorBrush x:Key="GapoStageOtherBrush" Color="#8A909B" />
       <SolidColorBrush x:Key="SelectorBarItemPillFill" Color="#2563EB" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#2563EB" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#1D4ED8" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#1D4ED8" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#2563EB" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#FFFFFF" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#FFFFFF" />
       <SolidColorBrush x:Key="AccentButtonBackground" Color="#2563EB" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#1D4FD8" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#1A45BD" />
@@ -54,6 +61,13 @@
       <SolidColorBrush x:Key="GapoStageStreamingBrush" Color="#E6B450" />
       <SolidColorBrush x:Key="GapoStageOtherBrush" Color="#7D828D" />
       <SolidColorBrush x:Key="SelectorBarItemPillFill" Color="#6EA8FE" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOn" Color="#6EA8FE" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPointerOver" Color="#8AB8FE" />
+      <SolidColorBrush x:Key="ToggleSwitchFillOnPressed" Color="#8AB8FE" />
+      <SolidColorBrush x:Key="ToggleSwitchStrokeOn" Color="#6EA8FE" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOn" Color="#10131A" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPointerOver" Color="#10131A" />
+      <SolidColorBrush x:Key="ToggleSwitchKnobFillOnPressed" Color="#10131A" />
       <SolidColorBrush x:Key="AccentButtonBackground" Color="#6EA8FE" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPointerOver" Color="#86B7FE" />
       <SolidColorBrush x:Key="AccentButtonBackgroundPressed" Color="#5C96EC" />
