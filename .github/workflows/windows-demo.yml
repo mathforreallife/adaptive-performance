@@ -1,8 +1,6 @@
 name: Windows demo build & end-to-end test
 
 on:
-  push:
-    branches: [ "**" ]
   workflow_dispatch:
 
 jobs:

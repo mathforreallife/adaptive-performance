@@ -1,0 +1,22 @@
+<Solution>
+  <Folder Name="/fixture/">
+    <Project Path="fixture/Gapo.LoadGenerator/Gapo.LoadGenerator.csproj" />
+    <Project Path="fixture/Gapo.Sandbox.Contract/Gapo.Sandbox.Contract.csproj" />
+    <Project Path="fixture/Gapo.Sandbox/Gapo.Sandbox.csproj" />
+  </Folder>
+  <Folder Name="/src/">
+    <Project Path="src/Gapo.Agent/Gapo.Agent.csproj" />
+    <Project Path="src/Gapo.Core/Gapo.Core.csproj" />
+    <Project Path="src/Gapo.Windows/Gapo.Windows.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Gapo.Core.Tests/Gapo.Core.Tests.csproj" />
+    <Project Path="tests/Gapo.EndToEnd/Gapo.EndToEnd.csproj" />
+    <Project Path="tests/Gapo.Sandbox.Contract.Tests/Gapo.Sandbox.Contract.Tests.csproj" />
+    <Project Path="tests/Gapo.SourceRules.Tests/Gapo.SourceRules.Tests.csproj" />
+    <Project Path="tests/Gapo.Windows.Tests/Gapo.Windows.Tests.csproj" />
+  </Folder>
+  <Folder Name="/tools/">
+    <Project Path="tools/Gapo.SourceRules/Gapo.SourceRules.csproj" />
+  </Folder>
+</Solution>
