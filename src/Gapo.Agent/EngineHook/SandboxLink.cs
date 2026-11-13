@@ -41,7 +41,9 @@ public sealed class SandboxLink : IDisposable
         }
     }
 
-    public int ReadNewFrames()
+    public delegate void FrameObserver(in FrameRecord frame);
+
+    public int ReadNewFrames(FrameObserver? observer = null)
     {
         if (channel is null)
         {
@@ -53,6 +55,11 @@ public sealed class SandboxLink : IDisposable
         do
         {
             count = channel.ReadNewFrames(ref nextFrameIndex, readBuffer);
+            for (var index = 0; observer is not null && index < count; index++)
+            {
+                observer(in readBuffer[index]);
+            }
+
             if (count > 0)
             {
                 LatestFrame = readBuffer[count - 1];
@@ -63,6 +70,14 @@ public sealed class SandboxLink : IDisposable
 
         FramesRead += total;
         return total;
+    }
+
+    public void SkipBacklog()
+    {
+        if (channel is not null)
+        {
+            nextFrameIndex = channel.FramesWritten;
+        }
     }
 
     public void Dispose() => Disconnect();

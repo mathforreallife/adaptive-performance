@@ -60,37 +60,51 @@ The research workflow script is saved at
 `C:\Users\Kevin\.claude\projects\C--Users-Kevin-Desktop-Project\03b2d8a3-1b4f-4985-b608-67e477eab4b4\workflows\scripts\gapo-understand-wf_e4c9822a-3a0.js`
 (run id `wf_e4c9822a-3a0`, resumable only inside the same session; in a new session just re-create the missing briefs).
 
-## In-progress state (updated 2026-11-12, step 0 pushed for its first Windows CI run)
+## In-progress state (updated 2026-11-12, step 0 done, step 1 started)
 
-Branch `step-0-test-rig`, pushed, PR open against the default branch. What exists and passes locally (89 unit tests, no-comments check, end-to-end rig):
+**Step 0 is complete and green on Windows CI twice** (runs 43218799941 and 43219536423). PR #1 (`step-0-test-rig` into the default branch) is open and waiting for the user: the permission system does not let the agent merge pull requests ("merge without review"). Do not try to work around that. Later steps are stacked on top: branch `step-1-telemetry-core` was created from the step-0 tip; open its PR with base `step-0-test-rig` (or the default branch once PR #1 is merged).
 
-- `tools/Gapo.SourceRules` — no-comments checker (`check . --exclude demo --exclude docs`) and `strip`.
-- `fixture/Gapo.Sandbox.Contract` — telemetry contract (120-byte record, pinned by tests), settings INI, paths.
-- `fixture/Gapo.Sandbox` — the fixture game (WinForms window, software renderer, D3D11 flip-model present with WARP and GDI fallbacks, scenario switches, JSON result log). Run: `artifacts/bin/Gapo.Sandbox/release/GAPO-Sandbox.exe --data-dir=<dir> --reset --autotest=20 --log=<file.json> [--scenario=...] [--workload=W,E,D]`.
-- `src/Gapo.Core` (overhead meter + budgets), `src/Gapo.Windows` (own-process probe using cycle counts, background mode, process liveness), `src/Gapo.Agent` (skeleton: attaches to the fixture's engine hook, reads frames at 10 Hz, measures itself, exits 4 when over budget).
-- `tests/Gapo.EndToEnd` — the rig: fixture alone, fixture + agent, fixture alone; asserts overhead budget and A/B within noise. Run: `artifacts/bin/Gapo.EndToEnd/release/Gapo.EndToEnd.exe --output=<dir> --seconds=20`.
-- `.github/workflows/windows.yml` — build, source rules, unit tests, end-to-end, artifacts. The demo workflow is manual-only now.
+Two things need the user's decision (asked in chat on 2026-11-12; check whether they answered):
+
+1. Merging PR #1 (and later PRs) — the user has to merge, or add a permission rule that allows it.
+2. PresentMon — downloading and running the PresentMon console executable (GameTechDev/PresentMon release v2.6.0, `PresentMon-2.6.0-x64.exe`) was also blocked by the permission system. Without it the frame-timing path is being built as GAPO's own small ETW consumer of the same present events (see next actions). If the user allows PresentMon, use it to cross-check the own consumer.
+
+Step 0 results: laptop 23.1 / 23.3 / 23.3 FPS (alone / with agent / alone), agent 0.019–0.054 % CPU, 6.0 MB; CI runner 39.4 / 39.5 / 39.3 FPS, agent 0.064 % CPU, 6.1 MB. Budget: 0.3 % / 40 MB.
+
+Step 1 so far (branch `step-1-telemetry-core`, PR #2 with base `step-0-test-rig`, 140 unit tests passing, CI green on the runner for the frame-timing commit):
+
+- Per-core load: `Gapo.Core/Telemetry/ProcessorLoad.cs`, `Gapo.Windows/Telemetry/ProcessorTimesProbe.cs`.
+- Process/thread snapshot: `Gapo.Core/Telemetry/ProcessSnapshot.cs`, `ProcessActivity.cs`, `Gapo.Windows/Telemetry/ProcessSnapshotReader.cs`.
+- Frame timing by GAPO's own ETW consumer: `Gapo.Core/FrameTiming/PresentTracker.cs`, `PresentedFrameQueue.cs`, `Gapo.Windows/FrameTiming/EtwNative.cs`, `EtwPresentSession.cs`; agent side `Gapo.Agent/FrameTiming/`. Validated in the rig against the fixture's telemetry (0.0-0.3 % apart on the laptop, 0.1 % on the runner, no events lost; tracing does not slow the game).
+- Game counters and memory: `Gapo.Windows/Processes/GameProcessProbe.cs`, `Gapo.Windows/Telemetry/MemoryStatusProbe.cs`.
+- 1 Hz monitor: `Gapo.Core/Telemetry/SystemMonitor.cs`, agent side `Gapo.Agent/Monitoring/`. The rig asserts the single-threaded fixture uses about one processor, its busiest thread is near 100 % of one, and its autosave writes are seen.
+- Agent with everything on: about 0.14 % CPU, 9.6 MB private (budget 0.3 % / 40 MB).
 
 Build and test locally:
 
 ```
-%LOCALAPPDATA%\Microsoft\dotnet\dotnet.exe build Gapo.slnx -c Release
-%LOCALAPPDATA%\Microsoft\dotnet\dotnet.exe test --solution Gapo.slnx -c Release
+%LOCALAPPDATA%/Microsoft/dotnet/dotnet.exe build Gapo.slnx -c Release
+%LOCALAPPDATA%/Microsoft/dotnet/dotnet.exe test --solution Gapo.slnx -c Release
+artifacts/bin/Gapo.SourceRules/release/gapo-source-rules.exe check . --exclude demo --exclude docs
+artifacts/bin/Gapo.EndToEnd/release/Gapo.EndToEnd.exe --output=<dir> --seconds=20
 ```
 
-Research workflows failed twice on the usage limit and cost a lot; do not re-run them. Decide by direct experiment instead (for example: run PresentMon against the fixture here to see what it reports), and look things up inline only when needed.
+Research workflows failed twice on the usage limit and cost a lot; do not re-run them. Decide by direct experiment and look things up inline only when needed.
 
 ## Next actions, in order
 
-1. Check the Windows CI run of the PR (`gh run list -R mathforreallife/adaptive-performance --branch step-0-test-rig`), fix whatever fails on the runner (likely candidates: D3D device creation on the GPU-less VM, timing of the A/B check on 2-4 vCPUs, action versions), add the CI numbers to spec Appendix B, merge the PR when green.
-2. Remaining step-0 items: a background-load generator executable (`fixture/Gapo.LoadGenerator`), ADRs in `docs/adr/` (solution layout, fixture present path, cycle-counted overhead, test rig = hosted runner + this laptop, branch/PR convention), README refresh, end-of-phase summary for the user.
-3. Step 1, telemetry core: get PresentMon working against the fixture on this laptop first (download the console build from the GameTechDev/PresentMon GitHub releases into a scratch folder, run it elevated with CSV to stdout for the fixture's process, confirm it reports the D3D11 presents and CPUBusy/GPUBusy), then decide the integration (console child process vs own ETW consumer), then build: frame-timing source abstraction, per-core load and process snapshot via `NtQuerySystemInformation`, game CPU/IO/memory on cached handles, all at <= 1 Hz except frame events, with the overhead gate still green.
-4. Then continue the build order below.
+1. Finish step 1:
+   - ETW: pass an event-id filter (`EVENT_FILTER_TYPE_EVENT_ID` through `ENABLE_TRACE_PARAMETERS`) so only present start/stop events are delivered (about 14,000 events per 20 s arrive today, mostly irrelevant); add GPU busy time from Microsoft-Windows-DxgKrnl events and validate it with the fixture's `--scenario=gpu-load` on the laptop's HD 4000; handle "access denied" in the UI wording.
+   - Game detection without the fixture hook: foreground/full-screen process, later the Steam library index (step 5).
+   - ADR 0004 for the frame-timing decision.
+2. Step 2, hardware inventory: one-shot cached scan with a "could not be read" list, AOT-safe (no System.Management): CPU topology via `GetLogicalProcessorInformationEx`, clocks via `CallNtPowerInformation`, RAM modules via SMBIOS (`GetSystemFirmwareTable`), GPU name/VRAM via DXGI, drives via `IOCTL_STORAGE_QUERY_PROPERTY`, display via `EnumDisplaySettings`, power via `GetSystemPowerStatus` and `PowerGetEffectiveOverlayScheme`, OS build from the registry. `docs/research/demo-engine.md` and `demo-sandbox.md` exist; read `demo/src/Optimiser/Hardware/*.cs` directly for the demo's scanner.
+3. Step 3, measurement harness (windows, warm-up detection, A/A noise floor, statistics, ABAB), driven against the fixture; `docs/research/demo-engine.md` has every constant.
+4. Then continue the build order below (step 2 hardware inventory, step 3 measurement harness, ...).
 
 ## Task list (build order, spec III.4)
 
-- [ ] 0. Test rig — in progress
-- [ ] 1. Telemetry core
+- [x] 0. Test rig — done (PR #1, waiting for the user to merge)
+- [ ] 1. Telemetry core — in progress
 - [ ] 2. Hardware inventory
 - [ ] 3. Measurement harness
 - [ ] 4. Diagnosis v1

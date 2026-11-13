@@ -61,6 +61,42 @@ internal static partial class ProcessNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetProcessMemoryInfo(nint process, ref ProcessMemoryCountersEx counters, uint size);
 
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct IoCounters
+    {
+        public ulong ReadOperationCount;
+        public ulong WriteOperationCount;
+        public ulong OtherOperationCount;
+        public ulong ReadTransferCount;
+        public ulong WriteTransferCount;
+        public ulong OtherTransferCount;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    internal struct MemoryStatusEx
+    {
+        public uint Length;
+        public uint MemoryLoad;
+        public ulong TotalPhysical;
+        public ulong AvailablePhysical;
+        public ulong TotalPageFile;
+        public ulong AvailablePageFile;
+        public ulong TotalVirtual;
+        public ulong AvailableVirtual;
+        public ulong AvailableExtendedVirtual;
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GetProcessIoCounters(nint process, out IoCounters counters);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    internal static partial uint GetPriorityClass(nint process);
+
+    [LibraryImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool GlobalMemoryStatusEx(ref MemoryStatusEx status);
+
     [LibraryImport("kernel32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool SetPriorityClass(nint process, uint priorityClass);

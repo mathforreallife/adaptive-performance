@@ -1,4 +1,6 @@
 using System.Text.Json;
+using Gapo.Agent.FrameTiming;
+using Gapo.Agent.Monitoring;
 using Gapo.Core.Overhead;
 
 namespace Gapo.Agent;
@@ -11,7 +13,9 @@ public sealed record AgentReport(
     bool CpuMeasuredFromCycleCounts,
     OverheadBudget Budget,
     OverheadSummary Overhead,
-    OverheadVerdict Verdict)
+    OverheadVerdict Verdict,
+    FrameTimingReport? FrameTiming,
+    MonitorReport Monitor)
 {
     private const int DecimalPlaces = 3;
 
@@ -47,6 +51,8 @@ public sealed record AgentReport(
         }
 
         json.WriteEndArray();
+        FrameTiming?.WriteTo(json);
+        Monitor.WriteTo(json);
         json.WriteEndObject();
     }
 

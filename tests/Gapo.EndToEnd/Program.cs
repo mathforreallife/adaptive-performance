@@ -6,7 +6,15 @@ const int Passed = 0;
 const int Failed = 1;
 const double DefaultRunSeconds = 20;
 const int MinimumFrames = 100;
+const int MaximumAttempts = 3;
 const double MinimumShareOfFramesSeenByAgent = 0.9;
+const double MinimumShareOfFramesSeenByEventTracing = 0.85;
+const double MaximumFrameTimeDisagreementPercent = 3.0;
+const string FrameTimingAvailable = "Available";
+const int MinimumMonitorSamples = 8;
+const double LowestProcessorsASingleThreadedGameUses = 0.6;
+const double HighestProcessorsASingleThreadedGameUses = 1.6;
+const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
 
 var outputDirectory = Path.GetFullPath(ValueOf("--output") ?? Path.Combine(Path.GetTempPath(), "gapo-end-to-end"));
 var binariesRoot = Path.GetFullPath(ValueOf("--binaries") ?? Path.Combine(AppContext.BaseDirectory, "..", ".."));
@@ -16,10 +24,28 @@ var failures = new List<string>();
 
 try
 {
-    var firstBaseline = rig.RunFixtureAlone("baseline-1");
-    var (attached, agent) = rig.RunFixtureWithAgent("with-agent");
-    var secondBaseline = rig.RunFixtureAlone("baseline-2");
-    var comparison = OverheadComparison.Between(firstBaseline.AverageFps, secondBaseline.AverageFps, attached.AverageFps);
+    FixtureResult firstBaseline;
+    FixtureResult attached;
+    FixtureResult secondBaseline;
+    AgentResult agent;
+    OverheadComparison comparison;
+    var attempt = 0;
+    do
+    {
+        attempt++;
+        var suffix = attempt == 1 ? string.Empty : "-attempt-" + attempt.ToString(CultureInfo.InvariantCulture);
+        firstBaseline = rig.RunFixtureAlone("baseline-1" + suffix);
+        (attached, agent) = rig.RunFixtureWithAgent("with-agent" + suffix);
+        secondBaseline = rig.RunFixtureAlone("baseline-2" + suffix);
+        comparison = OverheadComparison.Between(firstBaseline.AverageFps, secondBaseline.AverageFps, attached.AverageFps);
+        if (!comparison.BaselinesAgree)
+        {
+            Print($"attempt {attempt}: the two runs without the agent differ by {comparison.BaselineSpreadPercent:0.0}% ({firstBaseline.AverageFps:0.0} and {secondBaseline.AverageFps:0.0} FPS); the machine is too busy to judge overhead");
+        }
+    }
+    while (!comparison.BaselinesAgree && attempt < MaximumAttempts);
+
+    Expect(comparison.BaselinesAgree, string.Create(CultureInfo.InvariantCulture, $"The machine stayed too busy to judge overhead in {attempt} attempts (runs without the agent differed by {comparison.BaselineSpreadPercent:0.0}%)."));
 
     foreach (var run in new[] { firstBaseline, attached, secondBaseline })
     {
@@ -33,6 +59,18 @@ try
     Expect(agent.WithinBudget && agent.ExitCode == 0, "The agent exceeded its overhead budget: " + string.Join(" ", agent.Violations));
     Expect(comparison.AttachedRunIsWithinNoise, string.Create(CultureInfo.InvariantCulture, $"The game ran {comparison.SlowdownPercent:0.0}% slower with the agent attached; the noise floor is {comparison.NoiseFloorPercent:0.0}%."));
 
+    var frameTiming = agent.FrameTiming;
+    Expect(frameTiming.Availability == FrameTimingAvailable, $"Frame timing through event tracing was not available: {frameTiming.Availability}.");
+    Expect(frameTiming.EventsLost == 0, $"Event tracing lost {frameTiming.EventsLost} events.");
+    Expect(frameTiming.ShareOfHookFramesSeen >= MinimumShareOfFramesSeenByEventTracing, $"Event tracing saw {frameTiming.PresentedFrames} presented frames while the game reported {frameTiming.HookFrames}.");
+    Expect(frameTiming.MedianDifferencePercent <= MaximumFrameTimeDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing measured a median frame time of {frameTiming.MedianFrameMs:0.00} ms; the game itself reported {frameTiming.HookMedianFrameMs:0.00} ms."));
+    Print($"frame time  event tracing {frameTiming.MedianFrameMs:0.00} ms median over {frameTiming.PresentedFrames} frames, game's own telemetry {frameTiming.HookMedianFrameMs:0.00} ms over {frameTiming.HookFrames} frames ({frameTiming.MedianDifferencePercent:0.0}% apart); CPU busy {frameTiming.MedianCpuBusyMs:0.00} ms, in present {frameTiming.MedianInPresentMs:0.00} ms; {frameTiming.EventsSeen} events, {frameTiming.EventsLost} lost");
+    var monitor = agent.Monitor;
+    Expect(monitor.Samples >= MinimumMonitorSamples, $"The monitor produced only {monitor.Samples} samples.");
+    Expect(monitor.MeanGameProcessorsUsed is >= LowestProcessorsASingleThreadedGameUses and <= HighestProcessorsASingleThreadedGameUses, string.Create(CultureInfo.InvariantCulture, $"The single-threaded fixture should use about one processor; the monitor measured {monitor.MeanGameProcessorsUsed:0.00}."));
+    Expect(monitor.MedianBusiestGameThreadPercent >= LowestBusiestThreadShareOfASingleThreadedGame, string.Create(CultureInfo.InvariantCulture, $"The fixture's main thread should be close to a full processor; the monitor measured {monitor.MedianBusiestGameThreadPercent:0}%."));
+    Expect(monitor.PeakGameWriteMegabytesPerSecond > 0, "The monitor never saw the fixture's autosave disk writes.");
+    Print($"monitor     game uses {monitor.MeanGameProcessorsUsed:0.00} processors, busiest game thread {monitor.MedianBusiestGameThreadPercent:0}% of one; machine load {monitor.MeanMachineLoadPercent:0}% (busiest processor {monitor.MeanBusiestProcessorPercent:0}%), background {monitor.MeanBackgroundPercent:0.0}%; game {monitor.GamePrivateMegabytes:0} MB, peak disk write {monitor.PeakGameWriteMegabytesPerSecond:0.0} MB/s");
     Print($"agent       {agent.RunAverageCpuPercent:0.000}% CPU average (peak {agent.PeakCpuPercent:0.00}%), {agent.PeakPrivateMegabytes:0.0} MB private, {agent.FramesRead} frames read");
     Print($"A/B         baseline {comparison.BaselineFps:0.0} FPS, attached {comparison.AttachedFps:0.0} FPS, slowdown {comparison.SlowdownPercent:0.0}%, noise floor ±{comparison.NoiseFloorPercent:0.0}%");
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
@@ -76,10 +114,14 @@ void WriteSummary(FixtureResult firstBaseline, FixtureResult attached, FixtureRe
     json.WriteNumber("attachedFps", attached.AverageFps);
     json.WriteNumber("slowdownPercent", Math.Round(comparison.SlowdownPercent, 3));
     json.WriteNumber("noiseFloorPercent", Math.Round(comparison.NoiseFloorPercent, 3));
+    json.WriteNumber("baselineSpreadPercent", Math.Round(comparison.BaselineSpreadPercent, 3));
     json.WriteNumber("agentRunAverageCpuPercent", agent.RunAverageCpuPercent);
     json.WriteNumber("agentPeakCpuPercent", agent.PeakCpuPercent);
     json.WriteNumber("agentPeakPrivateMegabytes", agent.PeakPrivateMegabytes);
     json.WriteNumber("agentFramesRead", agent.FramesRead);
+    json.WriteNumber("eventTracingMedianFrameMs", agent.FrameTiming.MedianFrameMs);
+    json.WriteNumber("gameTelemetryMedianFrameMs", agent.FrameTiming.HookMedianFrameMs);
+    json.WriteNumber("eventTracingFrames", agent.FrameTiming.PresentedFrames);
     json.WriteString("presentPath", attached.PresentPath);
     json.WriteString("adapter", attached.Adapter);
     json.WriteBoolean("passed", failures.Count == 0);
