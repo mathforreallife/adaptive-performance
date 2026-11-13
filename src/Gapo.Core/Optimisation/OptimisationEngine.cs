@@ -484,12 +484,19 @@ public sealed class OptimisationEngine
         }
     }
 
+    private const string CapsTurnedOff = "Not capped: you turned frame-rate caps off in GAPO's settings.";
+
     private string TunePacing(Goal goal, int refresh)
     {
         if (goal == Goal.MaximumFps)
         {
             notTouched.Add("Frame-rate cap: Maximum FPS mode never caps.");
             return "No frame cap (Maximum FPS mode).";
+        }
+
+        if (!controls.AllowFrameCap)
+        {
+            return CapsTurnedOff;
         }
 
         var statistics = reference.Statistics;
@@ -524,11 +531,6 @@ public sealed class OptimisationEngine
         if (SkipWhenLocked(candidate))
         {
             return "Frame-rate cap left as it is: you locked it.";
-        }
-
-        if (!controls.AllowFrameCap)
-        {
-            return "Not capped: you turned frame-rate caps off in GAPO's settings.";
         }
 
         if (!PlayerAgrees(candidate))
