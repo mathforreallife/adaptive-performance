@@ -183,6 +183,15 @@ public sealed class OptimisationEngineTests
     }
 
     [Fact]
+    public void TurnedOffCapsAreTheReasonGivenEvenWhenTheTargetIsOutOfReach()
+    {
+        var (report, game, _) = Optimise(configure: simulated => simulated.RenderMs = 90, controls: new OptimisationControls { AllowFrameCap = false });
+
+        Assert.Equal("0", game.Settings[SimulatedGame.Cap]);
+        Assert.Equal("Not capped: you turned frame-rate caps off in GAPO's settings.", report.PacingNote);
+    }
+
+    [Fact]
     public void KeepsTheCapWhenItsVariationIsTooSmallToSee()
     {
         var (report, game, _) = Optimise(configure: simulated =>
