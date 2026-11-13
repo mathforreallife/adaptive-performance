@@ -1,4 +1,5 @@
 using Gapo.Agent.EngineHook;
+using Gapo.Core.Diagnosis;
 using Gapo.Core.Measurement;
 using Gapo.Sandbox.Contract;
 
@@ -12,10 +13,14 @@ public sealed class BaselineMeasurement
     private const int EnterBenchmark = 1;
     private const int LeaveBenchmark = 0;
     private const int WindowsPerAttempt = 2;
+    private const int MostFramesKeptForHitchObservation = 24_000;
 
     private readonly MeasurementWindowOptions windowOptions = new();
     private readonly WarmupDetector warmup = new();
     private readonly List<FrameStatistics> windows = new(WindowsPerAttempt);
+    private readonly List<MeasuredFrame> framesOfThisAttempt = new(512);
+    private readonly List<MeasuredFrame> framesSinceWarm = new(4096);
+    private StageAccumulator stages = new();
     private Phase phase = Phase.WaitingForGame;
     private MeasurementWindow? window;
     private TimeSpan phaseStartedAt;
@@ -57,7 +62,18 @@ public sealed class BaselineMeasurement
         }
         else if (phase == Phase.Collecting)
         {
-            window!.Offer(frame);
+            var accepted = window!.Frames.Count;
+            window.Offer(frame);
+            if (window.Frames.Count > accepted)
+            {
+                framesOfThisAttempt.Add(frame);
+                stages.Add(record);
+            }
+        }
+
+        if (phase > Phase.WaitingForWarmup && !frame.IsWarmup && framesSinceWarm.Count < MostFramesKeptForHitchObservation)
+        {
+            framesSinceWarm.Add(frame);
         }
     }
 
@@ -136,11 +152,17 @@ public sealed class BaselineMeasurement
         if (!noise.CanBeTrusted && Attempts < MaximumAttempts)
         {
             windows.Clear();
+            framesOfThisAttempt.Clear();
+            stages = new StageAccumulator();
             RestartScene(link, now);
             return;
         }
 
-        Result = new BaselineReport(windows[0], windows[1], noise, Attempts, anyWindowCutShort, FailureReason: null);
+        Result = new BaselineReport(windows[0], windows[1], noise, Attempts, anyWindowCutShort, FailureReason: null)
+        {
+            Combined = FrameStatistics.From(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(framesOfThisAttempt)),
+            Stages = stages.ToStageTimes(),
+        };
         link.TrySendCommand(SandboxCommand.BenchmarkCamera, LeaveBenchmark);
         Enter(Phase.LeavingBenchmark, now);
     }
@@ -178,6 +200,8 @@ public sealed class BaselineMeasurement
         phase = Phase.Finished;
     }
 
+    public FrameStatistics ObservedSinceWarm() => FrameStatistics.From(System.Runtime.InteropServices.CollectionsMarshal.AsSpan(framesSinceWarm));
+
     private static FrameMarks MarksOf(FrameFlags flags) =>
         ((flags & FrameFlags.Warmup) != 0 ? FrameMarks.Warmup : FrameMarks.None)
         | ((flags & FrameFlags.Autosave) != 0 ? FrameMarks.StorageHitch : FrameMarks.None);
@@ -192,4 +216,8 @@ public sealed record BaselineReport(
     string? FailureReason)
 {
     public bool Succeeded => FailureReason is null;
+
+    public FrameStatistics Combined { get; init; } = FrameStatistics.Empty;
+
+    public StageTimes? Stages { get; init; }
 }

@@ -1,3 +1,4 @@
+using Gapo.Core.Diagnosis;
 using Gapo.Core.Overhead;
 using Gapo.Core.Statistics;
 using Gapo.Core.Telemetry;
@@ -26,6 +27,11 @@ public sealed class AgentMonitor : IDisposable
     private GameProcessProbe? game;
     private int samplesWithGame;
     private double peakWriteMegabytesPerSecond;
+    private double[] loadSumPerProcessor = [];
+    private long lowestAvailableMemoryBytes = long.MaxValue;
+    private int memoryLoadPercent;
+    private long gamePrivateBytes;
+    private ProcessPriority gamePriority = ProcessPriority.Unknown;
 
     public AgentMonitor()
     {
@@ -74,9 +80,26 @@ public sealed class AgentMonitor : IDisposable
             background.Mean,
             busiestThread.Count == 0 ? 0 : busiestThread.Median(),
             peakWriteMegabytesPerSecond,
-            monitor.Latest.GamePrivateBytes,
+            gamePrivateBytes,
             monitor.Latest.MemoryLoadPercent,
-            monitor.Latest.GamePriority);
+            gamePriority);
+
+    public MonitorSummary SummariseForDiagnosis()
+    {
+        var samples = Math.Max(1, gameProcessorsUsed.Count);
+        var loads = loadSumPerProcessor.Select(sum => sum / samples).ToArray();
+        return new MonitorSummary
+        {
+            LoadPerProcessor = loads,
+            AverageLoadPercent = averageLoad.Mean,
+            BusiestProcessorPercent = loads.Length == 0 ? 0 : loads.Max(),
+            GameProcessorsUsed = gameProcessorsUsed.Mean,
+            BusiestGameThreadPercent = busiestThread.Count == 0 ? null : busiestThread.Median(),
+            BackgroundPercent = background.Mean,
+            MemoryLoadPercent = memoryLoadPercent,
+            LowestAvailableMemoryBytes = lowestAvailableMemoryBytes == long.MaxValue ? 0 : lowestAvailableMemoryBytes,
+        };
+    }
 
     public void Dispose()
     {
@@ -91,6 +114,20 @@ public sealed class AgentMonitor : IDisposable
         busiestProcessor.Add(sample.BusiestProcessorPercent);
         background.Add(sample.BackgroundMachinePercent);
         peakWriteMegabytesPerSecond = Math.Max(peakWriteMegabytesPerSecond, sample.GameWriteMegabytesPerSecond);
+        lowestAvailableMemoryBytes = Math.Min(lowestAvailableMemoryBytes, sample.AvailablePhysicalBytes);
+        memoryLoadPercent = sample.MemoryLoadPercent;
+        gamePrivateBytes = sample.GamePrivateBytes;
+        gamePriority = sample.GamePriority;
+        var loads = monitor.LoadPerProcessor;
+        if (loadSumPerProcessor.Length != loads.Length)
+        {
+            loadSumPerProcessor = new double[loads.Length];
+        }
+
+        for (var processor = 0; processor < loads.Length; processor++)
+        {
+            loadSumPerProcessor[processor] += loads[processor];
+        }
     }
 
     private void ObserveGameThreads(TimeSpan at, int gameProcessId)

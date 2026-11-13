@@ -3,6 +3,8 @@ using Gapo.Agent.EngineHook;
 using Gapo.Agent.FrameTiming;
 using Gapo.Agent.Measurement;
 using Gapo.Agent.Monitoring;
+using Gapo.Core.Diagnosis;
+using Gapo.Core.Hardware;
 using Gapo.Core.Overhead;
 using Gapo.Core.Statistics;
 using Gapo.Sandbox.Contract;
@@ -15,6 +17,7 @@ public sealed class AgentSession
 {
     private static readonly TimeSpan TelemetryReadInterval = TimeSpan.FromMilliseconds(100);
     private const int ReadsPerOverheadSample = 10;
+    private const int HighestDefaultTargetFps = 144;
 
     private readonly AgentOptions options;
     private readonly SeriesSummary hookFrameMs = new();
@@ -78,7 +81,29 @@ public sealed class AgentSession
             frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs),
             monitor.Summarise(),
             hardware,
-            baseline);
+            baseline,
+            Diagnose(hardware, monitor, frameTiming));
+    }
+
+    private BottleneckDiagnosis? Diagnose(HardwareInventory hardware, AgentMonitor monitor, FrameTimingProbe? frameTiming)
+    {
+        if (baseline?.Result is not { Succeeded: true } measured)
+        {
+            return null;
+        }
+
+        return Diagnostician.Diagnose(new DiagnosisInput
+        {
+            Frames = measured.Combined,
+            TargetFps = Math.Min(hardware.Display.EffectiveRefreshHz, HighestDefaultTargetFps),
+            Monitor = monitor.SummariseForDiagnosis(),
+            Processor = new ProcessorLimits(hardware.Cpu.LogicalProcessors, hardware.Cpu.MaximumMegahertz, hardware.Cpu.LimitMegahertz),
+            Stages = measured.Stages,
+            Presents = frameTiming is { FrameMs.Count: > 0 }
+                ? new PresentTiming(frameTiming.FrameMs.Median(), frameTiming.CpuBusyMs.Median(), frameTiming.InPresentMs.Median())
+                : null,
+            HitchObservation = baseline.ObservedSinceWarm(),
+        });
     }
 
     private static void ReconcileFrameTiming(SandboxLink link, FrameTimingProbe? frameTiming)

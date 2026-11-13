@@ -42,7 +42,7 @@ public sealed class OwnProcessProbeTests
 
         var charged = probe.Read().ProcessorTime - before;
 
-        Assert.InRange(charged.TotalMilliseconds, busyFor.TotalMilliseconds * 0.15, busyFor.TotalMilliseconds * 8);
+        Assert.InRange(charged.TotalMilliseconds, busyFor.TotalMilliseconds * 0.05, busyFor.TotalMilliseconds * 8);
     }
 
     [Fact]

@@ -32,6 +32,7 @@ namespace Gapo.Sandbox
         public float Detail = 1f;
         const double RenderTargetMs = 20.0, SimTargetMs = 8.5;
         const int MaxBaseWidth = 1280, MinBaseWidth = 224, MaxEntities = 3000, MinEntities = 80;
+        const int MinScenarioBaseWidth = 128;
         const int StreamingBurstChunks = 40;
         const double StreamingBurstIntervalMs = 110;
         const int BallastTouchMbPerFrame = 32;
@@ -126,7 +127,7 @@ namespace Gapo.Sandbox
 
         void ApplyScenarioScaling()
         {
-            BaseW = Clamp((int)(BaseW * Options.RenderWidthMultiplier / 32) * 32, MinBaseWidth, MaxBaseWidth);
+            BaseW = Clamp((int)(BaseW * Options.RenderWidthMultiplier / 32) * 32, Options.RenderWidthMultiplier < 1.0 ? MinScenarioBaseWidth : MinBaseWidth, MaxBaseWidth);
             BaseH = (BaseW * 9 / 16) & ~1;
             EntityBase = Options.EntityOverride > 0
                 ? Options.EntityOverride
