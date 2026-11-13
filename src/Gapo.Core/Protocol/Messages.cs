@@ -27,9 +27,12 @@ public sealed record LiveSampleMessage(
     double OwnCpuPercent,
     double OwnMegabytes,
     bool OwnUseIsOverBudget,
-    IReadOnlyList<double> RecentFrameMs) : AgentMessage;
+    IReadOnlyList<double> RecentFrameMs,
+    bool CanOptimise = true) : AgentMessage;
 
 public sealed record ReportReadyMessage(string Path) : AgentMessage;
+
+public sealed record DiagnosisMessage(string GameName, string Bottleneck, string Title, string Summary, IReadOnlyList<string> AlsoNoticed, string Basis) : AgentMessage;
 
 public abstract record UiCommand;
 

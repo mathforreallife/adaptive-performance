@@ -122,6 +122,19 @@ public sealed class OptimisationEngineTests
     }
 
     [Fact]
+    public void KeepsTheCapWhenItsVariationIsTooSmallToSee()
+    {
+        var (report, game, _) = Optimise(configure: simulated =>
+        {
+            simulated.RenderMs = 14;
+            simulated.CapJitterMs = 1;
+        });
+
+        Assert.Equal(Decision.Kept, Experiment(report, OptimisationEngine.FrameCapSetting).Decision);
+        Assert.Equal("60", game.Settings[SimulatedGame.Cap]);
+    }
+
+    [Fact]
     public void RollsTheCapBackWhenItMakesPacingWorse()
     {
         var (report, game, _) = Optimise(configure: simulated =>

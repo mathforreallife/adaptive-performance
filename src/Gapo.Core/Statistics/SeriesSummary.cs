@@ -24,6 +24,13 @@ public sealed class SeriesSummary
 
     public double Mean => Count == 0 ? 0 : sum / Count;
 
+    public void Clear()
+    {
+        Count = 0;
+        Overflowed = 0;
+        sum = 0;
+    }
+
     public void Add(double value)
     {
         if (Count == values.Length)

@@ -2,11 +2,14 @@ using System.Diagnostics;
 using Gapo.Adapters.Sandbox;
 using Gapo.Agent.EngineHook;
 using Gapo.Agent.FrameTiming;
+using Gapo.Agent.Games;
 using Gapo.Agent.Link;
 using Gapo.Agent.Measurement;
 using Gapo.Agent.Monitoring;
 using Gapo.Agent.Optimisation;
 using Gapo.Core.Diagnosis;
+using Gapo.Core.FrameTiming;
+using Gapo.Core.Games;
 using Gapo.Core.Hardware;
 using Gapo.Core.Optimisation;
 using Gapo.Core.Measurement;
@@ -14,6 +17,7 @@ using Gapo.Core.Overhead;
 using Gapo.Core.Protocol;
 using Gapo.Core.Statistics;
 using Gapo.Sandbox.Contract;
+using Gapo.Windows.FrameTiming;
 using Gapo.Windows.Hardware;
 using Gapo.Windows.Processes;
 
@@ -38,7 +42,12 @@ public sealed class AgentSession : IDisposable
     private readonly OverheadMeter budgetMeter = new(Environment.ProcessorCount, BudgetJudgementSpan);
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly SandboxLink link;
-    private readonly FrameTimingProbe? frameTiming;
+    private readonly SteamGameWatcher? steamGames;
+    private FrameTimingProbe? frameTiming;
+    private bool frameTimingIsOnlyForLiveData;
+    private string? announcedGame;
+    private ObservedGameDiagnosis? observedDiagnosis;
+    private DiagnosisMessage? latestDiagnosis;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -48,7 +57,6 @@ public sealed class AgentSession : IDisposable
     private BackgroundModeResult background;
     private bool restoredInterruptedTrial;
     private bool stopRequested;
-    private bool wasConnected;
     private SandboxSession? optimisationSession;
     private bool collectHookFrameTimes;
     private bool wasInsideWindow;
@@ -62,6 +70,7 @@ public sealed class AgentSession : IDisposable
         frameTiming = options.MeasureFrameTiming ? new FrameTimingProbe() : null;
         baseline = options.MeasureBaseline ? new BaselineMeasurement() : null;
         server = options.Serve ? new AgentPipeServer(options.PipeName) : null;
+        steamGames = options.Serve ? new SteamGameWatcher(options.SteamRoot) : null;
         owner = options.ExitWithProcessId > 0 ? ProcessLiveness.TryWatch(options.ExitWithProcessId) : null;
     }
 
@@ -97,7 +106,7 @@ public sealed class AgentSession : IDisposable
             budget,
             overhead,
             overhead.Evaluate(budget),
-            frameTiming is null ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs),
+            frameTiming is null || frameTimingIsOnlyForLiveData ? null : FrameTimingReport.From(frameTiming, hookFrameMs, hookWorkMs, hookPresentMs),
             monitor.Summarise(),
             hardware,
             baseline,
@@ -110,6 +119,7 @@ public sealed class AgentSession : IDisposable
     {
         server?.Dispose();
         owner?.Dispose();
+        steamGames?.Dispose();
         frameTiming?.Dispose();
         monitor.Dispose();
         link.Dispose();
@@ -126,13 +136,16 @@ public sealed class AgentSession : IDisposable
                     finished = Optimise(optimise.Goal);
                     PublishReport(finished);
                     break;
+                case OptimiseCommand when SteamGame is { } unknown:
+                    server.Send(new StatusMessage(AgentState.Watching, unknown.Game.Name + " cannot be optimised yet", NotSupportedYet));
+                    break;
                 case OptimiseCommand:
                     server.Send(new StatusMessage(AgentState.NoGame, "No game is running", "Start a game first; GAPO measures the game while it runs."));
                     break;
                 case RevertAllCommand:
                     var reverted = FileChangeJournal.RevertAll(options.JournalPath);
                     server.Send(new StatusMessage(
-                        link.IsConnected ? AgentState.Watching : AgentState.NoGame,
+                        link.IsConnected || SteamGame is not null ? AgentState.Watching : AgentState.NoGame,
                         reverted ? "Every change was reverted" : "Nothing to revert",
                         reverted ? "The game is back to its original settings." : "GAPO has no recorded changes for this game."));
                     break;
@@ -163,15 +176,27 @@ public sealed class AgentSession : IDisposable
     {
         if (server is null || !server.HasClient)
         {
+            announcedGame = null;
             return;
         }
 
-        if (link.IsConnected != wasConnected && optimisationSession is null)
+        var steam = SteamGame;
+        var gameName = link.IsConnected ? SandboxKnowledge.GameName : steam?.Game.Name ?? string.Empty;
+        var gameKey = link.IsConnected ? "fixture" : steam is null ? string.Empty : "steam:" + steam.Game.AppId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+        if (gameKey != announcedGame && optimisationSession is null)
         {
-            wasConnected = link.IsConnected;
-            server.Send(wasConnected
-                ? new StatusMessage(AgentState.Watching, "Watching " + SandboxKnowledge.GameName, "GAPO is measuring quietly. Choose a goal and optimise when you are ready.")
-                : new StatusMessage(AgentState.NoGame, "No game is running", "Start a game and GAPO will find out what limits it on this PC."));
+            announcedGame = gameKey;
+            server.Send(gameKey.Length == 0
+                ? new StatusMessage(AgentState.NoGame, "No game is running", "Start a game and GAPO will find out what limits it on this PC.")
+                : link.IsConnected
+                    ? new StatusMessage(AgentState.Watching, "Watching " + gameName, "GAPO is measuring quietly. Choose a goal and optimise when you are ready.")
+                    : new StatusMessage(AgentState.Watching, "Watching " + gameName, frameTiming is { Availability: FrameTimingAvailability.Available }
+                        ? NotSupportedYet
+                        : NotSupportedYet + " Frame times are not available either: reading them needs administrator rights or membership of the Performance Log Users group."));
+            if (latestDiagnosis is { } diagnosis && diagnosis.GameName == gameName && !link.IsConnected)
+            {
+                server.Send(diagnosis);
+            }
         }
 
         if (insideWindow)
@@ -183,9 +208,10 @@ public sealed class AgentSession : IDisposable
         var latest = monitor.Latest;
         var ownBudget = OverheadBudget.For(optimisationSession is null ? OptimiserState.DashboardOpen : OptimiserState.Optimising);
         var judgedCpu = clock.Elapsed >= BudgetJudgementSpan ? budgetMeter.RollingCpuPercent : 0;
+        var gameRunning = gameKey.Length > 0;
         server.Send(new LiveSampleMessage(
-            link.IsConnected,
-            link.IsConnected ? SandboxKnowledge.GameName : string.Empty,
+            gameRunning,
+            gameName,
             frames.AverageFps,
             frames.MedianFrameMs,
             frames.MedianBusyMs,
@@ -195,7 +221,8 @@ public sealed class AgentSession : IDisposable
             meter.RollingCpuPercent,
             meter.PrivateMegabytes,
             judgedCpu > ownBudget.MaximumCpuPercent || meter.PrivateMegabytes > ownBudget.MaximumPrivateMegabytes,
-            link.IsConnected ? liveFrames.ChartPoints() : []));
+            gameRunning ? liveFrames.ChartPoints() : [],
+            CanOptimise: link.IsConnected));
     }
 
     private OptimisationReport Optimise(Goal goal)
@@ -226,7 +253,7 @@ public sealed class AgentSession : IDisposable
             wasInsideWindow = insideWindow;
         }
 
-        if (!link.IsConnected)
+        if (!link.IsConnected && SteamGame is null)
         {
             liveFrames.Clear();
         }
@@ -239,8 +266,10 @@ public sealed class AgentSession : IDisposable
             var own = probe.Read();
             meter.Record(clock.Elapsed, own, insideWindow);
             budgetMeter.Record(clock.Elapsed, own, insideWindow);
-            monitor.Reconcile(link.GameProcessId);
+            WatchForSteamGames();
+            monitor.Reconcile(link.IsConnected ? link.GameProcessId : SteamGame?.ProcessId ?? 0);
             monitor.Sample(clock.Elapsed, own, allowProcessSnapshot: !insideWindow);
+            AdvanceObservedDiagnosis();
             PublishLiveSample(insideWindow);
         }
 
@@ -277,21 +306,97 @@ public sealed class AgentSession : IDisposable
         });
     }
 
+    private RunningGame? SteamGame => link.IsConnected ? null : steamGames?.Current;
+
+    private const string NotSupportedYet = "GAPO measures this game while it runs, but it does not know this game's settings yet, so it cannot change anything. Nothing was changed.";
+
+    private void WatchForSteamGames()
+    {
+        if (steamGames is null || optimisationSession is not null)
+        {
+            return;
+        }
+
+        if (link.IsConnected)
+        {
+            steamGames.Forget();
+            return;
+        }
+
+        if (steamGames.Poll(clock.Elapsed))
+        {
+            liveFrames.Clear();
+            latestDiagnosis = null;
+            observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed);
+            ReconcileFrameTiming();
+        }
+    }
+
+    private void AdvanceObservedDiagnosis()
+    {
+        if (observedDiagnosis is not { IsFinished: false } observing || SteamGame is not { } game || !observing.Advance(clock.Elapsed, monitor, hardware))
+        {
+            return;
+        }
+
+        if (observing.Result is not { } result)
+        {
+            Console.WriteLine($"No diagnosis for {game.Game.Name}: {observing.FailureReason}");
+            return;
+        }
+
+        latestDiagnosis = new DiagnosisMessage(
+            game.Game.Name,
+            result.Primary.ToString(),
+            result.Title,
+            result.Summary,
+            result.SecondaryProblems,
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"Observed for {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s while you played, from frame times and processor use, without changing anything. GAPO could not repeat the same scene, so this describes those {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s."));
+        Console.WriteLine($"Diagnosis for {game.Game.Name}: {result.Title}. {result.Summary}");
+        server?.Send(latestDiagnosis);
+    }
+
     private void ReconcileFrameTiming()
     {
+        var target = link.IsConnected ? link.GameProcessId : SteamGame?.ProcessId ?? 0;
+        if (frameTiming is null && target != 0 && !link.IsConnected && server is not null)
+        {
+            frameTiming = new FrameTimingProbe(keepsSummaries: false) { FrameObserver = ObservePresentedFrame };
+            frameTimingIsOnlyForLiveData = true;
+        }
+
         if (frameTiming is null)
         {
             return;
         }
 
-        if (link.IsConnected && !frameTiming.IsTracking)
+        if (target != 0 && frameTiming.TrackedProcessId != target)
         {
-            link.SkipBacklog();
-            frameTiming.Track(link.GameProcessId);
+            if (link.IsConnected)
+            {
+                link.SkipBacklog();
+            }
+
+            frameTiming.Track(target);
         }
-        else if (!link.IsConnected && frameTiming.IsTracking)
+        else if (target == 0 && frameTiming.TrackedProcessId != 0)
         {
             frameTiming.StopTracking();
+            if (frameTimingIsOnlyForLiveData)
+            {
+                frameTiming.Dispose();
+                frameTiming = null;
+                frameTimingIsOnlyForLiveData = false;
+            }
+        }
+    }
+
+    private void ObservePresentedFrame(PresentedFrame frame)
+    {
+        if (!link.IsConnected)
+        {
+            liveFrames.Add(new MeasuredFrame(frame.PresentStartMs, frame.FrameMs, frame.CpuBusyMs, 0, FrameMarks.None));
+            observedDiagnosis?.OnFrame(frame);
         }
     }
 

@@ -71,6 +71,18 @@ public sealed class AgentMonitor : IDisposable
         }
     }
 
+    public void ResetSummaries()
+    {
+        gameProcessorsUsed.Clear();
+        averageLoad.Clear();
+        busiestProcessor.Clear();
+        background.Clear();
+        busiestThread.Clear();
+        peakWriteMegabytesPerSecond = 0;
+        loadSumPerProcessor = [];
+        lowestAvailableMemoryBytes = long.MaxValue;
+    }
+
     public MonitorReport Summarise() =>
         new(
             gameProcessorsUsed.Count,

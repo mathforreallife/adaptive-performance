@@ -20,6 +20,8 @@ public sealed partial class HomeView : UserControl
 
     private IReadOnlyList<double> chartValues = [];
     private bool optimising;
+    private bool canOptimise = true;
+    private string shownGame = string.Empty;
 
     public HomeView()
     {
@@ -50,7 +52,14 @@ public sealed partial class HomeView : UserControl
     public void ShowSample(LiveSampleMessage sample)
     {
         LivePanel.Visibility = sample.GameConnected ? Visibility.Visible : Visibility.Collapsed;
+        canOptimise = sample.CanOptimise;
         UpdateControls(sample.GameConnected);
+        if (sample.GameName != shownGame)
+        {
+            shownGame = sample.GameName;
+            DiagnosisPanel.Visibility = Visibility.Collapsed;
+        }
+
         if (!sample.GameConnected)
         {
             GameTitle.Text = "No game is running";
@@ -71,10 +80,22 @@ public sealed partial class HomeView : UserControl
         DrawChart();
     }
 
+    public void ShowDiagnosis(DiagnosisMessage diagnosis)
+    {
+        DiagnosisTitle.Text = diagnosis.Title;
+        DiagnosisSummary.Text = diagnosis.Summary;
+        DiagnosisAlso.Text = string.Join(Environment.NewLine, diagnosis.AlsoNoticed.Select(line => "Also: " + line));
+        DiagnosisAlso.Visibility = diagnosis.AlsoNoticed.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        DiagnosisBasis.Text = diagnosis.Basis;
+        shownGame = diagnosis.GameName;
+        DiagnosisPanel.Visibility = Visibility.Visible;
+    }
+
     private void UpdateControls(bool gameConnected)
     {
         ControlsPanel.Visibility = gameConnected ? Visibility.Visible : Visibility.Collapsed;
-        OptimiseButton.Visibility = optimising ? Visibility.Collapsed : Visibility.Visible;
+        OptimiseButton.Visibility = optimising || !canOptimise ? Visibility.Collapsed : Visibility.Visible;
+        GoalPanel.Visibility = canOptimise || optimising ? Visibility.Visible : Visibility.Collapsed;
         StopButton.Visibility = optimising ? Visibility.Visible : Visibility.Collapsed;
         RevertButton.IsEnabled = !optimising;
         GoalSelector.IsEnabled = !optimising;
