@@ -27,7 +27,7 @@ public sealed record StageTimes(
     public double PassMs(string name) => RenderPasses.FirstOrDefault(pass => pass.Name == name)?.Milliseconds ?? 0;
 }
 
-public sealed record PresentTiming(double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs);
+public sealed record PresentTiming(double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs, double? GpuBusyMs = null);
 
 public sealed record MonitorSummary
 {

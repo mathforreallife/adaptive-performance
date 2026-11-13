@@ -321,7 +321,7 @@ public sealed class AgentSession : IDisposable
             Processor = new ProcessorLimits(hardware.Cpu.LogicalProcessors, hardware.Cpu.MaximumMegahertz, hardware.Cpu.LimitMegahertz),
             Stages = measured.Stages,
             Presents = frameTiming is { FrameMs.Count: > 0 }
-                ? new PresentTiming(frameTiming.FrameMs.Median(), frameTiming.CpuBusyMs.Median(), frameTiming.InPresentMs.Median())
+                ? new PresentTiming(frameTiming.FrameMs.Median(), frameTiming.CpuBusyMs.Median(), frameTiming.InPresentMs.Median(), frameTiming.MeasuresGpuBusy ? frameTiming.GpuBusyMsPerFrame : null)
                 : null,
             HitchObservation = baseline.ObservedSinceWarm(),
         });
@@ -348,7 +348,7 @@ public sealed class AgentSession : IDisposable
         {
             liveFrames.Clear();
             latestDiagnosis = null;
-            observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed);
+            observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed, GpuBusyTicksSoFar);
             recognisedGame = steamGames.Current is { } found ? GameRecognition.Recognise(found.Game, options.LocalAppDataFolder, options.DocumentsFolder) : null;
             ReconcileFrameTiming();
         }
@@ -431,8 +431,11 @@ public sealed class AgentSession : IDisposable
             hardware,
             (state, title, detail) => ReportProgressAs(state, title, detail),
             clock.Elapsed,
-            game.ProcessId);
+            game.ProcessId,
+            GpuBusyTicksSoFar);
     }
+
+    private long GpuBusyTicksSoFar() => frameTiming?.GpuBusyTicksOfTrackedProcess ?? 0;
 
     private void AdvanceRestartOptimisation()
     {

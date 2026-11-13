@@ -82,6 +82,7 @@ internal static unsafe partial class EtwNative
         [FieldOffset(16)] public long TimeStamp;
         [FieldOffset(24)] public Guid ProviderId;
         [FieldOffset(40)] public ushort EventId;
+        [FieldOffset(42)] public byte Version;
         [FieldOffset(86)] public ushort UserDataLength;
         [FieldOffset(96)] public byte* UserData;
         [FieldOffset(104)] public void* UserContext;

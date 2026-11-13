@@ -1,25 +1,11 @@
 using System.Diagnostics;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Gapo.Core.FrameTiming;
 
 namespace Gapo.Windows.FrameTiming;
 
-public enum FrameTimingAvailability
-{
-    Available,
-    AccessDenied,
-    Failed,
-}
-
-public sealed unsafe class EtwPresentSession : IDisposable
+public sealed unsafe class EtwPresentSession : EtwRealTimeSession
 {
     public const string DefaultSessionName = "GAPO-FrameTiming";
-
-    private const int SessionNameCapacityBytes = 512;
-    private const uint SessionBufferKilobytes = 64;
-    private const uint FlushTimerSeconds = 1;
-    private const int ConsumerStopTimeoutMs = 3000;
 
     private const ushort DxgiPresentStart = 42;
     private const ushort DxgiPresentStop = 43;
@@ -35,44 +21,22 @@ public sealed unsafe class EtwPresentSession : IDisposable
     private static readonly Guid DxgiProvider = new("CA11C036-0102-4A2D-A6AD-F03CFED5D3C9");
     private static readonly Guid Direct3D9Provider = new("783ACA0A-790E-4D7F-8451-AA850511C6B9");
 
-    private readonly string sessionName;
     private readonly IPresentEventSink sink;
-    private EtwNative.TraceProperties* properties;
-    private ulong sessionHandle;
-    private ulong traceHandle = EtwNative.InvalidProcessTraceHandle;
-    private GCHandle selfHandle;
-    private Thread? consumer;
 
     private EtwPresentSession(string sessionName, IPresentEventSink sink)
+        : base(sessionName)
     {
-        this.sessionName = sessionName;
         this.sink = sink;
     }
 
     public static long TimestampTicksPerSecond => Stopwatch.Frequency;
 
-    public long EventsSeen { get; private set; }
-
-    public uint LastErrorCode { get; private set; }
-
     public int FocusedProcessId { get; private set; }
-
-    public bool FocusOn(int processId)
-    {
-        if (sessionHandle == 0)
-        {
-            return false;
-        }
-
-        var focused = Enable(DxgiProvider, DxgiPresentEvents, processId) & Enable(Direct3D9Provider, Direct3D9PresentEvents, processId);
-        FocusedProcessId = focused ? processId : 0;
-        return focused;
-    }
 
     public static EtwPresentSession? TryStart(IPresentEventSink sink, out FrameTimingAvailability availability, string sessionName = DefaultSessionName)
     {
         var session = new EtwPresentSession(sessionName, sink);
-        availability = session.Start();
+        availability = session.StartSession();
         if (availability == FrameTimingAvailability.Available)
         {
             return session;
@@ -82,175 +46,25 @@ public sealed unsafe class EtwPresentSession : IDisposable
         return null;
     }
 
-    public uint ReadEventsLost()
+    public bool FocusOn(int processId)
     {
-        if (sessionHandle == 0)
+        if (!IsRunning)
         {
-            return 0;
-        }
-
-        var query = AllocateProperties();
-        try
-        {
-            const uint ControlQuery = 0;
-            return EtwNative.ControlTrace(sessionHandle, null, query, ControlQuery) == EtwNative.Success ? query->EventsLost : 0;
-        }
-        finally
-        {
-            NativeMemory.Free(query);
-        }
-    }
-
-    public void Dispose()
-    {
-        if (sessionHandle != 0)
-        {
-            EtwNative.ControlTrace(sessionHandle, null, properties, EtwNative.ControlStop);
-            sessionHandle = 0;
-        }
-
-        if (traceHandle != EtwNative.InvalidProcessTraceHandle)
-        {
-            EtwNative.CloseTrace(traceHandle);
-            traceHandle = EtwNative.InvalidProcessTraceHandle;
-        }
-
-        consumer?.Join(ConsumerStopTimeoutMs);
-        consumer = null;
-        if (selfHandle.IsAllocated)
-        {
-            selfHandle.Free();
-        }
-
-        if (properties != null)
-        {
-            NativeMemory.Free(properties);
-            properties = null;
-        }
-    }
-
-    private FrameTimingAvailability Start()
-    {
-        properties = AllocateProperties();
-        var status = EtwNative.StartTrace(out sessionHandle, sessionName, properties);
-        if (status == EtwNative.AlreadyExists)
-        {
-            var stale = AllocateProperties();
-            EtwNative.ControlTrace(0, sessionName, stale, EtwNative.ControlStop);
-            NativeMemory.Free(stale);
-            status = EtwNative.StartTrace(out sessionHandle, sessionName, properties);
-        }
-
-        if (status != EtwNative.Success)
-        {
-            sessionHandle = 0;
-            LastErrorCode = status;
-            return status == EtwNative.AccessDenied ? FrameTimingAvailability.AccessDenied : FrameTimingAvailability.Failed;
-        }
-
-        if (!Enable(DxgiProvider, DxgiPresentEvents, 0) || !Enable(Direct3D9Provider, Direct3D9PresentEvents, 0) || !OpenForConsumption())
-        {
-            return FrameTimingAvailability.Failed;
-        }
-
-        consumer = new Thread(ConsumeUntilStopped) { IsBackground = true, Name = "GAPO frame timing" };
-        consumer.Start();
-        return FrameTimingAvailability.Available;
-    }
-
-    private static EtwNative.TraceProperties* AllocateProperties()
-    {
-        var totalBytes = (nuint)(EtwNative.TraceProperties.SizeInBytes + (2 * SessionNameCapacityBytes));
-        var allocated = (EtwNative.TraceProperties*)NativeMemory.AllocZeroed(totalBytes);
-        allocated->BufferSize = (uint)totalBytes;
-        allocated->Flags = EtwNative.TracedGuidFlag;
-        allocated->ClientContext = EtwNative.QueryPerformanceCounterClock;
-        allocated->LogFileMode = EtwNative.RealTimeLogFileMode;
-        allocated->SessionBufferKilobytes = SessionBufferKilobytes;
-        allocated->FlushTimerSeconds = FlushTimerSeconds;
-        allocated->LoggerNameOffset = EtwNative.TraceProperties.SizeInBytes;
-        allocated->LogFileNameOffset = EtwNative.TraceProperties.SizeInBytes + SessionNameCapacityBytes;
-        return allocated;
-    }
-
-    private bool Enable(in Guid provider, ReadOnlySpan<ushort> wantedEventIds, int processId)
-    {
-        const int FilterHeaderBytes = 4;
-        const byte IncludeListedEvents = 1;
-        var filterBytes = FilterHeaderBytes + (wantedEventIds.Length * sizeof(ushort));
-        var filter = stackalloc byte[filterBytes];
-        filter[0] = IncludeListedEvents;
-        filter[1] = 0;
-        *(ushort*)(filter + 2) = (ushort)wantedEventIds.Length;
-        wantedEventIds.CopyTo(new Span<ushort>(filter + FilterHeaderBytes, wantedEventIds.Length));
-
-        var processIds = stackalloc uint[1];
-        processIds[0] = (uint)processId;
-        var descriptors = stackalloc EtwNative.EventFilterDescriptor[2];
-        descriptors[0] = new EtwNative.EventFilterDescriptor { Pointer = (ulong)filter, Size = (uint)filterBytes, Type = EtwNative.EventIdFilterType };
-        descriptors[1] = new EtwNative.EventFilterDescriptor { Pointer = (ulong)processIds, Size = sizeof(uint), Type = EtwNative.ProcessIdFilterType };
-        var parameters = new EtwNative.EnableParameters { Version = EtwNative.EnableParametersVersion, FilterDescriptors = descriptors, FilterDescriptorCount = processId > 0 ? 2u : 1u };
-        var status = EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, &parameters);
-        LastErrorCode = status;
-        if (status == EtwNative.Success)
-        {
-            return true;
-        }
-
-        if (processId > 0)
-        {
-            parameters.FilterDescriptorCount = 1;
-            if (EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, &parameters) != EtwNative.Success)
-            {
-                EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, null);
-            }
-
             return false;
         }
 
-        status = EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, null);
-        LastErrorCode = status;
-        return status == EtwNative.Success;
+        var dxgi = Enable(DxgiProvider, EtwNative.EnableProvider, 0, DxgiPresentEvents, processId) == EtwNative.Success;
+        var direct3D9 = Enable(Direct3D9Provider, EtwNative.EnableProvider, 0, Direct3D9PresentEvents, processId) == EtwNative.Success;
+        var focused = dxgi && direct3D9;
+        FocusedProcessId = focused ? processId : 0;
+        return focused;
     }
 
-    private bool OpenForConsumption()
-    {
-        selfHandle = GCHandle.Alloc(this);
-        var logFile = default(EtwNative.TraceLogFile);
-        fixed (char* name = sessionName)
-        {
-            logFile.LoggerName = name;
-            logFile.ProcessTraceMode = EtwNative.ProcessRealTime | EtwNative.ProcessEventRecord | EtwNative.ProcessRawTimestamp;
-            logFile.EventRecordCallback = &OnEventRecord;
-            logFile.Context = (void*)GCHandle.ToIntPtr(selfHandle);
-            traceHandle = EtwNative.OpenTrace(&logFile);
-        }
+    protected override bool EnableProviders() =>
+        Enable(DxgiProvider, EtwNative.EnableProvider, 0, DxgiPresentEvents, 0) == EtwNative.Success
+        && Enable(Direct3D9Provider, EtwNative.EnableProvider, 0, Direct3D9PresentEvents, 0) == EtwNative.Success;
 
-        if (traceHandle == EtwNative.InvalidProcessTraceHandle)
-        {
-            LastErrorCode = (uint)Marshal.GetLastPInvokeError();
-            return false;
-        }
-
-        return true;
-    }
-
-    private void ConsumeUntilStopped()
-    {
-        var handle = traceHandle;
-        EtwNative.ProcessTrace(&handle, 1, null, null);
-    }
-
-    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
-    private static void OnEventRecord(EtwNative.EventRecord* record)
-    {
-        if (GCHandle.FromIntPtr((nint)record->UserContext).Target is EtwPresentSession session)
-        {
-            session.Dispatch(record);
-        }
-    }
-
-    private void Dispatch(EtwNative.EventRecord* record)
+    private protected override void Dispatch(EtwNative.EventRecord* record)
     {
         EventsSeen++;
         var isDxgi = record->ProviderId == DxgiProvider;
