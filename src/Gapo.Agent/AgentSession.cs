@@ -18,6 +18,7 @@ using Gapo.Core.Protocol;
 using Gapo.Core.Statistics;
 using Gapo.Sandbox.Contract;
 using Gapo.Windows.FrameTiming;
+using Gapo.Windows.Games;
 using Gapo.Windows.Hardware;
 using Gapo.Windows.Processes;
 
@@ -49,6 +50,7 @@ public sealed class AgentSession : IDisposable
     private ObservedGameDiagnosis? observedDiagnosis;
     private DiagnosisMessage? latestDiagnosis;
     private RecognisedGame? recognisedGame;
+    private RestartOptimiser? restartOptimiser;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -77,7 +79,7 @@ public sealed class AgentSession : IDisposable
 
     public AgentReport Run()
     {
-        restoredInterruptedTrial = FileChangeJournal.RestoreInterruptedTrial(options.JournalPath);
+        restoredInterruptedTrial = FileChangeJournal.RestoreInterruptedTrial(options.JournalPath) | IniChangeJournal.RestoreInterruptedTrial(options.IniJournalPath);
         hardware = HardwareScanner.Scan();
         GC.Collect();
         background = BackgroundMode.Enter();
@@ -137,6 +139,17 @@ public sealed class AgentSession : IDisposable
                     finished = Optimise(optimise.Goal);
                     PublishReport(finished);
                     break;
+                case OptimiseCommand optimise when restartOptimiser is null && SteamGame is { } supported && recognisedGame is { CanBeOptimised: true, SettingsPath: { } settingsPath }:
+                    StartRestartOptimisation(optimise.Goal, supported, settingsPath);
+                    break;
+                case OptimiseCommand when restartOptimiser is not null:
+                    break;
+                case StopCommand when restartOptimiser is not null:
+                    var stopped = restartOptimiser.Stop(clock.Elapsed);
+                    restartOptimiser = null;
+                    PublishReport(stopped);
+                    finished = stopped;
+                    break;
                 case OptimiseCommand when SteamGame is { } unknown:
                     server.Send(new StatusMessage(AgentState.Watching, unknown.Game.Name + " cannot be optimised yet", GameRecognition.Explain(recognisedGame, NotSupportedYet)));
                     break;
@@ -144,7 +157,13 @@ public sealed class AgentSession : IDisposable
                     server.Send(new StatusMessage(AgentState.NoGame, "No game is running", "Start a game first; GAPO measures the game while it runs."));
                     break;
                 case RevertAllCommand:
-                    var reverted = FileChangeJournal.RevertAll(options.JournalPath);
+                    if (restartOptimiser is not null)
+                    {
+                        restartOptimiser.Stop(clock.Elapsed);
+                        restartOptimiser = null;
+                    }
+
+                    var reverted = FileChangeJournal.RevertAll(options.JournalPath) | IniChangeJournal.RevertAll(options.IniJournalPath);
                     server.Send(new StatusMessage(
                         link.IsConnected || SteamGame is not null ? AgentState.Watching : AgentState.NoGame,
                         reverted ? "Every change was reverted" : "Nothing to revert",
@@ -184,7 +203,7 @@ public sealed class AgentSession : IDisposable
         var steam = SteamGame;
         var gameName = link.IsConnected ? SandboxKnowledge.GameName : steam?.Game.Name ?? string.Empty;
         var gameKey = link.IsConnected ? "fixture" : steam is null ? string.Empty : "steam:" + steam.Game.AppId.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        if (gameKey != announcedGame && optimisationSession is null)
+        if (gameKey != announcedGame && optimisationSession is null && restartOptimiser is null)
         {
             announcedGame = gameKey;
             server.Send(gameKey.Length == 0
@@ -223,7 +242,7 @@ public sealed class AgentSession : IDisposable
             meter.PrivateMegabytes,
             judgedCpu > ownBudget.MaximumCpuPercent || meter.PrivateMegabytes > ownBudget.MaximumPrivateMegabytes,
             gameRunning ? liveFrames.ChartPoints() : [],
-            CanOptimise: link.IsConnected));
+            CanOptimise: link.IsConnected || (steam is not null && recognisedGame is { CanBeOptimised: true })));
     }
 
     private OptimisationReport Optimise(Goal goal)
@@ -271,6 +290,7 @@ public sealed class AgentSession : IDisposable
             monitor.Reconcile(link.IsConnected ? link.GameProcessId : SteamGame?.ProcessId ?? 0);
             monitor.Sample(clock.Elapsed, own, allowProcessSnapshot: !insideWindow);
             AdvanceObservedDiagnosis();
+            AdvanceRestartOptimisation();
             PublishLiveSample(insideWindow);
         }
 
@@ -393,8 +413,51 @@ public sealed class AgentSession : IDisposable
         }
     }
 
+    private void StartRestartOptimisation(Goal goal, RunningGame game, string settingsPath)
+    {
+        if (IniSettingsFile.Read(settingsPath) is not var (document, _))
+        {
+            server?.Send(new StatusMessage(AgentState.Failed, "The settings file could not be read", settingsPath));
+            return;
+        }
+
+        restartOptimiser = new RestartOptimiser(
+            game.Game.Name,
+            settingsPath,
+            Gapo.Core.Games.Unreal.UnrealSettings.Read(document),
+            new IniChangeJournal(options.IniJournalPath),
+            goal,
+            monitor,
+            hardware,
+            (state, title, detail) => ReportProgressAs(state, title, detail),
+            clock.Elapsed,
+            game.ProcessId);
+    }
+
+    private void AdvanceRestartOptimisation()
+    {
+        if (restartOptimiser is null)
+        {
+            return;
+        }
+
+        if (restartOptimiser.Advance(clock.Elapsed, SteamGame?.ProcessId ?? 0) is { } finished)
+        {
+            restartOptimiser = null;
+            announcedGame = null;
+            PublishReport(finished);
+        }
+    }
+
+    private void ReportProgressAs(AgentState state, string title, string detail)
+    {
+        Console.WriteLine($"{title} | {detail}");
+        server?.Send(new StatusMessage(state, title, detail));
+    }
+
     private void ObservePresentedFrame(PresentedFrame frame)
     {
+        restartOptimiser?.OnFrame(frame);
         if (!link.IsConnected)
         {
             liveFrames.Add(new MeasuredFrame(frame.PresentStartMs, frame.FrameMs, frame.CpuBusyMs, 0, FrameMarks.None));

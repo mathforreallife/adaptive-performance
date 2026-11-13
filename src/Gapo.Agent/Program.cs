@@ -23,7 +23,7 @@ catch (ArgumentException exception)
 
 if (options.RevertAll)
 {
-    var reverted = FileChangeJournal.RevertAll(options.JournalPath);
+    var reverted = FileChangeJournal.RevertAll(options.JournalPath) | IniChangeJournal.RevertAll(options.IniJournalPath);
     Console.WriteLine(reverted ? "GAPO put every setting back to its original value." : "GAPO has no recorded changes to revert.");
     return Success;
 }

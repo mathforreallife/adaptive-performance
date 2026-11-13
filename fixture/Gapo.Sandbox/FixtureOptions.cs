@@ -47,6 +47,7 @@ namespace Gapo.Sandbox
         public string ScreenshotPath;
         public bool ResetSettings;
         public bool Recalibrate;
+        public string UnrealSettingsPath;
 
         public static FixtureOptions Parse(string[] args)
         {
@@ -78,6 +79,7 @@ namespace Gapo.Sandbox
                 else if (ValueOf(argument, "--screenshot", out value)) options.ScreenshotPath = value;
                 else if (argument == "--reset") options.ResetSettings = true;
                 else if (argument == "--recalibrate") options.Recalibrate = true;
+                else if (ValueOf(argument, "--unreal-settings", out value)) options.UnrealSettingsPath = value;
                 else throw new ArgumentException("Unknown argument: " + argument);
             }
 

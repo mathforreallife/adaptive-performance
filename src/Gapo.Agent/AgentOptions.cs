@@ -30,6 +30,8 @@ public sealed record AgentOptions(
 
     public string DocumentsFolder => Documents ?? Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments);
 
+    public string IniJournalPath => Path.Combine(Path.GetDirectoryName(Path.GetFullPath(JournalPath)) ?? string.Empty, Path.GetFileNameWithoutExtension(JournalPath) + "-ini.json");
+
     private const string ListGamesFlag = "--list-games";
     private const string SteamRootOption = "--steam-root";
     private const string MapNameOption = "--sandbox-map";

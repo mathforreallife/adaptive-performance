@@ -25,6 +25,7 @@ const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
 const double LargestShareOfOneProcessorTheInterfaceMayUse = 0.25;
 const double PercentScale = 100.0;
 const double LargestLiveFpsDisagreementPercent = 10.0;
+const double SmallestExpectedRestartGainPercent = 20.0;
 const string SoftwareAdapterName = "Basic Render";
 
 var outputDirectory = Path.GetFullPath(ValueOf("--output") ?? Path.Combine(Path.GetTempPath(), "gapo-end-to-end"));
@@ -40,6 +41,11 @@ try
     {
         rig.RunFixtureAlone("calibration");
         CheckLiveInterface();
+    }
+    else if (ValueOf("--only") == "restart")
+    {
+        rig.RunFixtureAlone("calibration");
+        CheckRestartOptimisation();
     }
     else if (ValueOf("--only") == "unknown-game")
     {
@@ -177,6 +183,7 @@ void CheckEverything()
 
     CheckLiveInterface();
     CheckUnknownSteamGame();
+    CheckRestartOptimisation();
     var (_, simulationAgent) = rig.RunFixtureWithBaselineMeasurement("simulation-bound", scenario: "simulation-bound");
     ExpectDiagnosis(simulationAgent.Diagnosis, "CpuMainThread", "the simulation-bound fixture");
     Expect(simulationAgent.Diagnosis is null || simulationAgent.Diagnosis.EngineLimitation.Length > 0, "The simulation-bound diagnosis did not explain the engine limitation.");
@@ -195,12 +202,36 @@ void CheckUnknownSteamGame()
     Expect(disagreement <= LargestLiveFpsDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing showed {served.MedianLiveFps:0.0} FPS for the unknown game; the game itself measured {check.Fixture.AverageFps:0.0} FPS."));
     Expect(!served.EverOfferedToOptimise, "The interface was offered Optimise for a game GAPO has no settings knowledge of.");
     Expect(served.RefusedToOptimise, "The agent did not refuse to optimise a game it does not know.");
-    Expect(served.WatchingDetail.Contains("Unreal Engine game and read its graphics settings", StringComparison.Ordinal) && served.WatchingDetail.Contains("Shadows Epic", StringComparison.Ordinal) && served.WatchingDetail.EndsWith("Nothing was changed.", StringComparison.Ordinal), "The interface was not told that the game is an Unreal Engine game with readable settings and why nothing was changed: " + served.WatchingDetail);
+    Expect(served.WatchingDetail.Contains("Unreal Engine game protected by Easy Anti-Cheat", StringComparison.Ordinal) && served.WatchingDetail.EndsWith("Nothing was changed.", StringComparison.Ordinal), "The interface was not told that the game is protected by anti-cheat and that nothing was changed: " + served.WatchingDetail);
+    Expect(check.SettingsUntouched, "The settings file of a game protected by anti-cheat was changed.");
     Expect(served.SawTheGameLeave, "The agent did not notice that the unknown game exited.");
     Expect(served.Diagnosis is { Bottleneck: "CpuOneThreadLimit" }, $"The unknown single-threaded fixture should be diagnosed as limited by one CPU thread; the agent said: {served.Diagnosis?.Title ?? "nothing"}. {served.Diagnosis?.Summary}");
     Expect(!check.Agent.ConnectedToGame, "The agent connected to the fixture's engine hook although the fixture ran without it.");
     Expect(check.Agent.RunAverageCpuPercent <= budget.MaximumCpuPercent && check.Agent.PeakPrivateMegabytes <= budget.MaximumPrivateMegabytes, string.Create(CultureInfo.InvariantCulture, $"The agent used {check.Agent.RunAverageCpuPercent:0.000}% CPU and {check.Agent.PeakPrivateMegabytes:0.0} MB while watching an unknown game; the budget with the interface open is {budget.MaximumCpuPercent:0.0}% / {budget.MaximumPrivateMegabytes:0} MB."));
     Print($"unknown     '{check.GameName}' found through the Steam library and the process list, measured through event tracing only: {served.MedianLiveFps:0.0} FPS live vs {check.Fixture.AverageFps:0.0} FPS from the game ({disagreement:0.0}% apart) over {served.LiveSamplesWithFrames} samples; Optimise {(served.RefusedToOptimise ? "refused with a reason" : "NOT refused")}; exit {(served.SawTheGameLeave ? "noticed" : "missed")}; diagnosis: {served.Diagnosis?.Title ?? "none"}. {served.Diagnosis?.Summary}; agent {check.Agent.RunAverageCpuPercent:0.000}% CPU, {check.Agent.PeakPrivateMegabytes:0.0} MB");
+}
+
+void CheckRestartOptimisation()
+{
+    var check = rig.RunRestartOptimisation("restart");
+    var report = check.Report;
+    Expect(check.Served.OfferedToOptimise, "The interface was not offered Optimise for an Unreal Engine game with a readable settings file.");
+    Expect(report.Completed, "The restart-based optimisation did not complete: " + report.Error);
+    Expect(check.Served.RestartsAsked >= 2 && check.Restarts == check.Served.RestartsAsked, $"The agent asked for {check.Served.RestartsAsked} restarts and the game was restarted {check.Restarts} times.");
+    Expect(report.Kept >= 1, "No change was kept.");
+    Expect(report.FpsGainPercent >= SmallestExpectedRestartGainPercent, string.Create(CultureInfo.InvariantCulture, $"The restart-based optimisation gained only {report.FpsGainPercent:0}% average FPS."));
+    var originalLines = check.OriginalSettings.Split("\r\n");
+    var optimisedLines = check.OptimisedSettings.Split("\r\n");
+    var changedLines = originalLines.Zip(optimisedLines).Count(pair => pair.First != pair.Second);
+    Expect(originalLines.Length == optimisedLines.Length && changedLines == report.Kept, $"The settings file should differ from the original in exactly the {report.Kept} kept line(s); {changedLines} line(s) differ and the line count went from {originalLines.Length} to {optimisedLines.Length}.");
+    Expect(check.RevertedSettings == check.OriginalSettings, "Revert all did not restore the settings file byte for byte.");
+    Print($"restart     {report.FpsGainPercent:+0;-0;0}% average FPS ({report.BaselineFps:0.0} → {report.FinalFps:0.0}); frame work {report.BaselineWorkMs:0.0} → {report.FinalWorkMs:0.0} ms; kept {report.Kept}, rolled back {report.RolledBack}; {check.Restarts} game restarts in {report.DurationSeconds:0} s; noise floor ±{report.NoiseFloorPercent:0.0}%");
+    foreach (var experiment in report.Experiments)
+    {
+        Print($"            [{experiment.Decision}] {experiment.Title}: {experiment.GainPercent:+0;-0;0}%");
+    }
+
+    Print($"            settings file: {changedLines} line(s) changed; revert all restored it byte for byte: {check.RevertedSettings == check.OriginalSettings}");
 }
 
 void CheckLiveInterface()

@@ -4,7 +4,10 @@ using Gapo.Windows.Games;
 
 namespace Gapo.Agent.Games;
 
-public sealed record RecognisedGame(string Engine, string? AntiCheat, string? SettingsPath, IReadOnlyList<string> Settings);
+public sealed record RecognisedGame(string Engine, string? AntiCheat, string? SettingsPath, IReadOnlyList<string> Settings)
+{
+    public bool CanBeOptimised => AntiCheat is null && SettingsPath is not null;
+}
 
 public static class GameRecognition
 {
@@ -49,6 +52,6 @@ public static class GameRecognition
         }
 
         var named = string.Join(", ", recognised.Settings.Take(SettingsNamedInStatus));
-        return $"GAPO recognises this as an {recognised.Engine} game and read its graphics settings ({named}). The game applies them when it starts, so changing them needs a restart of the game, which GAPO does not do yet. {NothingChanged}";
+        return $"GAPO recognises this as an {recognised.Engine} game and read its graphics settings ({named}). The game applies them when it starts, so GAPO tests one change per restart and asks you to restart the game between tests. Choose a goal and optimise when you are ready.";
     }
 }

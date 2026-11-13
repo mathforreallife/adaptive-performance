@@ -282,6 +282,15 @@ namespace Gapo.Sandbox
 
         void LoadOrCreateSettings()
         {
+            if (Options.UnrealSettingsPath != null)
+            {
+                string text;
+                try { text = File.ReadAllText(Options.UnrealSettingsPath); } catch (IOException) { text = string.Empty; }
+                Settings = UnrealStyleSettings.FromIni(text);
+                LoadedOptimisedSettings = !Settings.IsUnoptimisedDefaults();
+                return;
+            }
+
             var s = SandboxSettings.Load(_settingsPath);
             if (s == null)
             {
@@ -350,7 +359,7 @@ namespace Gapo.Sandbox
             int flags = 0;
             float ioMs = 0;
 
-            if (frameStart >= _nextSettingsCheck)
+            if (frameStart >= _nextSettingsCheck && Options.UnrealSettingsPath == null)
             {
                 _nextSettingsCheck = frameStart + 200;
                 if (CheckSettingsFile()) flags |= (int)FrameFlags.SettingsReload;
