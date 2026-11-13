@@ -165,6 +165,8 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - README rewritten for players; screenshots in `docs/images/` from the interface rig phase (`ui-live`, light theme; the window now also captures `plan.png`).
 - Honest status: measures any Steam game, optimises only Unreal Engine games without anti-cheat, never run against a real commercial game. It is a beta, published as a GitHub pre-release.
 
+- **CI overhead gate is close to its limit.** Agent CPU inside measurement windows on GitHub runners: 0.137 %, 0.194 %, 0.205 %, 0.303 % for the same code (budget 0.30 %; the laptop measures about 0.13 %). The high value came from the shortest run (6 windows) on a slower runner (0.86 % average overall). A failed run was re-run, not loosened. Worth testing whether ReadyToRun or `TieredPGO=false` for the agent removes JIT work from the early windows.
+
 ### Launch checklist (what "finished" still needs)
 
 1. Beta test on PCs with Steam and real Unreal games (`docs/USER-GUIDE.md`, "Report a problem"); confirm the Performance Log Users path.
