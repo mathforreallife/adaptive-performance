@@ -57,6 +57,10 @@ internal static partial class ProcessNative
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool QueryProcessCycleTime(nint process, out ulong cycleTime);
 
+    [LibraryImport("kernel32.dll", EntryPoint = "QueryFullProcessImageNameW", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static unsafe partial bool QueryFullProcessImageName(nint process, uint flags, char* buffer, ref uint size);
+
     [LibraryImport("kernel32.dll", EntryPoint = "K32GetProcessMemoryInfo", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool GetProcessMemoryInfo(nint process, ref ProcessMemoryCountersEx counters, uint size);

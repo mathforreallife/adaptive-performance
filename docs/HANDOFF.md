@@ -133,6 +133,13 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - Thread-level CPU probe for the window: `artifacts/rig/threadprobe.ps1` (not in git). Never pipe its output through `Select-Object -First`; that skips its clean-up and leaves windows open.
 - Latest laptop rig run (e2e17): 25.1 -> 60.0 FPS (+139 %), agent 0.39 % CPU optimising / 0.14 % in windows / 16 MB; window live next to the game 0.26 % CPU (median slice) / 37 MB.
 
+## Step 5, real games (branch `step-5-steam-library`, on top of `step-7-live-link`)
+
+- `src/Gapo.Core/Games`: `KeyValues.cs` (Valve KeyValues parser, `TryParse`), `SteamLibrary.cs` (`SteamLibraryFiles.ReadLibraryFolders` / `ReadAppManifest`, `SteamLibraryIndex.Scan` over an `IGameFileSource`), `RunningGames.cs` (`RunningGameMatcher`).
+- `src/Gapo.Windows/Games`: `SteamLocator` (registry), `DiskGameFileSource`, `RunningGameFinder` (process snapshot + cached image paths).
+- Agent: `--list-games [--steam-root=<folder>]`. Sample tree builder: `artifacts/rig/make_steamtree.py <folder>`; stand-in running game test: `artifacts/rig/steam_running_test.ps1` (neither is in git).
+- Not done: using the running game in serve mode (live frame timing through event tracing for a game that has no adapter), Epic/GOG libraries, anti-cheat policy list, the first real-game adapter (settings file read/write with restart-required settings), a run against a real Steam installation.
+
 ## Step 7 state (branch `step-7-ui`, stacked on steps 5-6)
 
 - `src/Gapo.App` - WinUI 3 app: `Themes/Tokens.xaml` (design tokens for light, dark, high contrast), `MainWindow`, `Views/ResultsView`, `Views/DetailsView` (five tabs), `Views/HomeView` (no-game state), `Reports/ReportView.cs` (reads the agent's report JSON), `ScreenshotRun.cs`, `AppOptions.cs`. Run: `artifacts/bin/Gapo.App/release_win-x64/GAPO.exe --report=<agent report> [--screenshots=<folder>] [--theme=light|dark]`.
@@ -144,7 +151,7 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 
 1. Make sure the `step-7-live-link` PR is merged and its CI run is green (on the GPU-less runner the interface CPU budget is reported, not enforced; the quarter-of-a-processor ceiling and the 80 MB limit are).
 2. Remaining UI: frame-budget bar, running / warm-up / error states with phase progress, Save report, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, Tips content.
-3. Real games: Steam library index (`SteamPath` in the registry, `libraryfolders.vdf`, `appmanifest_*.acf`, a pure KeyValues parser with tests), running-game detection without the engine hook, a first real-game adapter, settings that need a restart. Steam is not installed on the laptop; the parser can be built and tested from fixture files first.
+3. Real games, continued (the Steam index and running-game detection exist, see "Step 5, real games"): make serve mode watch for a running Steam game and show live frame timing for it through event tracing even without an adapter ("GAPO can measure this game but does not know its settings yet"); then a first real-game adapter and settings that need a restart.
 4. Leftovers: GPU busy time (DxgKrnl events; PresentMon reports about 1.0 ms per frame for the fixture, use it as the reference), hitch-period observation, ADRs for frame timing and for the engine/adapter interfaces, README refresh.
 5. Then steps 8-12 of the build order.
 
