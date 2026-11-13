@@ -126,12 +126,13 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 
 ## State on 2026-11-13 (read this first; older sections below are history)
 
-- **PRs #1-#7 are merged** into the default branch `claude/eloquent-mendel-mn6f48` (the user authorised merging on 2026-11-13: "make operational decisions on the dev including presentmon, merge PRs"). New work goes on a fresh branch off the default branch with one PR per step; merge it yourself once CI is green.
+- **PRs #1-#11 are merged** into the default branch `claude/eloquent-mendel-mn6f48` (the user authorised merging on 2026-11-13: "make operational decisions on the dev including presentmon, merge PRs"). PR #12 (ETW process filter) is open; merge it once its CI is green. New work goes on a fresh branch off the default branch with one PR per step; merge it yourself once CI is green. Doc-only pushes (`docs/**`, `*.md`) do not start CI.
+- Rig phases and how to run one alone after a calibration run: `--only=interface` (window overhead next to the game), `--only=unknown-game` (hook-less fixture in a fake Steam library with Easy Anti-Cheat: measured only), `--only=restart` (Unreal-style restart loop, about 4 minutes). The full rig takes about 14 minutes locally and 15 on CI (timeout 30).
 - **PresentMon is allowed** as a development cross-check. `artifacts/tools/presentmon/PresentMon-2.6.0-x64.exe` (not in git; `gh release download v2.6.0 -R GameTechDev/PresentMon -p "PresentMon-2.6.0-x64.exe"`, Intel-signed). GAPO's own frame timing agrees with it to 0.1 %.
 - **Windows App SDK is pinned to 1.8.260921001.** 2.6.5 makes the window's compositor thread burn a whole logical processor while a game presents (ADR 0004 amendment). Do not upgrade unless the rig's live-interface phase passes on this Windows 10 laptop.
 - Branch `step-7-live-link`: agent serve mode (`--serve`, `--pipe-name`, `--reports-dir`, `--exit-with-process`), `src/Gapo.App/AgentLink.cs`, live `HomeView`, own-use meter in `MainWindow`, rig phase `RunLiveInterface` (`Gapo.EndToEnd.exe --only=interface` runs just that phase after a calibration run).
 - Thread-level CPU probe for the window: `artifacts/rig/threadprobe.ps1` (not in git). Never pipe its output through `Select-Object -First`; that skips its clean-up and leaves windows open.
-- Latest laptop rig run (e2e17): 25.1 -> 60.0 FPS (+139 %), agent 0.39 % CPU optimising / 0.14 % in windows / 16 MB; window live next to the game 0.26 % CPU (median slice) / 37 MB.
+- Latest laptop rig run (e2e20): fixture 24.8 -> 60.0 FPS (+142 %, capped at 60, stutters 11.3 -> 0/min); window next to the game 0.21 % CPU / 37 MB; unknown Steam game 24.8 FPS live vs 25.9 from the game; restart loop 24.2 -> 87.4 FPS (+261 %) in 6 restarts, settings file restored byte for byte. CI runner (PR #11): +109 %, restart loop +115 %.
 
 ## Step 5, real games (branch `step-5-steam-library`, on top of `step-7-live-link`)
 
