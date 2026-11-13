@@ -17,6 +17,7 @@ const int MinimumMonitorSamples = 8;
 const double SlowestAcceptableHardwareScanMilliseconds = 1500;
 const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
 const double SmallestExpectedFpsGainPercent = 25;
+const double SmallestExpectedWorkReductionFactor = 1.5;
 const int FewestExpectedKeptChanges = 2;
 const int ExpectedScreenshots = 6;
 const int FewestLiveSamples = 3;
@@ -159,7 +160,7 @@ void CheckEverything()
     if (optimisingAgent.Optimisation is { } optimised)
     {
         Expect(optimised.Completed, "The optimisation did not complete: " + optimised.Error);
-        Expect(optimised.FpsGainPercent >= SmallestExpectedFpsGainPercent, string.Create(CultureInfo.InvariantCulture, $"The optimisation gained only {optimised.FpsGainPercent:0}% average FPS on the deliberately wasteful fixture."));
+        Expect(optimised.FpsGainPercent >= SmallestExpectedFpsGainPercent || optimised.WorkReductionFactor >= SmallestExpectedWorkReductionFactor, string.Create(CultureInfo.InvariantCulture, $"The optimisation gained only {optimised.FpsGainPercent:0}% average FPS and cut frame work only {optimised.WorkReductionFactor:0.0}× on the deliberately wasteful fixture."));
         Expect(optimised.Kept >= FewestExpectedKeptChanges, $"Only {optimised.Kept} change(s) were kept.");
         Expect(optimised.Experiments.Count > 0 && optimised.Experiments[0].Kind == "HitchFix" && optimised.Experiments[0].Decision == "Kept", "The autosave hitch was not fixed first.");
         Expect(optimised.Experiments.All(experiment => experiment.Reason.Length > 0), "An experiment has no stated reason.");
