@@ -1,6 +1,8 @@
 using System.Globalization;
 using Gapo.Agent;
 using Gapo.Agent.Optimisation;
+using Gapo.Core.Games;
+using Gapo.Windows.Games;
 
 const int Success = 0;
 const int UsageError = 2;
@@ -22,6 +24,40 @@ if (options.RevertAll)
 {
     var reverted = FileChangeJournal.RevertAll(options.JournalPath);
     Console.WriteLine(reverted ? "GAPO put every setting back to its original value." : "GAPO has no recorded changes to revert.");
+    return Success;
+}
+
+if (options.ListGames)
+{
+    var steamRoot = options.SteamRoot ?? SteamLocator.FindSteamRoot();
+    if (steamRoot is null)
+    {
+        Console.WriteLine("Steam was not found on this PC.");
+        return Success;
+    }
+
+    var scan = SteamLibraryIndex.Scan(steamRoot, new DiskGameFileSource());
+    Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"Steam at {steamRoot}: {scan.Games.Count} game(s) in {scan.Libraries.Count} library folder(s)."));
+    foreach (var game in scan.Games)
+    {
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {game.AppId,8}  {game.Name}  ({(game.FullyInstalled ? "installed" : "not fully installed")}; {game.InstallDirectory})"));
+    }
+
+    foreach (var note in scan.CouldNotBeRead)
+    {
+        Console.WriteLine("  not read: " + note);
+    }
+
+    using var processes = new Gapo.Windows.Telemetry.ProcessSnapshotReader();
+    var snapshot = new Gapo.Core.Telemetry.ProcessSnapshot();
+    processes.Capture(snapshot, TimeSpan.Zero, detailedProcessId: 0);
+    var running = new RunningGameFinder().Find(snapshot, scan.Games);
+    Console.WriteLine(running.Count == 0 ? "No Steam game is running." : "Running now:");
+    foreach (var game in running)
+    {
+        Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {game.Game.Name}  (process {game.ProcessId}, {Path.GetFileName(game.ImagePath)})"));
+    }
+
     return Success;
 }
 

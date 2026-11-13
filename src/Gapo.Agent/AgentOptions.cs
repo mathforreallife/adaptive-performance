@@ -17,8 +17,12 @@ public sealed record AgentOptions(
     string PipeName,
     string ReportsDirectory,
     string JournalPath,
-    string? ReportPath)
+    string? ReportPath,
+    bool ListGames = false,
+    string? SteamRoot = null)
 {
+    private const string ListGamesFlag = "--list-games";
+    private const string SteamRootOption = "--steam-root";
     private const string MapNameOption = "--sandbox-map";
     private const string SecondsOption = "--seconds";
     private const string ReportOption = "--report";
@@ -66,6 +70,14 @@ public sealed record AgentOptions(
             else if (argument == RevertAllFlag)
             {
                 options = options with { RevertAll = true };
+            }
+            else if (argument == ListGamesFlag)
+            {
+                options = options with { ListGames = true };
+            }
+            else if (TryReadValue(argument, SteamRootOption, out var steamRoot))
+            {
+                options = options with { SteamRoot = steamRoot };
             }
             else if (TryReadValue(argument, JournalOption, out var journalPath))
             {
