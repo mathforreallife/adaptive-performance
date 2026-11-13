@@ -5,8 +5,9 @@ using Microsoft.UI.Xaml;
 
 namespace Gapo.App;
 
-public sealed record AppOptions(string? ReportPath, string? ScreenshotDirectory, ElementTheme Theme, string PipeName, string? AgentPath, double ScreenshotAfterSeconds = 0)
+public sealed record AppOptions(string? ReportPath, string? ScreenshotDirectory, ElementTheme Theme, string PipeName, string? AgentPath, double ScreenshotAfterSeconds = 0, string? NotificationTestPath = null)
 {
+    private const string NotificationTestOption = "--notification-test=";
     private const string ScreenshotAfterOption = "--screenshot-after=";
     private const string ReportOption = "--report=";
     private const string ScreenshotOption = "--screenshots=";
@@ -39,6 +40,10 @@ public sealed record AppOptions(string? ReportPath, string? ScreenshotDirectory,
             else if (argument.StartsWith(AgentOption, StringComparison.Ordinal))
             {
                 options = options with { AgentPath = argument[AgentOption.Length..] };
+            }
+            else if (argument.StartsWith(NotificationTestOption, StringComparison.Ordinal))
+            {
+                options = options with { NotificationTestPath = argument[NotificationTestOption.Length..] };
             }
             else if (argument.StartsWith(ScreenshotAfterOption, StringComparison.Ordinal) && double.TryParse(argument[ScreenshotAfterOption.Length..], NumberStyles.Float, CultureInfo.InvariantCulture, out var after) && after >= 0)
             {
