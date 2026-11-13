@@ -157,6 +157,20 @@ namespace Gapo.Sandbox
             {
                 ExitCode = ExitClosedBeforeAutotestFinished;
                 Program.ReportFailure(_options, "The game window was closed before the auto-test finished.");
+                if (!string.IsNullOrEmpty(_logPath))
+                {
+                    try
+                    {
+                        ResultLog.Write(_logPath + ".partial.json", _game, _presenter != null ? "dxgi" : "gdi", _presenter != null ? _presenter.AdapterName : null,
+                            _presenter != null && _presenter.IsSoftwareAdapter, _presentFallbackReason, _presentPath);
+                    }
+                    catch (IOException)
+                    {
+                    }
+                    catch (UnauthorizedAccessException)
+                    {
+                    }
+                }
             }
             _game.Dispose();
             if (_presenter != null) { _presenter.Dispose(); _presenter = null; }

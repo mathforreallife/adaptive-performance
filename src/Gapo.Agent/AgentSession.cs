@@ -27,7 +27,8 @@ namespace Gapo.Agent;
 public sealed class AgentSession : IDisposable
 {
     private static readonly TimeSpan TelemetryReadInterval = TimeSpan.FromMilliseconds(100);
-    private const int ReadsPerOverheadSample = 10;
+    private static readonly TimeSpan TelemetryReadIntervalInsideWindows = TimeSpan.FromMilliseconds(200);
+    private static readonly TimeSpan SampleInterval = TimeSpan.FromSeconds(1);
     private const int HighestDefaultTargetFps = 144;
     private const string LastReportFileName = "last-report.json";
     private static readonly TimeSpan LiveSpan = TimeSpan.FromSeconds(10);
@@ -63,7 +64,7 @@ public sealed class AgentSession : IDisposable
     private SandboxSession? optimisationSession;
     private bool collectHookFrameTimes;
     private bool wasInsideWindow;
-    private int reads;
+    private TimeSpan nextSampleAt = SampleInterval;
 
     public AgentSession(AgentOptions options, CancellationToken cancellation)
     {
@@ -281,8 +282,9 @@ public sealed class AgentSession : IDisposable
         link.ReadNewFrames(collectHookFrameTimes || baseline is not null || optimisationSession is not null || server is not null ? ObserveHookFrame : null);
         baseline?.Advance(link, clock.Elapsed);
         frameTiming?.Collect();
-        if (++reads % ReadsPerOverheadSample == 0)
+        if (clock.Elapsed >= nextSampleAt)
         {
+            nextSampleAt = clock.Elapsed + SampleInterval;
             var own = probe.Read();
             meter.Record(clock.Elapsed, own, insideWindow);
             budgetMeter.Record(clock.Elapsed, own, insideWindow);
@@ -302,7 +304,7 @@ public sealed class AgentSession : IDisposable
             }
         }
 
-        cancellation.WaitHandle.WaitOne(TelemetryReadInterval);
+        cancellation.WaitHandle.WaitOne(insideWindow ? TelemetryReadIntervalInsideWindows : TelemetryReadInterval);
         return !cancellation.IsCancellationRequested && !stopRequested;
     }
 
@@ -353,7 +355,7 @@ public sealed class AgentSession : IDisposable
             ReconcileFrameTiming();
             if (observedDiagnosis is not null)
             {
-                frameTiming?.StartGpuTiming();
+                StartGpuTimingOnRealHardware();
             }
         }
     }
@@ -425,7 +427,7 @@ public sealed class AgentSession : IDisposable
             return;
         }
 
-        frameTiming?.StartGpuTiming();
+        StartGpuTimingOnRealHardware();
         restartOptimiser = new RestartOptimiser(
             game.Game.Name,
             settingsPath,
@@ -441,6 +443,14 @@ public sealed class AgentSession : IDisposable
     }
 
     private long GpuBusyTicksSoFar() => frameTiming?.GpuBusyTicksOfTrackedProcess ?? 0;
+
+    private void StartGpuTimingOnRealHardware()
+    {
+        if (hardware.PrimaryGpu is { IsRealHardware: true })
+        {
+            frameTiming?.StartGpuTiming();
+        }
+    }
 
     private void AdvanceRestartOptimisation()
     {

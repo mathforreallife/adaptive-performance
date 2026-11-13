@@ -74,6 +74,21 @@ public sealed class RestartOptimisationTests
     }
 
     [Fact]
+    public void ANearMissIsRolledBackButIsNotCountedAsNoEffect()
+    {
+        var nearMiss = RestartJudgement.Judge(Statistics(29.3), Statistics(26.4), 10.0);
+        var nothing = RestartJudgement.Judge(Statistics(29.3), Statistics(29.6), 10.0);
+
+        Assert.False(nearMiss.Keep);
+        Assert.False(nearMiss.ShowedNoEffect);
+        Assert.False(nothing.Keep);
+        Assert.True(nothing.ShowedNoEffect);
+        Assert.False(RestartJudgement.Judge(Statistics(29.3), Statistics(20.0), 10.0).ShowedNoEffect);
+        Assert.False(nothing.LooksDisturbed);
+        Assert.True(RestartJudgement.Judge(Statistics(21.4), Statistics(28.9), 10.0).LooksDisturbed);
+    }
+
+    [Fact]
     public void ASessionWithoutFramesIsNeverKept() =>
         Assert.False(RestartJudgement.Judge(Statistics(42.8), FrameStatistics.Empty, 5.0).Keep);
 
