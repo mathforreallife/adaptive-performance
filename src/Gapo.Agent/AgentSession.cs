@@ -48,6 +48,7 @@ public sealed class AgentSession : IDisposable
     private string? announcedGame;
     private ObservedGameDiagnosis? observedDiagnosis;
     private DiagnosisMessage? latestDiagnosis;
+    private RecognisedGame? recognisedGame;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -137,7 +138,7 @@ public sealed class AgentSession : IDisposable
                     PublishReport(finished);
                     break;
                 case OptimiseCommand when SteamGame is { } unknown:
-                    server.Send(new StatusMessage(AgentState.Watching, unknown.Game.Name + " cannot be optimised yet", NotSupportedYet));
+                    server.Send(new StatusMessage(AgentState.Watching, unknown.Game.Name + " cannot be optimised yet", GameRecognition.Explain(recognisedGame, NotSupportedYet)));
                     break;
                 case OptimiseCommand:
                     server.Send(new StatusMessage(AgentState.NoGame, "No game is running", "Start a game first; GAPO measures the game while it runs."));
@@ -191,8 +192,8 @@ public sealed class AgentSession : IDisposable
                 : link.IsConnected
                     ? new StatusMessage(AgentState.Watching, "Watching " + gameName, "GAPO is measuring quietly. Choose a goal and optimise when you are ready.")
                     : new StatusMessage(AgentState.Watching, "Watching " + gameName, frameTiming is { Availability: FrameTimingAvailability.Available }
-                        ? NotSupportedYet
-                        : NotSupportedYet + " Frame times are not available either: reading them needs administrator rights or membership of the Performance Log Users group."));
+                        ? GameRecognition.Explain(recognisedGame, NotSupportedYet)
+                        : GameRecognition.Explain(recognisedGame, NotSupportedYet) + " Frame times are not available either: reading them needs administrator rights or membership of the Performance Log Users group."));
             if (latestDiagnosis is { } diagnosis && diagnosis.GameName == gameName && !link.IsConnected)
             {
                 server.Send(diagnosis);
@@ -308,7 +309,7 @@ public sealed class AgentSession : IDisposable
 
     private RunningGame? SteamGame => link.IsConnected ? null : steamGames?.Current;
 
-    private const string NotSupportedYet = "GAPO measures this game while it runs, but it does not know this game's settings yet, so it cannot change anything. Nothing was changed.";
+    private const string NotSupportedYet = "GAPO measures this game while it runs, but it does not know this game's settings yet, so it cannot change anything. " + GameRecognition.NothingChanged;
 
     private void WatchForSteamGames()
     {
@@ -328,6 +329,7 @@ public sealed class AgentSession : IDisposable
             liveFrames.Clear();
             latestDiagnosis = null;
             observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed);
+            recognisedGame = steamGames.Current is { } found ? GameRecognition.Recognise(found.Game, options.LocalAppDataFolder, options.DocumentsFolder) : null;
             ReconcileFrameTiming();
         }
     }

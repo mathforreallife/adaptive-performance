@@ -1,5 +1,6 @@
 using System.Globalization;
 using Gapo.Agent;
+using Gapo.Agent.Games;
 using Gapo.Agent.Optimisation;
 using Gapo.Core.Games;
 using Gapo.Windows.Games;
@@ -41,6 +42,14 @@ if (options.ListGames)
     foreach (var game in scan.Games)
     {
         Console.WriteLine(string.Create(CultureInfo.InvariantCulture, $"  {game.AppId,8}  {game.Name}  ({(game.FullyInstalled ? "installed" : "not fully installed")}; {game.InstallDirectory})"));
+        if (GameRecognition.Recognise(game, options.LocalAppDataFolder, options.DocumentsFolder) is { } recognised)
+        {
+            Console.WriteLine($"            {recognised.Engine}{(recognised.AntiCheat is null ? string.Empty : ", protected by " + recognised.AntiCheat)}; settings: {recognised.SettingsPath ?? "no settings file yet"}");
+            if (recognised.Settings.Count > 0)
+            {
+                Console.WriteLine("            " + string.Join(", ", recognised.Settings));
+            }
+        }
     }
 
     foreach (var note in scan.CouldNotBeRead)

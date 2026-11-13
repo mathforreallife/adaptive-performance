@@ -195,7 +195,7 @@ void CheckUnknownSteamGame()
     Expect(disagreement <= LargestLiveFpsDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing showed {served.MedianLiveFps:0.0} FPS for the unknown game; the game itself measured {check.Fixture.AverageFps:0.0} FPS."));
     Expect(!served.EverOfferedToOptimise, "The interface was offered Optimise for a game GAPO has no settings knowledge of.");
     Expect(served.RefusedToOptimise, "The agent did not refuse to optimise a game it does not know.");
-    Expect(served.WatchingDetail.Contains("cannot change anything", StringComparison.Ordinal), "The interface was not told why the game cannot be optimised: " + served.WatchingDetail);
+    Expect(served.WatchingDetail.Contains("Unreal Engine game and read its graphics settings", StringComparison.Ordinal) && served.WatchingDetail.Contains("Shadows Epic", StringComparison.Ordinal) && served.WatchingDetail.EndsWith("Nothing was changed.", StringComparison.Ordinal), "The interface was not told that the game is an Unreal Engine game with readable settings and why nothing was changed: " + served.WatchingDetail);
     Expect(served.SawTheGameLeave, "The agent did not notice that the unknown game exited.");
     Expect(served.Diagnosis is { Bottleneck: "CpuOneThreadLimit" }, $"The unknown single-threaded fixture should be diagnosed as limited by one CPU thread; the agent said: {served.Diagnosis?.Title ?? "nothing"}. {served.Diagnosis?.Summary}");
     Expect(!check.Agent.ConnectedToGame, "The agent connected to the fixture's engine hook although the fixture ran without it.");

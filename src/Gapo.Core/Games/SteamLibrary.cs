@@ -14,6 +14,8 @@ public interface IGameFileSource
 
     IReadOnlyList<string> ListFiles(string directory, string pattern);
 
+    IReadOnlyList<string> ListDirectories(string directory);
+
     bool DirectoryExists(string path);
 }
 

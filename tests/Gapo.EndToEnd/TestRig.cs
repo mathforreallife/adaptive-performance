@@ -155,6 +155,7 @@ public sealed class TestRig
     {
         const string GameName = "Fixture Without Its Hook";
         const string GameFolder = "Fixture Without Its Hook";
+        const string ProjectName = "FixtureGame";
         const int AppId = 3_000_001;
         const double GameSeconds = 85;
         var configuredSeconds = runSeconds;
@@ -164,19 +165,27 @@ public sealed class TestRig
             var steamRoot = Path.Combine(outputDirectory, "steam", "Steam");
             var apps = Path.Combine(steamRoot, "steamapps");
             var installed = Path.Combine(apps, "common", GameFolder);
+            var binaries = Path.Combine(installed, ProjectName, "Binaries", "Win64");
+            var localAppData = Path.Combine(outputDirectory, "steam", "LocalAppData");
+            var settingsFolder = Path.Combine(localAppData, ProjectName, "Saved", "Config", "Windows");
             if (Directory.Exists(Path.Combine(outputDirectory, "steam")))
             {
                 Directory.Delete(Path.Combine(outputDirectory, "steam"), recursive: true);
             }
 
-            Directory.CreateDirectory(installed);
+            Directory.CreateDirectory(Path.Combine(installed, "Engine", "Binaries", "ThirdParty"));
+            Directory.CreateDirectory(settingsFolder);
             var sandboxFolder = Path.GetDirectoryName(SandboxExecutable)!;
             foreach (var file in Directory.GetFiles(sandboxFolder, "*", SearchOption.AllDirectories))
             {
-                var target = Path.Combine(installed, Path.GetRelativePath(sandboxFolder, file));
+                var target = Path.Combine(binaries, Path.GetRelativePath(sandboxFolder, file));
                 Directory.CreateDirectory(Path.GetDirectoryName(target)!);
                 File.Copy(file, target);
             }
+
+            var shippingExecutable = Path.Combine(binaries, ProjectName + "-Win64-Shipping.exe");
+            File.Move(Path.Combine(binaries, Path.GetFileName(SandboxExecutable)), shippingExecutable);
+            File.WriteAllText(Path.Combine(settingsFolder, "GameUserSettings.ini"), "[/Script/Engine.GameUserSettings]\r\nFrameRateLimit=0.000000\r\nbUseVSync=False\r\n\r\n[ScalabilityGroups]\r\nsg.ResolutionQuality=100.000000\r\nsg.ViewDistanceQuality=3\r\nsg.ShadowQuality=3\r\nsg.PostProcessQuality=3\r\n");
 
             var escapedRoot = steamRoot.Replace(@"\", @"\\", StringComparison.Ordinal);
             File.WriteAllText(Path.Combine(apps, "libraryfolders.vdf"), $"\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{escapedRoot}\"\n\t}}\n}}\n");
@@ -189,13 +198,15 @@ public sealed class TestRig
                 "--serve",
                 "--pipe-name=" + pipeName,
                 "--steam-root=" + steamRoot,
+                "--local-app-data=" + localAppData,
+                "--documents=" + Path.Combine(outputDirectory, "steam", "Documents"),
                 "--sandbox-map=" + MapNameFor(name),
                 "--seconds=" + Seconds(GameSeconds + 45),
                 "--report=" + agentReport,
                 "--reports-dir=" + Path.Combine(outputDirectory, "reports-" + name),
             ]);
             using var client = InterfaceClient.Connect(pipeName);
-            using var game = Start(Path.Combine(installed, Path.GetFileName(SandboxExecutable)),
+            using var game = Start(shippingExecutable,
             [
                 "--data-dir=" + Path.Combine(outputDirectory, name + "-data"),
                 "--no-telemetry",
