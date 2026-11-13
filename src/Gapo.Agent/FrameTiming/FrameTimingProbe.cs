@@ -11,7 +11,7 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     private readonly PresentedFrameQueue queue = new();
     private readonly PresentedFrame[] drained = new PresentedFrame[DrainBatch];
     private readonly EtwPresentSession? session;
-    private readonly EtwGpuSession? gpu;
+    private EtwGpuSession? gpu;
     private long gpuBusyTicksBeforeTracking;
     private long gpuBusyTicksOfEarlierGames;
     private readonly bool keepsSummaries;
@@ -22,7 +22,6 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
         this.keepsSummaries = keepsSummaries;
         session = EtwPresentSession.TryStart(this, out var availability);
         Availability = availability;
-        gpu = session is null ? null : EtwGpuSession.TryStart(out _);
     }
 
     public FrameTimingAvailability Availability { get; }
@@ -42,6 +41,17 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     public long EventsSeen => session?.EventsSeen ?? 0;
 
     public bool MeasuresGpuBusy => gpu is not null;
+
+    public void StartGpuTiming()
+    {
+        if (session is null || gpu is not null)
+        {
+            return;
+        }
+
+        gpu = EtwGpuSession.TryStart(out _);
+        gpuBusyTicksBeforeTracking = GpuBusyTicksOfTrackedProcess;
+    }
 
     public long GpuPacketsSeen => gpu?.PacketsSeen ?? 0;
 

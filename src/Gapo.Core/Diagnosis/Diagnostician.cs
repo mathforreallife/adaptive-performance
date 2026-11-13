@@ -128,7 +128,9 @@ public static class Diagnostician
             return new Finding(
                 Bottleneck.GraphicsCard,
                 "The graphics card is the limit",
-                Text($"The graphics card is busy {gpu:0.0} ms of each {timing.MedianFrameMs:0.0} ms frame{processorNote}. Lower resolution, anti-aliasing, shadows or post-processing help; a faster processor would not."),
+                (gpu >= timing.MedianFrameMs
+                    ? Text($"The graphics card is busy for practically all of each {timing.MedianFrameMs:0.0} ms frame")
+                    : Text($"The graphics card is busy {gpu:0.0} ms of each {timing.MedianFrameMs:0.0} ms frame")) + processorNote + ". Lower resolution, anti-aliasing, shadows or post-processing help; a faster processor would not.",
                 ProblemCategory.GameSetting,
                 null);
         }

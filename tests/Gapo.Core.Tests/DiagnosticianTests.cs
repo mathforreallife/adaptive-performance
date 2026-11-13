@@ -251,6 +251,15 @@ public sealed class DiagnosticianTests
     }
 
     [Fact]
+    public void GpuTimeAboveTheFrameTimeIsNotPrintedAsMoreThanTheFrame()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 30, monitor: Monitor(gameProcessors: 0.6, busiestThread: 60), logicalProcessors: 4,
+            frames: Frames(30, medianFrameMs: 53.0), presents: new PresentTiming(53.0, 30, 20, GpuBusyMs: 53.5)));
+
+        Assert.StartsWith("The graphics card is busy for practically all of each 53.0 ms frame", diagnosis.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void ALightlyUsedGraphicsCardDoesNotHideACpuLimit()
     {
         var diagnosis = Diagnostician.Diagnose(Input(busyMs: 40, monitor: Monitor(loads: [40, 35, 30, 38], gameProcessors: 1.05, busiestThread: 98), logicalProcessors: 4,

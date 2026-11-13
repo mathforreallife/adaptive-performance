@@ -351,6 +351,10 @@ public sealed class AgentSession : IDisposable
             observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed, GpuBusyTicksSoFar);
             recognisedGame = steamGames.Current is { } found ? GameRecognition.Recognise(found.Game, options.LocalAppDataFolder, options.DocumentsFolder) : null;
             ReconcileFrameTiming();
+            if (observedDiagnosis is not null)
+            {
+                frameTiming?.StartGpuTiming();
+            }
         }
     }
 
@@ -421,6 +425,7 @@ public sealed class AgentSession : IDisposable
             return;
         }
 
+        frameTiming?.StartGpuTiming();
         restartOptimiser = new RestartOptimiser(
             game.Game.Name,
             settingsPath,
