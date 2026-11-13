@@ -172,6 +172,44 @@ public sealed class OptimisationEngineTests
     }
 
     [Fact]
+    public void APcThatSlowsDownMidwayIsNotReportedAsGaposEffect()
+    {
+        var (report, _, _) = Optimise(configure: simulated =>
+        {
+            simulated.SlowsDownFromMeasurement = 6;
+            simulated.SlowDownFactor = 3.0;
+        });
+
+        Assert.True(report.Completed);
+        Assert.Contains(report.NotTouched, note => note.StartsWith("The PC slowed down during the optimisation", StringComparison.Ordinal));
+        Assert.True(report.FpsGainPercent > 0, $"Measured at the same moment, the optimised settings should not look worse: {report.FpsGainPercent:0}%.");
+    }
+
+    [Fact]
+    public void ChangesThatHurtTogetherAreAllPutBack()
+    {
+        var (report, game, _) = Optimise(configure: simulated => simulated.OptimisedSettingsHurtFromMeasurement = 6);
+
+        Assert.True(report.Completed);
+        Assert.Contains(report.NotTouched, note => note.StartsWith("The kept changes together made frames slower", StringComparison.Ordinal));
+        Assert.Equal(report.OriginalSettings![SimulatedGame.AntiAliasing], game.Settings[SimulatedGame.AntiAliasing]);
+        Assert.Equal(report.OriginalSettings[SimulatedGame.Threads], game.Settings[SimulatedGame.Threads]);
+    }
+
+    [Fact]
+    public void AChangeThatMakesFramesSlowerIsCalledThat()
+    {
+        var (report, _, _) = Optimise(configure: simulated =>
+        {
+            simulated.SlowsDownFromMeasurement = 3;
+            simulated.SlowDownFactor = 2.0;
+        });
+
+        Assert.Contains(report.Experiments, experiment => experiment.Reason.StartsWith("Rolled back: frames took", StringComparison.Ordinal));
+        Assert.DoesNotContain(report.Experiments, experiment => experiment.GainPercent < -10 && experiment.Reason.Contains("within", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void FrameCapsCanBeTurnedOffAndTheTargetChosen()
     {
         var (report, game, _) = Optimise(configure: simulated => simulated.RenderMs = 14, controls: new OptimisationControls { AllowFrameCap = false, TargetFps = 30 });

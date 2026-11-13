@@ -57,6 +57,12 @@ public sealed class SimulatedGame : IGameSession, IGameKnowledge, IChangeJournal
 
     public int DisturbedBaselineWindows { get; set; }
 
+    public int SlowsDownFromMeasurement { get; set; } = int.MaxValue;
+
+    public double SlowDownFactor { get; set; } = 1;
+
+    public int OptimisedSettingsHurtFromMeasurement { get; set; } = int.MaxValue;
+
     public bool InBenchmark { get; private set; }
 
     public bool WaitedForWarmup { get; private set; }
@@ -103,6 +109,8 @@ public sealed class SimulatedGame : IGameSession, IGameKnowledge, IChangeJournal
         }
 
         var disturbance = WindowsMeasured <= DisturbedBaselineWindows && WindowsMeasured % 2 == 1 ? 1.25 : 1.0;
+        disturbance *= WindowsMeasured >= SlowsDownFromMeasurement ? SlowDownFactor : 1.0;
+        disturbance *= WindowsMeasured >= OptimisedSettingsHurtFromMeasurement && !Settings.Is(AntiAliasing, "SSAA") ? 3.0 : 1.0;
         var work = Math.Max(WorkNeverGoesBelowMs, WorkMs(Settings) * disturbance);
         var cap = Settings.Number(Cap);
         var frames = new MeasuredFrame[FramesPerWindow];
