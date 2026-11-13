@@ -12,6 +12,8 @@ public sealed record ExperimentResult(string Title, string Kind, string Decision
 
 public sealed record OptimisationResult(bool Completed, string Error, double FpsGainPercent, double WorkReductionFactor, int Kept, int RolledBack, double BaselineFps, double FinalFps, double BaselineWorkMs, double FinalWorkMs, double BaselineStuttersPerMinute, double FinalStuttersPerMinute, double NoiseFloorPercent, int MeasurementWindows, double DurationSeconds, string PacingNote, IReadOnlyList<ExperimentResult> Experiments, IReadOnlyList<string> NotTouched, IReadOnlyDictionary<string, string> SettingsAfter);
 
+public sealed record InterfaceRun(FixtureResult Fixture, double CpuPercent, double TypicalCpuPercent, double PeakPrivateMegabytes, double MeasuredSeconds, IReadOnlyList<string> Screenshots, int AgentsStarted, bool AgentsExitedWithTheInterface);
+
 public sealed record DiagnosisResult(string Primary, string Title, string Summary, string EngineLimitation, IReadOnlyList<string> Evidence, IReadOnlyList<string> SecondaryProblems);
 
 public sealed record BaselineResult(bool Succeeded, string FailureReason, int Attempts, double WaitedForWarmupSeconds, double NoiseFloorPercent, bool NoiseFloorCanBeTrusted, int FirstWindowFrames, int SecondWindowFrames, double FirstWindowMedianBusyMs, double SecondWindowMedianBusyMs);
@@ -38,6 +40,16 @@ public sealed class TestRig
     private readonly string sandboxDataDirectory;
     private const double LongEnoughForABaselineSeconds = 45;
     private const double LongestOptimisationSeconds = 360;
+    private const double LiveInterfaceRunSeconds = 84;
+    private const double LiveInterfaceScreenshotAfterSeconds = 70;
+    private const int InterfaceMeasureSlices = 3;
+    private const double BytesPerMegabyte = 1024.0 * 1024.0;
+    private const double PercentScale = 100.0;
+    private const string AgentProcessName = "Gapo.Agent";
+
+    private static readonly TimeSpan InterfaceSettleTime = TimeSpan.FromSeconds(20);
+    private static readonly TimeSpan InterfaceSliceTime = TimeSpan.FromSeconds(15);
+    private static readonly TimeSpan AgentExitAllowance = TimeSpan.FromSeconds(20);
 
     private double runSeconds;
     private string? fixtureScenario;
@@ -137,6 +149,111 @@ public sealed class TestRig
         return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal).ToList() : [];
     }
 
+    public InterfaceRun RunLiveInterface(string name)
+    {
+        var configuredSeconds = runSeconds;
+        runSeconds = LiveInterfaceRunSeconds;
+        try
+        {
+            var directory = Path.Combine(outputDirectory, "ui-live");
+            var agentsBefore = AgentProcessIds();
+            using var fixture = StartFixture(name, mapName: null);
+            using var app = Start(AppExecutable,
+            [
+                "--pipe-name=GAPO.Rig." + Guid.NewGuid().ToString("N"),
+                "--agent=" + AgentExecutable,
+                "--screenshots=" + directory,
+                "--theme=light",
+                "--screenshot-after=" + Seconds(LiveInterfaceScreenshotAfterSeconds),
+            ]);
+            Thread.Sleep(InterfaceSettleTime);
+            app.Refresh();
+            if (app.HasExited)
+            {
+                throw new InvalidOperationException("The user interface closed before its overhead could be measured.");
+            }
+
+            var processorTimeAtStart = app.TotalProcessorTime;
+            var peakPrivateBytes = app.PrivateMemorySize64;
+            var clock = Stopwatch.StartNew();
+            var timeline = new List<string> { "seconds,processorMilliseconds" };
+            var sliceCpuPercents = new List<double>();
+            var sliceStartedAt = clock.Elapsed;
+            var sliceStartedWith = processorTimeAtStart;
+            while (sliceCpuPercents.Count < InterfaceMeasureSlices)
+            {
+                Thread.Sleep(TimeSpan.FromSeconds(1));
+                app.Refresh();
+                if (app.HasExited)
+                {
+                    throw new InvalidOperationException("The user interface closed while its overhead was being measured.");
+                }
+
+                peakPrivateBytes = Math.Max(peakPrivateBytes, app.PrivateMemorySize64);
+                var now = clock.Elapsed;
+                var processorTimeNow = app.TotalProcessorTime;
+                timeline.Add(string.Create(CultureInfo.InvariantCulture, $"{now.TotalSeconds:0.0},{(processorTimeNow - processorTimeAtStart).TotalMilliseconds:0}"));
+                if (now - sliceStartedAt >= InterfaceSliceTime)
+                {
+                    sliceCpuPercents.Add((processorTimeNow - sliceStartedWith).TotalSeconds / (now - sliceStartedAt).TotalSeconds / Environment.ProcessorCount * PercentScale);
+                    sliceStartedAt = now;
+                    sliceStartedWith = processorTimeNow;
+                }
+            }
+
+            File.WriteAllLines(Path.Combine(outputDirectory, name + "-processor-time.csv"), timeline);
+
+            var measured = clock.Elapsed;
+            var processorTime = app.TotalProcessorTime - processorTimeAtStart;
+            var agentsStarted = AgentProcessIds().Except(agentsBefore).ToList();
+            WaitForExit(app, "user interface");
+            var agentsExited = WaitUntilGone(agentsStarted, AgentExitAllowance);
+            var fixtureResult = Collect(name, fixture);
+            var screenshots = Directory.Exists(directory) ? Directory.GetFiles(directory).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal).ToList() : [];
+            return new InterfaceRun(
+                fixtureResult,
+                processorTime.TotalSeconds / measured.TotalSeconds / Environment.ProcessorCount * PercentScale,
+                sliceCpuPercents.Order().ElementAt(sliceCpuPercents.Count / 2),
+                peakPrivateBytes / BytesPerMegabyte,
+                measured.TotalSeconds,
+                screenshots,
+                agentsStarted.Count,
+                agentsExited);
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
+    }
+
+    private static List<int> AgentProcessIds()
+    {
+        var ids = new List<int>();
+        foreach (var process in Process.GetProcessesByName(AgentProcessName))
+        {
+            ids.Add(process.Id);
+            process.Dispose();
+        }
+
+        return ids;
+    }
+
+    private static bool WaitUntilGone(IReadOnlyCollection<int> processIds, TimeSpan allowance)
+    {
+        var clock = Stopwatch.StartNew();
+        while (AgentProcessIds().Intersect(processIds).Any())
+        {
+            if (clock.Elapsed > allowance)
+            {
+                return false;
+            }
+
+            Thread.Sleep(250);
+        }
+
+        return true;
+    }
+
     public int RevertAll()
     {
         using var agent = Start(AgentExecutable, ["--revert-all", "--journal=" + JournalPath]);
@@ -163,17 +280,21 @@ public sealed class TestRig
         return (fixtureResult, ReadAgentResult(agentReport, agent.ExitCode));
     }
 
-    private Process StartFixture(string name, string mapName)
+    private Process StartFixture(string name, string? mapName)
     {
         var arguments = new List<string>
         {
             "--data-dir=" + sandboxDataDirectory,
-            "--map-name=" + mapName,
             "--reset",
             "--autotest=" + Seconds(runSeconds),
             "--log=" + ResultPath(name),
             "--screenshot=" + Path.Combine(outputDirectory, name + ".png"),
         };
+        if (mapName is not null)
+        {
+            arguments.Add("--map-name=" + mapName);
+        }
+
         if (workload is not null)
         {
             arguments.Add("--workload=" + workload);

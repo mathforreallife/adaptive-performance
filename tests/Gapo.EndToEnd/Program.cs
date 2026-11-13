@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
+using Gapo.Core.Overhead;
 using Gapo.EndToEnd;
 
 const int Passed = 0;
@@ -21,14 +22,43 @@ const int FewestLiveSamples = 3;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
+const double LargestShareOfOneProcessorTheInterfaceMayUse = 0.25;
+const double PercentScale = 100.0;
+const string SoftwareAdapterName = "Basic Render";
 
 var outputDirectory = Path.GetFullPath(ValueOf("--output") ?? Path.Combine(Path.GetTempPath(), "gapo-end-to-end"));
 var binariesRoot = Path.GetFullPath(ValueOf("--binaries") ?? Path.Combine(AppContext.BaseDirectory, "..", ".."));
 var runSeconds = ValueOf("--seconds") is { } seconds ? double.Parse(seconds, CultureInfo.InvariantCulture) : DefaultRunSeconds;
 var rig = new TestRig(binariesRoot, outputDirectory, runSeconds, ValueOf("--workload"));
 var failures = new List<string>();
+InterfaceRun? liveInterface = null;
 
 try
+{
+    if (ValueOf("--only") == "interface")
+    {
+        rig.RunFixtureAlone("calibration");
+        CheckLiveInterface();
+    }
+    else
+    {
+        CheckEverything();
+    }
+}
+catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or IOException or JsonException or KeyNotFoundException)
+{
+    failures.Add(exception.Message);
+}
+
+foreach (var failure in failures)
+{
+    Print($"FAILED: {failure}");
+}
+
+Print($"End-to-end run {(failures.Count == 0 ? "passed" : "failed")} with {failures.Count} problem(s).");
+return failures.Count == 0 ? Passed : Failed;
+
+void CheckEverything()
 {
     FixtureResult firstBaseline;
     FixtureResult attached;
@@ -139,24 +169,30 @@ try
         Expect(false, "The agent reported no optimisation result.");
     }
 
+    CheckLiveInterface();
     var (_, simulationAgent) = rig.RunFixtureWithBaselineMeasurement("simulation-bound", scenario: "simulation-bound");
     ExpectDiagnosis(simulationAgent.Diagnosis, "CpuMainThread", "the simulation-bound fixture");
     Expect(simulationAgent.Diagnosis is null || simulationAgent.Diagnosis.EngineLimitation.Length > 0, "The simulation-bound diagnosis did not explain the engine limitation.");
 
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
 }
-catch (Exception exception) when (exception is InvalidOperationException or TimeoutException or IOException or JsonException or KeyNotFoundException)
-{
-    failures.Add(exception.Message);
-}
 
-foreach (var failure in failures)
+void CheckLiveInterface()
 {
-    Print($"FAILED: {failure}");
+    var run = rig.RunLiveInterface("live-interface");
+    liveInterface = run;
+    var budget = OverheadBudget.For(OptimiserState.DashboardOpen);
+    var rendersOnHardware = !run.Fixture.Adapter.Contains(SoftwareAdapterName, StringComparison.OrdinalIgnoreCase) && run.Fixture.Adapter.Length > 0;
+    Expect(run.Fixture.ExitCode == 0, $"The fixture exited with code {run.Fixture.ExitCode} while the interface was open.");
+    Expect(run.Screenshots.Contains("home.png"), "The interface never showed live data from the game: " + string.Join(", ", run.Screenshots));
+    Expect(run.AgentsStarted == 1, $"The interface should start exactly one agent; {run.AgentsStarted} appeared.");
+    Expect(run.AgentsExitedWithTheInterface, "The agent the interface started was still running after the interface closed.");
+    var processorsUsed = run.CpuPercent * Environment.ProcessorCount / PercentScale;
+    Expect(processorsUsed <= LargestShareOfOneProcessorTheInterfaceMayUse, string.Create(CultureInfo.InvariantCulture, $"The interface used {processorsUsed:0.00} of a logical processor ({run.CpuPercent:0.00}% of the PC) next to a running game; something in it is spinning."));
+    Expect(!rendersOnHardware || run.TypicalCpuPercent <= budget.MaximumCpuPercent, string.Create(CultureInfo.InvariantCulture, $"The interface typically used {run.TypicalCpuPercent:0.00}% of the processor next to a running game ({run.CpuPercent:0.00}% over the whole {run.MeasuredSeconds:0} s); its budget is {budget.MaximumCpuPercent:0.0}%."));
+    Expect(run.PeakPrivateMegabytes <= budget.MaximumPrivateMegabytes, string.Create(CultureInfo.InvariantCulture, $"The interface used {run.PeakPrivateMegabytes:0.0} MB of private memory; its budget is {budget.MaximumPrivateMegabytes:0} MB."));
+    Print($"interface   live next to the game for {run.MeasuredSeconds:0} s: {run.TypicalCpuPercent:0.00}% CPU in the median 15 s slice, {run.CpuPercent:0.00}% overall, {run.PeakPrivateMegabytes:0.0} MB private (budget {budget.MaximumCpuPercent:0.0}% / {budget.MaximumPrivateMegabytes:0} MB{(rendersOnHardware ? string.Empty : "; CPU budget not enforced with software rendering")}); it started {run.AgentsStarted} agent, which {(run.AgentsExitedWithTheInterface ? "exited with it" : "kept running")}; game {run.Fixture.AverageFps:0.0} FPS");
 }
-
-Print($"End-to-end run {(failures.Count == 0 ? "passed" : "failed")} with {failures.Count} problem(s).");
-return failures.Count == 0 ? Passed : Failed;
 
 void Expect(bool condition, string failure)
 {
@@ -210,6 +246,13 @@ void WriteSummary(FixtureResult firstBaseline, FixtureResult attached, FixtureRe
     json.WriteNumber("eventTracingFrames", agent.FrameTiming.PresentedFrames);
     json.WriteString("presentPath", attached.PresentPath);
     json.WriteString("adapter", attached.Adapter);
+    if (liveInterface is { } live)
+    {
+        json.WriteNumber("interfaceCpuPercent", Math.Round(live.CpuPercent, 3));
+        json.WriteNumber("interfaceTypicalCpuPercent", Math.Round(live.TypicalCpuPercent, 3));
+        json.WriteNumber("interfacePeakPrivateMegabytes", Math.Round(live.PeakPrivateMegabytes, 1));
+    }
+
     json.WriteBoolean("passed", failures.Count == 0);
     json.WriteEndObject();
 }

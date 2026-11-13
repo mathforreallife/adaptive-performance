@@ -26,6 +26,7 @@ public sealed class AgentSession : IDisposable
     private const int HighestDefaultTargetFps = 144;
     private const string LastReportFileName = "last-report.json";
     private static readonly TimeSpan LiveSpan = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan BudgetJudgementSpan = TimeSpan.FromSeconds(30);
 
     private readonly AgentOptions options;
     private readonly CancellationToken cancellation;
@@ -34,12 +35,14 @@ public sealed class AgentSession : IDisposable
     private readonly SeriesSummary hookPresentMs = new();
     private readonly OwnProcessProbe probe = new();
     private readonly OverheadMeter meter = new(Environment.ProcessorCount);
+    private readonly OverheadMeter budgetMeter = new(Environment.ProcessorCount, BudgetJudgementSpan);
     private readonly Stopwatch clock = Stopwatch.StartNew();
     private readonly SandboxLink link;
     private readonly FrameTimingProbe? frameTiming;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
+    private readonly ProcessLiveness? owner;
     private readonly LiveFrameWindow liveFrames = new(LiveSpan);
     private HardwareInventory hardware = new();
     private BackgroundModeResult background;
@@ -59,6 +62,7 @@ public sealed class AgentSession : IDisposable
         frameTiming = options.MeasureFrameTiming ? new FrameTimingProbe() : null;
         baseline = options.MeasureBaseline ? new BaselineMeasurement() : null;
         server = options.Serve ? new AgentPipeServer(options.PipeName) : null;
+        owner = options.ExitWithProcessId > 0 ? ProcessLiveness.TryWatch(options.ExitWithProcessId) : null;
     }
 
     public AgentReport Run()
@@ -105,6 +109,7 @@ public sealed class AgentSession : IDisposable
     public void Dispose()
     {
         server?.Dispose();
+        owner?.Dispose();
         frameTiming?.Dispose();
         monitor.Dispose();
         link.Dispose();
@@ -176,7 +181,8 @@ public sealed class AgentSession : IDisposable
 
         var frames = liveFrames.Summarise();
         var latest = monitor.Latest;
-        var ownBudget = OverheadBudget.For(optimisationSession is null ? OptimiserState.GameRunning : OptimiserState.Optimising);
+        var ownBudget = OverheadBudget.For(optimisationSession is null ? OptimiserState.DashboardOpen : OptimiserState.Optimising);
+        var judgedCpu = clock.Elapsed >= BudgetJudgementSpan ? budgetMeter.RollingCpuPercent : 0;
         server.Send(new LiveSampleMessage(
             link.IsConnected,
             link.IsConnected ? SandboxKnowledge.GameName : string.Empty,
@@ -188,7 +194,7 @@ public sealed class AgentSession : IDisposable
             latest.AverageLoadPercent,
             meter.RollingCpuPercent,
             meter.PrivateMegabytes,
-            meter.RollingCpuPercent > ownBudget.MaximumCpuPercent || meter.PrivateMegabytes > ownBudget.MaximumPrivateMegabytes,
+            judgedCpu > ownBudget.MaximumCpuPercent || meter.PrivateMegabytes > ownBudget.MaximumPrivateMegabytes,
             link.IsConnected ? liveFrames.ChartPoints() : []));
     }
 
@@ -232,6 +238,7 @@ public sealed class AgentSession : IDisposable
         {
             var own = probe.Read();
             meter.Record(clock.Elapsed, own, insideWindow);
+            budgetMeter.Record(clock.Elapsed, own, insideWindow);
             monitor.Reconcile(link.GameProcessId);
             monitor.Sample(clock.Elapsed, own, allowProcessSnapshot: !insideWindow);
             PublishLiveSample(insideWindow);
@@ -317,6 +324,11 @@ public sealed class AgentSession : IDisposable
         }
 
         if (options.StopWhenGameExits && link.HasEverConnected && !link.IsConnected)
+        {
+            return true;
+        }
+
+        if (options.ExitWithProcessId > 0 && owner is not { IsRunning: true })
         {
             return true;
         }

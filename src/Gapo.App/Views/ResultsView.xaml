@@ -40,7 +40,11 @@
           </ItemsRepeater.ItemTemplate>
         </ItemsRepeater>
         <TextBlock Text="{x:Bind Report.Sentence}" Style="{StaticResource GapoBodyStyle}" />
-        <Button x:Name="MoreOptionsButton" Content="Show more options" Style="{StaticResource AccentButtonStyle}" Click="OnMoreOptionsClicked" />
+        <StackPanel Orientation="Horizontal" Spacing="8">
+          <Button x:Name="MoreOptionsButton" Content="Show more options" Style="{StaticResource AccentButtonStyle}" Click="OnMoreOptionsClicked" />
+          <Button Content="Revert all" Visibility="{x:Bind CanAct}" Click="OnRevertAllClicked" />
+          <Button Content="Optimise again" Visibility="{x:Bind CanAct}" Click="OnOptimiseAgainClicked" />
+        </StackPanel>
         <TextBlock Text="{x:Bind Report.MeasurementQuality}" Style="{StaticResource GapoSecondaryStyle}" />
       </StackPanel>
     </Border>

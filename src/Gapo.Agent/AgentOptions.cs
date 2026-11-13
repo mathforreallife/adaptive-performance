@@ -13,6 +13,7 @@ public sealed record AgentOptions(
     bool AskGameToCloseWhenDone,
     bool RevertAll,
     bool Serve,
+    int ExitWithProcessId,
     string PipeName,
     string ReportsDirectory,
     string JournalPath,
@@ -29,12 +30,13 @@ public sealed record AgentOptions(
     private const string CloseGameFlag = "--ask-game-to-close-when-done";
     private const string RevertAllFlag = "--revert-all";
     private const string ServeFlag = "--serve";
+    private const string ExitWithProcessOption = "--exit-with-process";
     private const string PipeNameOption = "--pipe-name";
     private const string ReportsOption = "--reports-dir";
 
     public static AgentOptions Parse(IReadOnlyList<string> arguments)
     {
-        var options = new AgentOptions(TelemetryChannel.DefaultMapName, Timeout.InfiniteTimeSpan, StopWhenGameExits: false, MeasureFrameTiming: false, MeasureBaseline: false, OptimisationGoal: null, AskGameToCloseWhenDone: false, RevertAll: false, Serve: false, PipeName: DefaultPipeName(), ReportsDirectory: DefaultReportsDirectory(), JournalPath: DefaultJournalPath(), ReportPath: null);
+        var options = new AgentOptions(TelemetryChannel.DefaultMapName, Timeout.InfiniteTimeSpan, StopWhenGameExits: false, MeasureFrameTiming: false, MeasureBaseline: false, OptimisationGoal: null, AskGameToCloseWhenDone: false, RevertAll: false, Serve: false, ExitWithProcessId: 0, PipeName: DefaultPipeName(), ReportsDirectory: DefaultReportsDirectory(), JournalPath: DefaultJournalPath(), ReportPath: null);
         foreach (var argument in arguments)
         {
             if (argument == StopWithGameFlag)
@@ -48,6 +50,10 @@ public sealed record AgentOptions(
             else if (argument == ServeFlag)
             {
                 options = options with { Serve = true };
+            }
+            else if (TryReadValue(argument, ExitWithProcessOption, out var processId))
+            {
+                options = options with { ExitWithProcessId = int.TryParse(processId, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed) ? parsed : 0 };
             }
             else if (TryReadValue(argument, PipeNameOption, out var pipeName))
             {
