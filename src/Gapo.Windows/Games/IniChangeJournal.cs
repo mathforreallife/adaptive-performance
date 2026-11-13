@@ -140,6 +140,11 @@ public sealed class IniChangeJournal
         return true;
     }
 
+    public static IReadOnlyDictionary<string, string?> OriginalsFor(string journalPath, string settingsPath) =>
+        Read(journalPath) is { } content && string.Equals(content.SettingsPath, settingsPath, StringComparison.OrdinalIgnoreCase)
+            ? content.Original
+            : new Dictionary<string, string?>();
+
     public static bool RevertAll(string journalPath)
     {
         if (Read(journalPath) is not { } content || content.Original.Count == 0)

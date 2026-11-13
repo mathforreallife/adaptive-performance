@@ -31,6 +31,8 @@ public sealed partial class MainWindow : Window
     private readonly HomeView home = new();
     private readonly AgentLink? link;
     private readonly Notifier? notifier;
+    private readonly GameSettingsView gameSettings = new();
+    private GameSettingsMessage? latestSettings;
     private bool windowIsActive = true;
     private ReportView report = ReportView.Empty;
     private bool rendersLiveData = true;
@@ -57,6 +59,11 @@ public sealed partial class MainWindow : Window
         home.OptimiseRequested += goal => link?.Send(new OptimiseCommand(goal));
         home.StopRequested += () => link?.Send(new StopCommand());
         home.RevertAllRequested += () => link?.Send(new RevertAllCommand());
+        home.GameSettingsRequested += ShowGameSettings;
+        gameSettings.BackRequested += ShowHome;
+        gameSettings.ValueChosen += (key, value) => link?.Send(new SetSettingCommand(key, value));
+        gameSettings.LockChanged += (key, locked) => link?.Send(new LockSettingCommand(key, locked));
+        gameSettings.PutBackRequested += key => link?.Send(new RevertSettingCommand(key));
         if (options.ReportPath is { } path && File.Exists(path))
         {
             ShowReport(path);
@@ -100,6 +107,19 @@ public sealed partial class MainWindow : Window
 
     private void ShowHome() => Show(home, StatusText.Text);
 
+    public bool HasGameSettings => latestSettings is not null;
+
+    public void ShowGameSettings()
+    {
+        if (latestSettings is null)
+        {
+            return;
+        }
+
+        gameSettings.Show(latestSettings);
+        Show(gameSettings, "Game settings");
+    }
+
     private void ShowReport(string path)
     {
         report = ReportView.Load(path);
@@ -126,11 +146,30 @@ public sealed partial class MainWindow : Window
                 break;
             case LiveSampleMessage sample:
                 MeasureOwnUse();
+                if (!sample.GameConnected && latestSettings is not null)
+                {
+                    latestSettings = null;
+                    home.ShowGameSettingsAvailable(false);
+                    if (ReferenceEquals(Body.Content, gameSettings))
+                    {
+                        ShowHome();
+                    }
+                }
+
                 if (rendersLiveData)
                 {
                     ShowOwnUse(sample);
                     home.ShowSample(sample);
                     samplesRendered += sample.GameConnected ? 1 : 0;
+                }
+
+                break;
+            case GameSettingsMessage settings:
+                latestSettings = settings;
+                home.ShowGameSettingsAvailable(true);
+                if (ReferenceEquals(Body.Content, gameSettings))
+                {
+                    gameSettings.Show(settings);
                 }
 
                 break;

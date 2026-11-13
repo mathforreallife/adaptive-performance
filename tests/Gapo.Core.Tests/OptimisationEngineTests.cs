@@ -12,11 +12,11 @@ public sealed class OptimisationEngineTests
         Display = new DisplayFacts { Width = 1600, Height = 900, ReportedRefreshHz = 60 },
     };
 
-    private static (OptimisationReport Report, SimulatedGame Game, OptimisationEngine Engine) Optimise(Goal goal = Goal.Balanced, Action<SimulatedGame>? configure = null)
+    private static (OptimisationReport Report, SimulatedGame Game, OptimisationEngine Engine) Optimise(Goal goal = Goal.Balanced, Action<SimulatedGame>? configure = null, IReadOnlySet<string>? lockedSettings = null)
     {
         var game = new SimulatedGame();
         configure?.Invoke(game);
-        var engine = new OptimisationEngine(game, game, game, SixtyHertzQuadCore);
+        var engine = new OptimisationEngine(game, game, game, SixtyHertzQuadCore, lockedSettings: lockedSettings);
         return (engine.Run(goal), game, engine);
     }
 
@@ -119,6 +119,18 @@ public sealed class OptimisationEngineTests
         Assert.Equal("60", game.Settings[SimulatedGame.Cap]);
         Assert.Equal("Locked to 60 FPS to match your 60 Hz display.", report.PacingNote);
         Assert.InRange(report.Final.AverageFps, 58, 61);
+    }
+
+    [Fact]
+    public void LockedSettingsAreNeverChangedAndTheReportSaysSo()
+    {
+        var locked = new HashSet<string> { SimulatedGame.Cap };
+        var (report, game, _) = Optimise(configure: simulated => simulated.RenderMs = 14, lockedSettings: locked);
+
+        Assert.DoesNotContain(report.Experiments, experiment => experiment.Kind == ChangeKind.Pacing);
+        Assert.Equal("0", game.Settings[SimulatedGame.Cap]);
+        Assert.Equal("Frame-rate cap left as it is: you locked it.", report.PacingNote);
+        Assert.StartsWith("Not changed because you locked them:", report.NotTouched[0], StringComparison.Ordinal);
     }
 
     [Fact]

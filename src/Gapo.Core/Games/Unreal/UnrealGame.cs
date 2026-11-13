@@ -1,4 +1,5 @@
 using System.Globalization;
+using Gapo.Core.Optimisation;
 
 namespace Gapo.Core.Games.Unreal;
 
@@ -39,6 +40,10 @@ public static class UnrealSettings
         new(UserSettingsSection, "FullscreenMode", "Window mode", []),
     ];
 
+    public static IReadOnlyList<SettingDefinition> Definitions { get; } = Known.Select(Define).ToList();
+
+    public static UnrealSetting? Find(string key) => Known.FirstOrDefault(setting => setting.Key == key);
+
     public static IReadOnlyDictionary<string, string> Read(IniDocument document)
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -51,6 +56,20 @@ public static class UnrealSettings
         }
 
         return values;
+    }
+
+    private static SettingDefinition Define(UnrealSetting setting)
+    {
+        IReadOnlyList<SettingChoice> choices = setting.Key switch
+        {
+            _ when setting.LevelNames.Count > 0 => setting.LevelNames.Select((name, level) => new SettingChoice(level.ToString(CultureInfo.InvariantCulture), name)).ToArray(),
+            "sg.ResolutionQuality" => new[] { 50, 60, 67, 75, 85, 100 }.Select(percent => new SettingChoice(percent.ToString(CultureInfo.InvariantCulture), percent + " %")).ToArray(),
+            "FrameRateLimit" => new[] { 0, 30, 60, 120, 144 }.Select(fps => new SettingChoice(fps.ToString(CultureInfo.InvariantCulture), fps == 0 ? "Unlimited" : fps + " FPS")).ToArray(),
+            "bUseVSync" => [new SettingChoice("True", "On"), new SettingChoice("False", "Off")],
+            "FullscreenMode" => [new SettingChoice("0", "Fullscreen"), new SettingChoice("1", "Borderless"), new SettingChoice("2", "Windowed")],
+            _ => [],
+        };
+        return new SettingDefinition(setting.Key, setting.Label, choices);
     }
 
     public static string Describe(UnrealSetting setting, string value)

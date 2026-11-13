@@ -43,6 +43,11 @@ try
         rig.RunFixtureAlone("calibration");
         CheckLiveInterface();
     }
+    else if (ValueOf("--only") == "settings")
+    {
+        rig.RunFixtureAlone("calibration");
+        CheckSettingControl();
+    }
     else if (ValueOf("--only") == "restart")
     {
         rig.RunFixtureAlone("calibration");
@@ -186,6 +191,7 @@ void CheckEverything()
     }
 
     CheckLiveInterface();
+    CheckSettingControl();
     CheckUnknownSteamGame();
     CheckGraphicsBoundUnknownGame();
     CheckRestartOptimisation();
@@ -223,6 +229,20 @@ void CheckUnknownSteamGame()
     Expect(!check.Agent.ConnectedToGame, "The agent connected to the fixture's engine hook although the fixture ran without it.");
     Expect(check.Agent.RunAverageCpuPercent <= budget.MaximumCpuPercent && check.Agent.PeakPrivateMegabytes <= budget.MaximumPrivateMegabytes, string.Create(CultureInfo.InvariantCulture, $"The agent used {check.Agent.RunAverageCpuPercent:0.000}% CPU and {check.Agent.PeakPrivateMegabytes:0.0} MB while watching an unknown game; the budget with the interface open is {budget.MaximumCpuPercent:0.0}% / {budget.MaximumPrivateMegabytes:0} MB."));
     Print($"unknown     '{check.GameName}' found through the Steam library and the process list, measured through event tracing only: {served.MedianLiveFps:0.0} FPS live vs {check.Fixture.AverageFps:0.0} FPS from the game ({disagreement:0.0}% apart) over {served.LiveSamplesWithFrames} samples; Optimise {(served.RefusedToOptimise ? "refused with a reason" : "NOT refused")}; exit {(served.SawTheGameLeave ? "noticed" : "missed")}; diagnosis: {served.Diagnosis?.Title ?? "none"}. {served.Diagnosis?.Summary}; agent {check.Agent.RunAverageCpuPercent:0.000}% CPU, {check.Agent.PeakPrivateMegabytes:0.0} MB");
+}
+
+void CheckSettingControl()
+{
+    var (served, report, antiAliasingAfter) = rig.RunSettingControl("settings");
+    var first = served.First;
+    Expect(first is { CanChange: true } && first.Settings.Any(setting => setting.Key == "AntiAliasing" && setting.Choices.Count == 3), "The agent did not send the fixture's settings with their choices.");
+    Expect(served.SetStatus == "Changed: Shadows is now High" && served.ShadowsInFileAfterSet == "High", $"Setting shadows by hand did not reach the game's file (status '{served.SetStatus}', file '{served.ShadowsInFileAfterSet}').");
+    Expect(served.RefusedAnUnknownValue, "An unknown value was not refused.");
+    Expect(served.ShadowsInFileAfterPutBack == "Ultra", $"Putting shadows back left '{served.ShadowsInFileAfterPutBack}' in the game's file.");
+    Expect(antiAliasingAfter == "SSAA4x", $"Anti-aliasing was locked but the optimisation changed it to {antiAliasingAfter}.");
+    Expect(report.NotTouched.Any(note => note.StartsWith("Not changed because you locked them: Anti-aliasing", StringComparison.Ordinal)), "The report did not say that anti-aliasing was left alone because it was locked.");
+    Expect(report.Completed && report.Experiments.All(experiment => !experiment.Title.StartsWith("Anti-aliasing", StringComparison.Ordinal)), "An anti-aliasing experiment ran although it was locked.");
+    Print($"settings    {first?.Settings.Count ?? 0} settings sent; lock, set (Shadows -> {served.ShadowsInFileAfterSet}), refusal and put back (-> {served.ShadowsInFileAfterPutBack}) all confirmed; optimisation with anti-aliasing locked: {report.FpsGainPercent:+0;-0;0}% average FPS, anti-aliasing still {antiAliasingAfter}; {report.NotTouched.FirstOrDefault()}");
 }
 
 void CheckRestartOptimisation()

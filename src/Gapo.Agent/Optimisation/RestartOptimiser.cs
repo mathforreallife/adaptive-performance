@@ -34,6 +34,7 @@ public sealed class RestartOptimiser
     private readonly Action<AgentState, string, string> report;
     private readonly TimeSpan startedAt;
     private readonly Func<long>? gpuBusyTicksSoFar;
+    private readonly IReadOnlySet<string> lockedSettings;
     private readonly List<ExperimentRecord> experiments = [];
     private readonly List<string> notTouched = [];
     private Queue<UnrealCandidate> candidates = new();
@@ -63,8 +64,10 @@ public sealed class RestartOptimiser
         Action<AgentState, string, string> report,
         TimeSpan now,
         int processId,
-        Func<long>? gpuBusyTicksSoFar = null)
+        Func<long>? gpuBusyTicksSoFar = null,
+        IReadOnlySet<string>? lockedSettings = null)
     {
+        this.lockedSettings = lockedSettings ?? new HashSet<string>();
         this.gpuBusyTicksSoFar = gpuBusyTicksSoFar;
         this.gameName = gameName;
         this.settingsPath = settingsPath;
@@ -161,6 +164,13 @@ public sealed class RestartOptimiser
         diagnosisBefore = diagnosis;
         noiseFloorPercent = RestartJudgement.NoiseFloorPercent(observation.FirstHalf, observation.SecondHalf);
         var ordered = UnrealKnowledge.Candidates(values, diagnosis.Primary).ToList();
+        var locked = ordered.Where(candidate => lockedSettings.Contains(candidate.Setting.Key)).Select(candidate => candidate.Setting.Label).ToList();
+        if (locked.Count > 0)
+        {
+            notTouched.Add(SettingLocks.Note(locked));
+            ordered = ordered.Where(candidate => !lockedSettings.Contains(candidate.Setting.Key)).ToList();
+        }
+
         if (goal == Goal.Quality)
         {
             foreach (var skipped in ordered.Where(candidate => candidate.VisualLoss > QualityGoalLargestVisualLoss))

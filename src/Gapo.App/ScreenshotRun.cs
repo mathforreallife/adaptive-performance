@@ -33,6 +33,12 @@ public sealed class ScreenshotRun
             if (!hasResult)
             {
                 await CaptureAsync("home");
+                if (window.HasGameSettings)
+                {
+                    window.ShowGameSettings();
+                    await CaptureAsync("game-settings");
+                }
+
                 return;
             }
 

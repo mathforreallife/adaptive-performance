@@ -49,6 +49,30 @@ public sealed class ProtocolTests
     }
 
     [Fact]
+    public void GameSettingsSurviveTheWire()
+    {
+        IReadOnlyList<SettingChoice> levels = [new("0", "Low"), new("3", "Epic")];
+        var sent = new GameSettingsMessage("Some game", true, true, "Applies at the next start.", [new SettingState("sg.ShadowQuality", "Shadows", "3", "3", true, levels), new SettingState("ResolutionSizeX", "Resolution width", "1920", "1920", false, [])]);
+
+        var received = Assert.IsType<GameSettingsMessage>(WireFormat.DecodeMessage(WireFormat.Encode(sent)));
+
+        Assert.Equal(sent with { Settings = [] }, received with { Settings = [] });
+        Assert.Equal(2, received.Settings.Count);
+        Assert.Equal(sent.Settings[0] with { Choices = [] }, received.Settings[0] with { Choices = [] });
+        Assert.Equal(levels, received.Settings[0].Choices);
+        Assert.Empty(received.Settings[1].Choices);
+    }
+
+    [Fact]
+    public void SettingCommandsSurviveTheWire()
+    {
+        UiCommand[] sent = [new LockSettingCommand("Shadows", true), new SetSettingCommand("sg.ShadowQuality", "2"), new RevertSettingCommand("Fog")];
+
+        Assert.Equal(sent, sent.Select(command => WireFormat.DecodeCommand(WireFormat.Encode(command))));
+        Assert.Null(WireFormat.DecodeCommand("{\"type\":\"set\",\"value\":\"2\"}"));
+    }
+
+    [Fact]
     public void LiveSampleSurvivesTheWire()
     {
         var sent = new LiveSampleMessage(true, "GAPO Sandbox", 24.9, 40.1, 39.6, 11.2, 0.99, 31, 0.13, 10.5, false, [40.0, 41.5, 120.25]);

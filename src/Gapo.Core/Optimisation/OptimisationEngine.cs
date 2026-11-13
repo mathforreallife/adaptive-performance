@@ -48,6 +48,8 @@ public sealed class OptimisationEngine
     private readonly List<ExperimentRecord> experiments = [];
     private readonly List<SettingCandidate> keptCandidates = [];
     private readonly List<string> notTouched = [];
+    private readonly IReadOnlySet<string> lockedSettings;
+    private readonly SortedSet<string> skippedBecauseLocked = new(StringComparer.Ordinal);
     private GameSettings? original;
     private GameSettings current = new([], 0);
     private WindowResult reference = new(FrameStatistics.Empty, null, []);
@@ -57,14 +59,29 @@ public sealed class OptimisationEngine
     private int windows;
     private int changesWithoutEffect;
 
-    public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null)
+    public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null, IReadOnlySet<string>? lockedSettings = null)
     {
+        this.lockedSettings = lockedSettings ?? new HashSet<string>();
         this.session = session;
         this.knowledge = knowledge;
         this.journal = journal;
         this.hardware = hardware;
         this.report = report ?? ((_, _) => { });
     }
+
+    private bool SkipWhenLocked(SettingCandidate candidate)
+    {
+        if (!SettingLocks.Touches(candidate, lockedSettings))
+        {
+            return false;
+        }
+
+        skippedBecauseLocked.Add(candidate.Setting);
+        return true;
+    }
+
+    private string[] WithLockNote() =>
+        skippedBecauseLocked.Count == 0 ? notTouched.ToArray() : [SettingLocks.Note(skippedBecauseLocked), .. notTouched];
 
     public OptimisationReport Run(Goal goal)
     {
@@ -123,7 +140,7 @@ public sealed class OptimisationEngine
                 FinalSettings = current,
                 PacingNote = pacingNote,
                 Experiments = experiments.ToArray(),
-                NotTouched = notTouched.ToArray(),
+                NotTouched = WithLockNote(),
                 Completed = true,
                 MeasurementWindows = windows,
                 Duration = clock.Elapsed,
@@ -141,7 +158,7 @@ public sealed class OptimisationEngine
                 Error = failure.Message,
                 FinalSettings = current,
                 Experiments = experiments.ToArray(),
-                NotTouched = notTouched.ToArray(),
+                NotTouched = WithLockNote(),
                 MeasurementWindows = windows,
                 Duration = clock.Elapsed,
             };
@@ -201,7 +218,7 @@ public sealed class OptimisationEngine
 
     private Stopwatch? FixHitchesFirst(FrameStatistics hitches)
     {
-        if (knowledge.HitchFix(current, hitches) is not { } fix)
+        if (knowledge.HitchFix(current, hitches) is not { } fix || SkipWhenLocked(fix))
         {
             return null;
         }
@@ -241,7 +258,7 @@ public sealed class OptimisationEngine
         {
             var smallestWorthTesting = Math.Max(SmallestPredictionMs, reference.Statistics.MedianBusyMs * SmallestPredictionShareOfWork);
             var candidates = knowledge.Candidates(current, reference, hardware.Cpu, memoryPressure)
-                .Where(candidate => !tried.Contains(candidate.Key) && !blocked.Contains(candidate.Setting))
+                .Where(candidate => !tried.Contains(candidate.Key) && !blocked.Contains(candidate.Setting) && !SkipWhenLocked(candidate))
                 .Where(candidate => candidate.Kind == ChangeKind.MemoryRelief || candidate.PredictedSavingMs >= smallestWorthTesting)
                 .OrderByDescending(candidate => candidate.Value)
                 .ToList();
@@ -470,6 +487,11 @@ public sealed class OptimisationEngine
         }
 
         var candidate = knowledge.FrameCap(current, cap, why);
+        if (SkipWhenLocked(candidate))
+        {
+            return "Frame-rate cap left as it is: you locked it.";
+        }
+
         if (candidate.Changes.All(change => current.Is(change.Key, change.Value)))
         {
             return Text($"Already capped at {cap} FPS.");

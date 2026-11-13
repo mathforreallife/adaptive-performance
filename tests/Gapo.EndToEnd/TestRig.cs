@@ -109,6 +109,52 @@ public sealed class TestRig
 
     public string SandboxSettingsPath => Path.Combine(sandboxDataDirectory, "sandbox-settings.ini");
 
+    public (SettingControlRun Served, OptimisationResult Report, string AntiAliasingAfter) RunSettingControl(string name)
+    {
+        var configuredSeconds = runSeconds;
+        runSeconds = LongestOptimisationSeconds;
+        var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
+        var journal = Path.Combine(outputDirectory, name + "-journal.json");
+        SettingControlRun? served = null;
+        Exception? clientFailure = null;
+        string ReadSetting(string key) =>
+            File.ReadAllLines(SandboxSettingsPath).Select(line => line.Split('=', 2)).Where(parts => parts.Length == 2 && parts[0].Trim() == key).Select(parts => parts[1].Split(';')[0].Trim()).FirstOrDefault() ?? string.Empty;
+        var client = new Thread(() =>
+        {
+            try
+            {
+                using var link = InterfaceClient.Connect(pipeName);
+                served = link.ExerciseSettingControl(ReadSetting);
+            }
+            catch (Exception exception) when (exception is TimeoutException or IOException or InvalidOperationException or InvalidCastException)
+            {
+                clientFailure = exception;
+            }
+        })
+        { IsBackground = true, Name = "rig setting-control client" };
+        try
+        {
+            client.Start();
+            RunFixtureWithAgent(name, "--serve", "--pipe-name=" + pipeName, "--reports-dir=" + Path.Combine(outputDirectory, "reports-" + name), "--ask-game-to-close-when-done", "--journal=" + journal);
+            client.Join(TimeSpan.FromSeconds(10));
+            if (served is null)
+            {
+                throw new InvalidOperationException("The setting-control link did not complete: " + (clientFailure?.Message ?? "no report was announced"));
+            }
+
+            using var document = JsonDocument.Parse(File.ReadAllText(served.ReportPath));
+            var report = ReadOptimisation(document.RootElement.GetProperty("optimisation"));
+            var antiAliasing = ReadSetting("AntiAliasing");
+            using var revert = Start(AgentExecutable, ["--revert-all", "--journal=" + journal]);
+            WaitForExit(revert, "agent");
+            return (served, report, antiAliasing);
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
+    }
+
     public (FixtureResult Fixture, AgentResult Agent, ServedRun Served) RunFixtureWithOptimisation(string name)
     {
         var configuredSeconds = runSeconds;
