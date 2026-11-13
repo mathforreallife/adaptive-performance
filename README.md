@@ -1,66 +1,126 @@
-# Adaptive Performance — GAPO
+# GAPO: game performance, measured
 
-**GAPO (Game Adaptive Performance Optimizer)** is an adaptive performance engine for PC games. It finds what is stopping the next frame from being produced, tests one fix at a time, keeps what measurably helps and rolls back what doesn't.
+**GAPO (Game Adaptive Performance Optimizer)** is a Windows app that watches your PC games while you play, tells you what is holding them back, and, only when you ask, tests one game setting at a time and keeps only the changes that measurably help. Everything it changes can be put back with one click.
 
-This repository contains:
+> **Status: 0.9 beta.** This is the first release meant for real Steam games. GAPO has been tested end to end on its own test games, on a Windows 10 laptop and on Windows CI. Its first contact with real Steam games is this beta, so please report what you see.
 
-| What | Where |
+<p align="center">
+  <img src="docs/images/home.png" alt="GAPO's home page with live FPS, frame time and the frame-time chart of a running game" width="720">
+</p>
+
+## What it does
+
+- **Measures any running Steam game.** You see frames per second, frame time, stutters per minute, a 10-second frame-time chart, and how much processor the game uses. GAPO finds the game by itself through your Steam library and the list of running programs.
+- **Says what limits the game.** After about 20 seconds of play it tells you whether the graphics card, one processor thread, the whole processor or something else is the limit. It reports this from measurements, without changing anything.
+- **Optimises when you ask.** Press **Optimise…** and GAPO first shows a plan: which settings it may test, how many game restarts it needs and an estimated time. Nothing changes until you press **Start**. A progress bar then shows the time left.
+- **Proves every change.** GAPO changes one setting, measures the same kind of play again, and keeps the change only if it beats the measuring noise. Otherwise it puts the setting straight back. The result screen shows the frame rate before and after and the reason for every decision.
+- **Shows an FPS overlay.** A small box over the game shows live FPS and, after an optimisation, before and after. It is a separate GAPO window on top of the game, never injected into it.
+- **Leaves you in control.**
+  - Lock settings GAPO must never touch.
+  - Set a value yourself, or put back a single setting.
+  - Have GAPO ask before each change.
+  - Forbid frame-rate caps or choose a frame-rate target.
+  - Limit the number of restarts.
+  - Switch the optimiser off entirely.
+
+<p align="center">
+  <img src="docs/images/plan.png" alt="The plan GAPO shows before optimising: steps, settings to test and an estimated time, with Start and Cancel" width="720">
+</p>
+
+## Which games
+
+| Game | What GAPO does |
 |---|---|
-| **Ready-to-run Windows demo** (game + optimiser, no install) | [`demo/release/GAPO-Demo.zip`](demo/release/GAPO-Demo.zip), or the two `.exe` files in [`demo/release/GAPO-Demo/`](demo/release/GAPO-Demo) |
-| **Handover spec for the commercial product**: conclusions from the demo, the complete original spec with marked lessons (🧪 / ✏️ / ➕), a practical build guide (architecture, stack, build order, Windows VM testing, overhead budgets, minimal theme-following design) and the measured results | [`Adaptive-Performance-FINAL.md`](Adaptive-Performance-FINAL.md) |
-| Demo source code (C#, .NET Framework 4.6.2, WinForms, no dependencies) | [`demo/src`](demo/src) |
-| Windows CI that builds and runs the demo end to end | [`.github/workflows/windows-demo.yml`](.github/workflows/windows-demo.yml) |
+| Any Steam game | Measures it live and says what limits it |
+| Unreal Engine games without anti-cheat | Also optimises: lowers one graphics setting per game restart in the game's `GameUserSettings.ini` and keeps it only if each frame takes measurably less work |
+| Games with Easy Anti-Cheat or BattlEye | Measured only; their files are never touched |
+| Other engines (Unity, Source, custom) | Measured only in 0.9 |
 
-## Run the demo (Windows 10 / 11)
+## Install
 
-1. Download [`demo/release/GAPO-Demo.zip`](demo/release/GAPO-Demo.zip) and extract it. It's two small programs, about 190 KB zipped.
-2. Run **`GAPO-Sandbox.exe`**. This is a simple island sandbox game with deliberately wasteful "Ultra" defaults. It measures your PC for a second at start-up and scales its world so it runs a little laggy on any machine: roughly 30–40 FPS, with a short freeze every 10 s. The FPS counter and frame-time graph are in the top left.
-3. Run **`GAPO-Optimiser.exe`** while the game is running. It scans your hardware, connects to the game and shows live FPS and the current bottleneck. Pick a goal (**Balanced** is a good start) and click **Optimise now**.
-4. Wait about a minute. The optimiser measures a baseline twice (to learn how noisy measurements are on your PC), diagnoses the bottleneck, then tests one change at a time on a repeatable benchmark flight. It keeps what beats the noise and rolls back the rest.
-5. The results screen shows the **percentage increase in average FPS**. **Show more options** reveals everything it did, in five tabs: every change with its measurements and reasoning, the before/after diagnosis, your PC, tips it deliberately didn't apply, and a live analyser.
+1. Download `GAPO-0.9.0-win-x64.zip` from [Releases](../../releases) and unzip it.
+2. Double-click **Install.cmd**. GAPO is installed for your account only: no administrator rights are needed to install. It goes to the Start menu and the desktop, and appears under **Settings → Apps** for uninstalling.
+3. When the installer offers to add your account to **Performance Log Users**, say **Y**, then sign out of Windows and back in once. Windows allows reading frame times to that group, so GAPO can then run without administrator rights.
 
-**Revert all** in the optimiser, or **F5** in the game, restores the unoptimised settings. Nothing outside `%LOCALAPPDATA%\GAPO-Demo` is changed, apart from the game's process priority. The optimiser only tests that when background apps compete for the CPU, and Windows resets it when the game closes.
+Windows 10 or 11 (64-bit) is required. Nothing else needs installing; .NET and the Windows App SDK are bundled. GAPO is not code-signed yet, so SmartScreen may warn you: choose **More info → Run anyway**.
 
-The demo is not code-signed, so Windows SmartScreen may say *"Windows protected your PC"*. Click **More info → Run anyway**.
+The full user guide is in [`docs/USER-GUIDE.md`](docs/USER-GUIDE.md); the release zip includes it as `READ-ME-FIRST.md`.
 
-The optimiser shows its own CPU and memory use in the top bar at all times. Keeping that overhead tiny is a core requirement: an optimiser that causes lag has failed. On the Windows test machine it used about 0.5 % CPU while optimising, 0.06 % or less inside measurement windows, and under 40 MB of RAM.
+## What GAPO promises
 
-The demo's gradient styling is only for this prototype. The commercial product's UI is specified as minimal and flat: one background colour that follows the Windows light/dark theme (see the handover spec, Part III.8).
+- It **never** injects into games, reads game memory, installs drivers, changes BIOS settings or closes programs.
+- It changes a game only the way a player would, by editing the game's own settings file. It records the original first, so **Revert all** restores it byte for byte. A copy of the original file is also kept next to it as `*.gapo-original`.
+- It reports only what it measured. Every number on the result screen comes from frames it timed on your PC.
+- It stays light. GAPO shows its own CPU and memory use at all times, and every build is gated on an overhead test. The background agent used about 0.15–0.3 % CPU on the test machines, and the window about 0.2–0.4 %.
+
+<p align="center">
+  <img src="docs/images/game-settings.png" alt="Game settings: every setting GAPO knows, with its value, whether GAPO may change it, and the original value" width="720">
+</p>
+<p align="center">
+  <img src="docs/images/settings.png" alt="Settings: the optimiser switch and the automatic diagnosis switch" width="720">
+</p>
+
+## Results so far
+
+Measured by the automated test rig on GAPO's own test games, not on commercial games:
+
+| Test | Result |
+|---|---|
+| Live optimisation of a deliberately wasteful test game | about +140 to +155 % average FPS on the laptop (25 → 60 FPS, capped to the display); +22 % on a faster CI machine that was already close to its 64 Hz target, with frame work halved |
+| Restart-based optimisation of an Unreal-style test game | between +37 % and +300 % average FPS over up to 6 restarts, varying from run to run with measurement noise; Revert all restored the file byte for byte every time |
+| Live FPS of a game GAPO knows nothing about | within about 4 % of the game's own counter |
+| Plan estimate vs reality | live: estimate 28–105 s, took 65 s; restarts: estimate 160–815 s, took 202 s |
+
+Real games will gain less. A real game's defaults are not deliberately wasteful, and many already run at the frame-rate target. In that case GAPO says so and changes nothing.
+
+## How it works
+
+```text
+ GAPO window (WinUI 3)                       GAPO agent (background, low priority)
+┌───────────────────────────────┐  named   ┌─────────────────────────────────────────────┐
+│ live numbers, chart, overlay  │◀─ pipe ─▶│ finds Steam games (library + process list)  │
+│ plan card, progress, results  │          │ frame times: Windows event tracing (DXGI)   │
+│ settings, locks, preferences  │          │ GPU busy time: DxgKrnl events               │
+└───────────────────────────────┘          │ diagnosis: what limits the frame            │
+                                           │ optimiser: change one → measure → keep/undo │
+                                           │ crash-safe change journal → Revert all      │
+                                           └─────────────────────────────────────────────┘
+```
+
+Frame timing uses the same Windows event tracing that PresentMon uses. A cross-check against PresentMon 2.6 agreed within 0.1 % on frame time and about 3 % on GPU busy time. Decisions follow the measurement noise: GAPO measures your current settings twice, and a change has to beat the difference between those two runs.
 
 ## Build from source
 
-Any OS with the .NET SDK (8+):
+You need Windows 10/11 x64 and the .NET SDK 10.0.404 or later (see [`global.json`](global.json)).
 
-```bash
-./demo/build.sh          # builds both programs and writes demo/release/GAPO-Demo.zip
+```powershell
+dotnet build Gapo.slnx -c Release
+dotnet test --solution Gapo.slnx -c Release
+.\tools\package-release.ps1          # writes artifacts\release\GAPO-<version>-win-x64.zip
 ```
 
-The output targets .NET Framework 4.6.2, which ships with Windows 10 and 11, so the `.exe` files run without installing anything. Every push runs [`windows-demo.yml`](.github/workflows/windows-demo.yml) on a Windows runner. It builds both programs, runs the sandbox, runs the optimiser's full auto-test against it, prints the optimisation report and the optimiser's measured overhead, and uploads the binaries and screenshots as artifacts.
+| Path | What |
+|---|---|
+| `src/Gapo.Core` | Measurement, statistics, diagnosis, optimisation engine, estimates, protocol |
+| `src/Gapo.Windows` | Event tracing, hardware inventory, Steam library, change journals |
+| `src/Gapo.Agent` | Background agent: game detection, live data, optimisers |
+| `src/Gapo.App` | WinUI 3 window, overlay, settings |
+| `src/Gapo.Adapters.Sandbox` | Knowledge for the test game |
+| `fixture/` | The test game used by the end-to-end rig |
+| `tests/Gapo.EndToEnd` | End-to-end rig: real game, agent and window on Windows, with overhead gates |
+| `tools/Gapo.SourceRules` | CI check that product source has no code comments |
+| `docs/` | User guide, architecture decisions (`adr/`), handover notes |
+| `Adaptive-Performance-FINAL.md` | Product specification, with lessons learned marked 🧪 / ✏️ / ➕ |
 
-Useful switches:
+Every push runs [`.github/workflows/windows.yml`](.github/workflows/windows.yml): build, unit tests, the no-comments check and the full end-to-end rig.
 
-| Program | Switch | Effect |
-|---|---|---|
-| `GAPO-Sandbox.exe` | `--reset` | Start from the unoptimised defaults |
-| | `--recalibrate` | Re-measure this PC and rescale the demo workload |
-| | `--autotest=SECONDS --screenshot=FILE --log=FILE` | Run, capture, write stats and exit (CI) |
-| | `--headless=SECONDS` | Run the game loop without a window (testing off Windows) |
-| `GAPO-Optimiser.exe` | `--autotest=DIR [--goal=Balanced\|MaxFps\|Quality\|Smooth]` | Optimise automatically, save screenshots and the report to `DIR`, then exit |
-| | `--selftest` | Console-only run of the full engine against a running sandbox |
+## Roadmap
 
-## How the demo is put together
+- **Real-game testing** of the Unreal adapter on PCs with Steam (the most important next step).
+- More engines: Unity games, plus games that keep settings in JSON or XML files.
+- More launchers: Epic Games, GOG.
+- A shared knowledge base, so GAPO knows which settings matter for each game before it tests.
+- GPU busy time on PCs with hardware-accelerated GPU scheduling.
+- Code signing and an MSIX package.
 
-```text
-GAPO-Sandbox.exe                                   GAPO-Optimiser.exe
-┌──────────────────────────────┐   shared memory   ┌──────────────────────────────────────┐
-│ game loop (main thread)      │ ── frame times ─▶ │ GameLink      reads telemetry @10 Hz │
-│  simulation: O(n²) AI+physics│    & stage costs  │ SystemMonitor per-core, game CPU/IO, │
-│  software renderer (passes)  │                   │               own overhead @1 Hz     │
-│  blocking autosave (hitch)   │ ◀─ benchmark cmd ─│ HardwareScanner once at start-up     │
-│ hot-reloads settings INI     │ ◀─ settings INI ──│ Engine: observe → diagnose → predict │
-│ reports applied revision     │   (atomic write)  │   → change one → measure → keep/revert│
-└──────────────────────────────┘                   │ UI: simple result + Show more options│
-                                                   └──────────────────────────────────────┘
-```
-
-The optimiser never injects into the game or reads its memory. It changes the game the same way a player would, by editing the game's settings file, and it proves every change with a measurement.
+The original proof-of-concept demo (WinForms, .NET Framework) is kept in [`demo/`](demo/) for reference.

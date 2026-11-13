@@ -164,6 +164,20 @@ public sealed partial class MainWindow : Window
 
     public bool HasGameSettings => latestSettings is not null;
 
+    public bool HasPlan { get; private set; }
+
+    public bool RequestPlan()
+    {
+        if (link is not { IsConnected: true })
+        {
+            return false;
+        }
+
+        ShowHome();
+        link.Send(new PlanCommand(home.SelectedGoal));
+        return true;
+    }
+
     public void ShowGameSettings()
     {
         if (latestSettings is null)
@@ -229,6 +243,7 @@ public sealed partial class MainWindow : Window
 
                 break;
             case PlanMessage plan:
+                HasPlan = true;
                 home.ShowPlan(plan);
                 break;
             case ProgressMessage progress:

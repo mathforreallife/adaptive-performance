@@ -157,10 +157,26 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - Engine/fixture state: the engine stops when the game already runs at the display rate; on the CI runner the result is 33.1 -> 62.0 FPS (+87 %), four kept, none rolled back. The fixture counts time blocked in `Map` and `Present` as wait.
 - Not done in the UI: live link to the agent (named pipe), home view with live stat tiles and frame-time chart, frame-budget bar, running / warm-up / error states, Revert all / Optimise again / Save report buttons, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, measuring the UI process against its 0.5 % / 80 MB budget.
 
+## Release 0.9 beta (2026-11-13, user request: "better README, fully built and finished for Steam, finalize everything to launch")
+
+- Version 0.9.0 (`Directory.Build.props`). `tools/package-release.ps1` writes `artifacts/release/GAPO-<version>-win-x64.zip` (+ `.sha256`): self-contained window, single-file agent, `Install.cmd`, `Install-GAPO.ps1`, `Uninstall-GAPO.ps1` (sources in `tools/release/`), `READ-ME-FIRST.md` (= `docs/USER-GUIDE.md`).
+- Installer: per user, no administrator rights; copies to `%LOCALAPPDATA%\Programs\GAPO`, Start menu + desktop shortcuts, Apps & Features entry (HKCU uninstall key). Offers to add the account to Performance Log Users (SID S-1-5-32-559, one UAC prompt, sign out/in) so the window runs unelevated and notifications work. **Not yet verified on a PC**: whether every event-tracing provider GAPO uses (DXGI present, DxgKrnl GPU) is readable by that group without elevation. First thing to check on a beta PC.
+- Uninstaller: asks whether to revert game settings (`Gapo.Agent.exe --revert-all`), removes program, shortcuts and uninstall key; keeps `%LOCALAPPDATA%\GAPO` unless `-RemoveData`.
+- README rewritten for players; screenshots in `docs/images/` from the interface rig phase (`ui-live`, light theme; the window now also captures `plan.png`).
+- Honest status: measures any Steam game, optimises only Unreal Engine games without anti-cheat, never run against a real commercial game. It is a beta, published as a GitHub pre-release.
+
+### Launch checklist (what "finished" still needs)
+
+1. Beta test on PCs with Steam and real Unreal games (`docs/USER-GUIDE.md`, "Report a problem"); confirm the Performance Log Users path.
+2. Code signing certificate (SmartScreen), then an MSIX or signed installer.
+3. Second engine family (Unity registry prefs or JSON/XML config games), and Epic/GOG libraries.
+4. Knowledge base (build-order step 8) so GAPO knows per game which settings matter.
+5. Privacy note for the reports folder before any telemetry upload is added (none exists today).
+
 ## Next actions, in order
 
-1. Make sure the `step-7-live-link` PR is merged and its CI run is green (on the GPU-less runner the interface CPU budget is reported, not enforced; the quarter-of-a-processor ceiling and the 80 MB limit are).
-2. Remaining UI: frame-budget bar, running / warm-up / error states with phase progress, Save report, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, Tips content.
+1. Merge PR #18 and PR #19 when CI is green; publish the 0.9.0 pre-release from the default branch.
+2. Remaining UI: frame-budget bar, warm-up / error states, Save report, tray icon, high-contrast and 150 % / 200 % screenshots, Tips content.
 3. Real games, continued: run the Unreal adapter against a real Unreal Engine game on a PC with Steam; frame-rate cap/VSync tuning for restart-based games; second engine family (Unity's `prefs` in the registry, or a JSON-config game); a tray notification when GAPO waits for a restart.
 4. Leftovers: GPU busy for hardware-scheduled GPUs (HAGS: `HwQueue`/`QueuePacket` path, needs a HAGS-capable PC), hitch-period observation, ADR for the engine/adapter interfaces, README refresh. (GPU busy time for DMA-packet GPUs is done: ADR 0005.)
 5. Then steps 8-12 of the build order.
