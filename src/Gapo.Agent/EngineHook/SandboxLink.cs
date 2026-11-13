@@ -72,6 +72,23 @@ public sealed class SandboxLink : IDisposable
         return total;
     }
 
+    public bool GameIsRunningNormally => channel is not null && channel.State == SandboxState.Running;
+
+    public int AppliedSettingsRevision => channel?.AppliedRevision ?? 0;
+
+    public bool LastCommandWasAcknowledged => channel is not null && channel.CommandAcknowledged == channel.CommandSequence;
+
+    public bool TrySendCommand(SandboxCommand command, int argument)
+    {
+        if (channel is null)
+        {
+            return false;
+        }
+
+        channel.SendCommand(command, argument);
+        return true;
+    }
+
     public void SkipBacklog()
     {
         if (channel is not null)

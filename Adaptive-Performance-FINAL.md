@@ -1163,6 +1163,15 @@ If the visual-quality loss is acceptable, keep the change. If not, revert it.
 > 7. **Stop when the goal is met** (Balanced/Quality) instead of spending visual quality for nothing, then try a **quality give-back** pass if there is lots of headroom.
 > One experiment took ~3.5–4 s; a full Windows run with 5–7 experiments took 31–38 s. On real games with restart-required settings this becomes minutes — prioritise by predicted value per visual cost and stop early.
 
+> ➕ **Added (product build, step 3)** — the measurement harness is now pure, unit-tested code in `src/Gapo.Core/Measurement`, fed with frames from any source (the engine hook today, ETW presents for games without one):
+> - `FrameStatistics` — median busy time, median / 95th / 99th percentile frame time, spread, stutters (same thresholds as the demo). **1 % and 0.1 % lows are simply not reported below 1,000 and 10,000 frames**, so a short window can never produce a low that is really one frame.
+> - `MeasurementWindow` — discards 650 ms of settling frames, keeps only frames of the expected settings revision that are not warm-up frames, completes after 2.6 s and 45 frames, and after 7 s either completes flagged as *cut short* (8 or more usable frames) or **fails** with "Too few frames were measured" — never "no gain".
+> - `NoiseFloor` — 2.5 × the A/A difference, clamped to 2.5–10 %, plus the rule learned in step 1: when the A/A pair differs by more than 4 % (the point where the clamp would be reached) the floor *cannot be trusted* and the pair is measured again, up to three attempts.
+> - `ChangeComparison` — a gain inside the floor proves nothing; a gain under 3× the floor is *borderline* and asks for confirmation by interleaved A/B pairs, which must agree in direction and beat the floor on average (the answer to Appendix B's note that the pacing decision flipped between runs).
+> - `WarmupDetector` — warm when 30–90 recent frames carry no warm-up mark and at most two spikes; works from frame times alone when the game gives no marks.
+>
+> First run against the fixture on the entry-level laptop: waited 7.4 s for warm-up, two windows of 62 and 65 frames on the restarted benchmark flight at 40.58 and 40.22 ms frame work (0.9 % apart → noise floor ±2.5 %, first attempt), and the agent used **0.09 % CPU inside the windows** (budget 0.3 %); process snapshots are suspended while a window is open.
+
 
 The full process should be:
 

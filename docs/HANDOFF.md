@@ -98,26 +98,27 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 - The agent scans once at start-up and writes the inventory into its report; the rig checks it (logical processors, memory, display, Windows build, the adapter the game rendered on is listed, scan under 1.5 s). On the laptop: 55 ms, nothing unread.
 - Not yet done for step 2: rescan on hardware or driver change, VRAM budget/usage (`IDXGIAdapter3::QueryVideoMemoryInfo`), PCIe link width, monitor VRR.
 
+## Step 3 state (branch `step-3-measurement-harness`, stacked on step 2)
+
+- `src/Gapo.Core/Measurement/` — `FrameStatistics.cs`, `MeasurementWindow.cs`, `NoiseFloor.cs` (with `ChangeComparison`), `WarmupDetector.cs`; tests in `tests/Gapo.Core.Tests/MeasurementTests.cs`.
+- `src/Gapo.Agent/Measurement/BaselineMeasurement.cs` — state machine driven from the agent loop: wait for warm-up, switch the fixture to its benchmark flight, restart the scene before each window, two windows, noise floor, retry up to three times when the pair cannot be trusted. `--measure-baseline` turns it on; the report gets a `baseline` object. The rig runs it as a fourth run (`baseline-measurement`, 45 s) and checks it, including CPU inside windows.
+- Rig output directories: the old session scratchpad is gone; use `artifacts/rig/<name>` inside the repo (ignored by git).
+- Timing-sensitive unit tests failed twice on loaded machines; keep lower bounds loose (15-20 % of a processor) whenever a test spins a thread.
+
 ## Next actions, in order
 
-1. Push `step-2-hardware-inventory`, open PR #3 with base `step-1-telemetry-core`, make CI green (watch the runner's inventory output: Hyper-V video, odd memory modules, unknown refresh rate are expected there and must come out as notes, not failures).
-2. Step 3, measurement harness, in `Gapo.Core/Measurement` (pure, driven by frames) plus an agent mode that runs it against the fixture:
-   - frame statistics per window: median busy time, p95/p99 frame time, average FPS, 1 % / 0.1 % lows (only reported with enough frames), stutter count with the demo's thresholds, computed only over frames of one settings revision;
-   - measurement window lifecycle: restart the benchmark path, discard 650 ms, collect at least 2600 ms and 45 frames, give up after 7 s, fail (not "no gain") on too few frames;
-   - warm-up detection and waiting (up to 45 s) with the reason for the user;
-   - A/A noise floor (2.5 x the difference, clamped 2.5-10 %) and the new rule from step 1: refuse to judge and re-measure when the A/A pair disagrees by more than 8 %;
-   - hitch observation over at least 14 s; ABAB interleaving helper;
-   - `docs/research/demo-engine.md` lists every constant and the demo's exact formulas.
-   - The agent keeps quiet inside windows (`insideMeasurementWindow: true` in the overhead meter) and the rig asserts the in-window budget.
-3. Leftovers from step 1: GPU busy time from Microsoft-Windows-DxgKrnl events validated with `--scenario=gpu-load`; game detection without the fixture hook; ADR 0004 (frame timing).
-4. Then steps 4 (diagnosis), 5 (game adapters, Steam library), 6 (experiment engine), 7 (UI).
+1. Push `step-3-measurement-harness`, open PR #4 (base `step-2-hardware-inventory`), make CI green; also confirm PR #3's CI went green after the test fix.
+2. Finish step 3: hitch observation over at least 14 s (period and size of storage hitches, per revision); a `MeasuredChange` helper that applies one settings change through an adapter interface, waits for the revision acknowledgement, measures, and returns the verdict (this is the seam to step 6); the same harness fed from ETW frames when no hook exists (busy time = CPU busy).
+3. Step 4, diagnosis v1 in `Gapo.Core/Diagnosis`: stage-time classification against the frame budget (simulation / render / present / streaming) when a hook exists; CPU-bound vs waiting-in-present from ETW otherwise; one-thread limit from the monitor (busiest thread vs processors used); background contention; memory pressure; storage hitch; transient. Conditional evidence sentences only. Use the fixture scenarios (`--scenario=...`) as test cases in the rig. `docs/research/demo-engine.md` sections 6-8 hold the demo's rules and wording.
+4. Leftovers from step 1: GPU busy time from Microsoft-Windows-DxgKrnl events validated with `--scenario=gpu-load`; game detection without the fixture hook; ADR 0004 (frame timing).
+5. Then steps 5 (game adapters, Steam library), 6 (experiment engine), 7 (UI).
 
 ## Task list (build order, spec III.4)
 
 - [x] 0. Test rig — done (PR #1, waiting for the user to merge)
 - [x] 1. Telemetry core — done except GPU busy time (PR #2)
-- [ ] 2. Hardware inventory — in progress (PR #3)
-- [ ] 3. Measurement harness
+- [x] 2. Hardware inventory — done (PR #3)
+- [ ] 3. Measurement harness — in progress (PR #4)
 - [ ] 4. Diagnosis v1
 - [ ] 5. First three game adapters
 - [ ] 6. Experiment engine

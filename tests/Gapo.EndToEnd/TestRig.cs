@@ -6,7 +6,9 @@ namespace Gapo.EndToEnd;
 
 public sealed record FixtureResult(string Name, int ExitCode, double AverageFps, double OnePercentLowFps, double MedianWorkMs, int Frames, int WarmupFrames, string PresentPath, string Adapter);
 
-public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor, HardwareResult Hardware);
+public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor, HardwareResult Hardware, BaselineResult? Baseline, double MeasurementWindowCpuPercent);
+
+public sealed record BaselineResult(bool Succeeded, string FailureReason, int Attempts, double WaitedForWarmupSeconds, double NoiseFloorPercent, bool NoiseFloorCanBeTrusted, int FirstWindowFrames, int SecondWindowFrames, double FirstWindowMedianBusyMs, double SecondWindowMedianBusyMs);
 
 public sealed record HardwareResult(double ScanMilliseconds, string Class, string ProcessorName, int LogicalProcessors, int Cores, long MemoryMegabytes, string ChannelMode, IReadOnlyList<string> GraphicsAdapters, string PrimaryGraphics, int DisplayWidth, int EffectiveRefreshHz, int WindowsBuild, IReadOnlyList<string> CouldNotBeRead);
 
@@ -28,7 +30,9 @@ public sealed class TestRig
     private readonly string binariesRoot;
     private readonly string outputDirectory;
     private readonly string sandboxDataDirectory;
-    private readonly double runSeconds;
+    private const double LongEnoughForABaselineSeconds = 45;
+
+    private double runSeconds;
     private readonly string? workload;
 
     public TestRig(string binariesRoot, string outputDirectory, double runSeconds, string? workload)
@@ -51,7 +55,21 @@ public sealed class TestRig
         return Collect(name, fixture);
     }
 
-    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithAgent(string name)
+    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithBaselineMeasurement(string name)
+    {
+        var configuredSeconds = runSeconds;
+        runSeconds = Math.Max(runSeconds, LongEnoughForABaselineSeconds);
+        try
+        {
+            return RunFixtureWithAgent(name, "--measure-baseline");
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
+    }
+
+    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithAgent(string name, params string[] extraAgentArguments)
     {
         var mapName = MapNameFor(name);
         var agentReport = Path.Combine(outputDirectory, name + "-agent.json");
@@ -63,6 +81,7 @@ public sealed class TestRig
             "--frame-timing",
             "--seconds=" + Seconds(runSeconds + StartupAllowance.TotalSeconds),
             "--report=" + agentReport,
+            .. extraAgentArguments,
         ]);
         var fixtureResult = Collect(name, fixture);
         WaitForExit(agent, "agent");
@@ -133,7 +152,25 @@ public sealed class TestRig
             root.GetProperty("violations").EnumerateArray().Select(violation => violation.GetString() ?? string.Empty).ToList(),
             ReadFrameTiming(root.GetProperty("frameTiming")),
             ReadMonitor(root.GetProperty("monitor")),
-            ReadHardware(root.GetProperty("hardware")));
+            ReadHardware(root.GetProperty("hardware")),
+            root.TryGetProperty("baseline", out var baseline) ? ReadBaseline(baseline) : null,
+            root.GetProperty("measurementWindowCpuPercent").GetDouble());
+    }
+
+    private static BaselineResult ReadBaseline(JsonElement baseline)
+    {
+        var succeeded = baseline.GetProperty("succeeded").GetBoolean();
+        return new BaselineResult(
+            succeeded,
+            baseline.GetProperty("failureReason").GetString() ?? string.Empty,
+            baseline.GetProperty("attempts").GetInt32(),
+            baseline.GetProperty("waitedForWarmupSeconds").GetDouble(),
+            succeeded ? baseline.GetProperty("noiseFloorPercent").GetDouble() : 0,
+            succeeded && baseline.GetProperty("noiseFloorCanBeTrusted").GetBoolean(),
+            succeeded ? baseline.GetProperty("firstWindow").GetProperty("frames").GetInt32() : 0,
+            succeeded ? baseline.GetProperty("secondWindow").GetProperty("frames").GetInt32() : 0,
+            succeeded ? baseline.GetProperty("firstWindow").GetProperty("medianBusyMs").GetDouble() : 0,
+            succeeded ? baseline.GetProperty("secondWindow").GetProperty("medianBusyMs").GetDouble() : 0);
     }
 
     private static HardwareResult ReadHardware(JsonElement hardware) =>
