@@ -1,6 +1,8 @@
 using System.Text.Json;
 using Gapo.Agent.FrameTiming;
+using Gapo.Agent.Hardware;
 using Gapo.Agent.Monitoring;
+using Gapo.Core.Hardware;
 using Gapo.Core.Overhead;
 
 namespace Gapo.Agent;
@@ -15,7 +17,8 @@ public sealed record AgentReport(
     OverheadSummary Overhead,
     OverheadVerdict Verdict,
     FrameTimingReport? FrameTiming,
-    MonitorReport Monitor)
+    MonitorReport Monitor,
+    HardwareInventory Hardware)
 {
     private const int DecimalPlaces = 3;
 
@@ -53,6 +56,7 @@ public sealed record AgentReport(
         json.WriteEndArray();
         FrameTiming?.WriteTo(json);
         Monitor.WriteTo(json);
+        HardwareInventoryJson.Write(json, Hardware);
         json.WriteEndObject();
     }
 

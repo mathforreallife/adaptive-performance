@@ -91,21 +91,32 @@ artifacts/bin/Gapo.EndToEnd/release/Gapo.EndToEnd.exe --output=<dir> --seconds=2
 
 Research workflows failed twice on the usage limit and cost a lot; do not re-run them. Decide by direct experiment and look things up inline only when needed.
 
+## Step 2 state (branch `step-2-hardware-inventory`, stacked on step 1)
+
+- `src/Gapo.Core/Hardware/` — `HardwareInventory.cs` (facts model), `HardwareRules.cs` (channel judgement, adapter classification, Windows naming, PC class), `SmbiosMemoryReader.cs` (pure SMBIOS type 17 parser).
+- `src/Gapo.Windows/Hardware/` — `HardwareNative.cs`, `ProcessorProbe.cs`, `GraphicsProbe.cs` (DXGI through the COM vtable), `SystemProbes.cs` (memory modules, display, storage, power, Windows), `HardwareScanner.cs` (isolated steps, "could not be read" list).
+- The agent scans once at start-up and writes the inventory into its report; the rig checks it (logical processors, memory, display, Windows build, the adapter the game rendered on is listed, scan under 1.5 s). On the laptop: 55 ms, nothing unread.
+- Not yet done for step 2: rescan on hardware or driver change, VRAM budget/usage (`IDXGIAdapter3::QueryVideoMemoryInfo`), PCIe link width, monitor VRR.
+
 ## Next actions, in order
 
-1. Finish step 1:
-   - ETW: pass an event-id filter (`EVENT_FILTER_TYPE_EVENT_ID` through `ENABLE_TRACE_PARAMETERS`) so only present start/stop events are delivered (about 14,000 events per 20 s arrive today, mostly irrelevant); add GPU busy time from Microsoft-Windows-DxgKrnl events and validate it with the fixture's `--scenario=gpu-load` on the laptop's HD 4000; handle "access denied" in the UI wording.
-   - Game detection without the fixture hook: foreground/full-screen process, later the Steam library index (step 5).
-   - ADR 0004 for the frame-timing decision.
-2. Step 2, hardware inventory: one-shot cached scan with a "could not be read" list, AOT-safe (no System.Management): CPU topology via `GetLogicalProcessorInformationEx`, clocks via `CallNtPowerInformation`, RAM modules via SMBIOS (`GetSystemFirmwareTable`), GPU name/VRAM via DXGI, drives via `IOCTL_STORAGE_QUERY_PROPERTY`, display via `EnumDisplaySettings`, power via `GetSystemPowerStatus` and `PowerGetEffectiveOverlayScheme`, OS build from the registry. `docs/research/demo-engine.md` and `demo-sandbox.md` exist; read `demo/src/Optimiser/Hardware/*.cs` directly for the demo's scanner.
-3. Step 3, measurement harness (windows, warm-up detection, A/A noise floor, statistics, ABAB), driven against the fixture; `docs/research/demo-engine.md` has every constant.
-4. Then continue the build order below (step 2 hardware inventory, step 3 measurement harness, ...).
+1. Push `step-2-hardware-inventory`, open PR #3 with base `step-1-telemetry-core`, make CI green (watch the runner's inventory output: Hyper-V video, odd memory modules, unknown refresh rate are expected there and must come out as notes, not failures).
+2. Step 3, measurement harness, in `Gapo.Core/Measurement` (pure, driven by frames) plus an agent mode that runs it against the fixture:
+   - frame statistics per window: median busy time, p95/p99 frame time, average FPS, 1 % / 0.1 % lows (only reported with enough frames), stutter count with the demo's thresholds, computed only over frames of one settings revision;
+   - measurement window lifecycle: restart the benchmark path, discard 650 ms, collect at least 2600 ms and 45 frames, give up after 7 s, fail (not "no gain") on too few frames;
+   - warm-up detection and waiting (up to 45 s) with the reason for the user;
+   - A/A noise floor (2.5 x the difference, clamped 2.5-10 %) and the new rule from step 1: refuse to judge and re-measure when the A/A pair disagrees by more than 8 %;
+   - hitch observation over at least 14 s; ABAB interleaving helper;
+   - `docs/research/demo-engine.md` lists every constant and the demo's exact formulas.
+   - The agent keeps quiet inside windows (`insideMeasurementWindow: true` in the overhead meter) and the rig asserts the in-window budget.
+3. Leftovers from step 1: GPU busy time from Microsoft-Windows-DxgKrnl events validated with `--scenario=gpu-load`; game detection without the fixture hook; ADR 0004 (frame timing).
+4. Then steps 4 (diagnosis), 5 (game adapters, Steam library), 6 (experiment engine), 7 (UI).
 
 ## Task list (build order, spec III.4)
 
 - [x] 0. Test rig — done (PR #1, waiting for the user to merge)
-- [ ] 1. Telemetry core — in progress
-- [ ] 2. Hardware inventory
+- [x] 1. Telemetry core — done except GPU busy time (PR #2)
+- [ ] 2. Hardware inventory — in progress (PR #3)
 - [ ] 3. Measurement harness
 - [ ] 4. Diagnosis v1
 - [ ] 5. First three game adapters
