@@ -52,6 +52,7 @@ jobs:
           path: |
             ${{ runner.temp }}/gapo-end-to-end/*.json
             ${{ runner.temp }}/gapo-end-to-end/*.png
+            ${{ runner.temp }}/gapo-end-to-end/ui-*/*
             ${{ runner.temp }}/gapo-end-to-end/*.txt
           if-no-files-found: warn
           retention-days: 14

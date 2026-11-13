@@ -55,6 +55,8 @@ public sealed class TestRig
 
     private string SandboxExecutable => Path.Combine(binariesRoot, "Gapo.Sandbox", "release", "GAPO-Sandbox.exe");
 
+    private string AppExecutable => Path.Combine(binariesRoot, "Gapo.App", "release_win-x64", "GAPO.exe");
+
     private string AgentExecutable => Path.Combine(binariesRoot, "Gapo.Agent", "release", "Gapo.Agent.exe");
 
     public FixtureResult RunFixtureAlone(string name)
@@ -95,6 +97,14 @@ public sealed class TestRig
         {
             runSeconds = configuredSeconds;
         }
+    }
+
+    public IReadOnlyList<string> CaptureUserInterface(string agentReportName, string theme)
+    {
+        var directory = Path.Combine(outputDirectory, "ui-" + theme);
+        using var app = Start(AppExecutable, ["--report=" + Path.Combine(outputDirectory, agentReportName), "--screenshots=" + directory, "--theme=" + theme]);
+        WaitForExit(app, "user interface");
+        return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal).ToList() : [];
     }
 
     public int RevertAll()

@@ -16,6 +16,7 @@ const double SlowestAcceptableHardwareScanMilliseconds = 1500;
 const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
 const double SmallestExpectedFpsGainPercent = 25;
 const int FewestExpectedKeptChanges = 2;
+const int ExpectedScreenshots = 6;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
 const double LowestBusiestThreadShareOfASingleThreadedGame = 70.0;
@@ -116,6 +117,13 @@ try
         }
 
         Print($"            agent while optimising: {optimisingAgent.RunAverageCpuPercent:0.000}% CPU average, {optimisingAgent.MeasurementWindowCpuPercent:0.000}% inside windows, {optimisingAgent.PeakPrivateMegabytes:0.0} MB private");
+        foreach (var theme in new[] { "light", "dark" })
+        {
+            var screenshots = rig.CaptureUserInterface("optimise-agent.json", theme);
+            Expect(screenshots.Count(file => file.EndsWith(".png", StringComparison.Ordinal)) == ExpectedScreenshots, $"The user interface produced {string.Join(", ", screenshots)} in the {theme} theme; expected the result view and five detail tabs.");
+            Print($"interface   {theme} theme: {string.Join(", ", screenshots)}");
+        }
+
         Expect(rig.RevertAll() == 0, "Revert all failed.");
         var reverted = File.ReadAllText(rig.SandboxSettingsPath);
         Expect(reverted.Contains("AutosaveSeconds=10 ", StringComparison.Ordinal) && reverted.Contains("RenderThreads=1 ", StringComparison.Ordinal) && reverted.Contains("AntiAliasing=SSAA4x", StringComparison.Ordinal), "Revert all did not restore the original settings file.");

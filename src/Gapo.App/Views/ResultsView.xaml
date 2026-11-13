@@ -1,0 +1,78 @@
+<UserControl
+    x:Class="Gapo.App.Views.ResultsView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:reports="using:Gapo.App.Reports">
+  <StackPanel Spacing="16" MaxWidth="960">
+    <Border Style="{StaticResource GapoCardStyle}">
+      <StackPanel Spacing="16">
+        <StackPanel Orientation="Horizontal" Spacing="12">
+          <TextBlock Text="{x:Bind Report.Headline}" Style="{StaticResource GapoResultNumberStyle}" />
+          <TextBlock Text="{x:Bind Report.HeadlineWord}" Style="{StaticResource GapoTitleStyle}" VerticalAlignment="Bottom" Margin="0,0,0,14" />
+        </StackPanel>
+        <TextBlock Text="{x:Bind Report.WorkLine}" Style="{StaticResource GapoBodyStyle}" />
+        <ItemsRepeater ItemsSource="{x:Bind Report.Rows}">
+          <ItemsRepeater.Layout>
+            <StackLayout Spacing="8" />
+          </ItemsRepeater.Layout>
+          <ItemsRepeater.ItemTemplate>
+            <DataTemplate x:DataType="reports:ComparisonRow">
+              <Grid ColumnSpacing="16">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="72" />
+                  <ColumnDefinition Width="24" />
+                  <ColumnDefinition Width="72" />
+                  <ColumnDefinition Width="96" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{x:Bind Label}" Style="{StaticResource GapoBodyStyle}" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="1" Text="{x:Bind Before}" Style="{StaticResource GapoSecondaryStyle}" FontSize="16" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="2" Text="→" Style="{StaticResource GapoSecondaryStyle}" HorizontalAlignment="Center" VerticalAlignment="Center" />
+                <TextBlock Grid.Column="3" Text="{x:Bind After}" Style="{StaticResource GapoBodyStyle}" FontSize="16" FontWeight="SemiBold" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <Border Grid.Column="4" Visibility="{x:Bind Improved}" Background="{ThemeResource GapoGoodTintBrush}" CornerRadius="4" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                  <TextBlock Text="{x:Bind Change}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoGoodBrush}" />
+                </Border>
+                <Border Grid.Column="4" Visibility="{x:Bind Worsened}" Background="{ThemeResource GapoBadTintBrush}" CornerRadius="4" Padding="8,2" HorizontalAlignment="Left" VerticalAlignment="Center">
+                  <TextBlock Text="{x:Bind Change}" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoBadBrush}" />
+                </Border>
+              </Grid>
+            </DataTemplate>
+          </ItemsRepeater.ItemTemplate>
+        </ItemsRepeater>
+        <TextBlock Text="{x:Bind Report.Sentence}" Style="{StaticResource GapoBodyStyle}" />
+        <Button x:Name="MoreOptionsButton" Content="Show more options" Style="{StaticResource AccentButtonStyle}" Click="OnMoreOptionsClicked" />
+        <TextBlock Text="{x:Bind Report.MeasurementQuality}" Style="{StaticResource GapoSecondaryStyle}" />
+      </StackPanel>
+    </Border>
+    <Border Style="{StaticResource GapoCardStyle}">
+      <StackPanel Spacing="12">
+        <TextBlock Text="What changed" Style="{StaticResource GapoSectionLabelStyle}" />
+        <ItemsRepeater ItemsSource="{x:Bind Report.Experiments}">
+          <ItemsRepeater.Layout>
+            <StackLayout Spacing="8" />
+          </ItemsRepeater.Layout>
+          <ItemsRepeater.ItemTemplate>
+            <DataTemplate x:DataType="reports:ExperimentCard">
+              <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                  <ColumnDefinition Width="*" />
+                  <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <TextBlock Text="{x:Bind Title}" Style="{StaticResource GapoBodyStyle}" VerticalAlignment="Center" />
+                <Border Grid.Column="1" Visibility="{x:Bind Kept}" Background="{ThemeResource GapoGoodTintBrush}" CornerRadius="4" Padding="8,2">
+                  <TextBlock Text="Kept" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoGoodBrush}" />
+                </Border>
+                <Border Grid.Column="1" Visibility="{x:Bind RolledBack}" Background="{ThemeResource GapoWarnTintBrush}" CornerRadius="4" Padding="8,2">
+                  <TextBlock Text="Rolled back" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoWarnBrush}" />
+                </Border>
+                <Border Grid.Column="1" Visibility="{x:Bind Failed}" Background="{ThemeResource GapoBadTintBrush}" CornerRadius="4" Padding="8,2">
+                  <TextBlock Text="Could not be measured" FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource GapoBadBrush}" />
+                </Border>
+              </Grid>
+            </DataTemplate>
+          </ItemsRepeater.ItemTemplate>
+        </ItemsRepeater>
+      </StackPanel>
+    </Border>
+  </StackPanel>
+</UserControl>

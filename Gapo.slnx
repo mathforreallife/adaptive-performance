@@ -7,6 +7,9 @@
   <Folder Name="/src/">
     <Project Path="src/Gapo.Adapters.Sandbox/Gapo.Adapters.Sandbox.csproj" />
     <Project Path="src/Gapo.Agent/Gapo.Agent.csproj" />
+    <Project Path="src/Gapo.App/Gapo.App.csproj">
+      <Platform Project="x64" />
+    </Project>
     <Project Path="src/Gapo.Core/Gapo.Core.csproj" />
     <Project Path="src/Gapo.Windows/Gapo.Windows.csproj" />
   </Folder>

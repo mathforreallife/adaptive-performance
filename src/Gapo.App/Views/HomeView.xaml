@@ -1,0 +1,12 @@
+<UserControl
+    x:Class="Gapo.App.Views.HomeView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+  <Border Style="{StaticResource GapoCardStyle}" MaxWidth="960">
+    <StackPanel Spacing="12">
+      <TextBlock Text="No game is running" Style="{StaticResource GapoTitleStyle}" />
+      <TextBlock Style="{StaticResource GapoBodyStyle}" Text="Start a game and GAPO will find out what limits it on this PC. It then changes one setting at a time, measures the result on the same scene, and keeps only what demonstrably helps." />
+      <TextBlock Style="{StaticResource GapoSecondaryStyle}" Text="GAPO never injects into games, never closes programs and can put every setting back." />
+    </StackPanel>
+  </Border>
+</UserControl>
