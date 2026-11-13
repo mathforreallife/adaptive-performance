@@ -14,6 +14,26 @@ namespace Gapo.Sandbox
         readonly List<float> _workMs = new List<float>(16384);
         double _simMs, _renderMs, _presentMs, _ioMs, _waitMs;
 
+        const int RecentFrames = 300;
+        readonly float[] _recentFrame = new float[RecentFrames], _recentWork = new float[RecentFrames], _recentSim = new float[RecentFrames],
+            _recentRender = new float[RecentFrames], _recentWait = new float[RecentFrames];
+        int _recentCount;
+
+        public double RecentMeanFrameMs { get { return RecentMean(_recentFrame); } }
+        public double RecentMeanWorkMs { get { return RecentMean(_recentWork); } }
+        public double RecentMeanSimulationMs { get { return RecentMean(_recentSim); } }
+        public double RecentMeanRenderMs { get { return RecentMean(_recentRender); } }
+        public double RecentMeanWaitMs { get { return RecentMean(_recentWait); } }
+
+        double RecentMean(float[] values)
+        {
+            int count = Math.Min(_recentCount, RecentFrames);
+            if (count == 0) return 0;
+            double sum = 0;
+            for (int i = 0; i < count; i++) sum += values[i];
+            return sum / count;
+        }
+
         public int Frames { get { return _frameMs.Count; } }
         public int WarmupFrames { get; private set; }
         public int AutosaveFrames { get; private set; }
@@ -36,6 +56,10 @@ namespace Gapo.Sandbox
                 LongestAutosaveMs = Math.Max(LongestAutosaveMs, record.IoMs);
             }
 
+            int slot = _recentCount % RecentFrames;
+            _recentFrame[slot] = record.FrameMs; _recentWork[slot] = record.WorkMs; _recentSim[slot] = record.SimMs;
+            _recentRender[slot] = record.RenderMs; _recentWait[slot] = record.WaitMs;
+            _recentCount++;
             if (_frameMs.Count >= MaximumFrames) return;
             _frameMs.Add(record.FrameMs);
             _workMs.Add(record.WorkMs);

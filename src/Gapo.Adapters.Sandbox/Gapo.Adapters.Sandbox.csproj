@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <RootNamespace>Gapo.Adapters.Sandbox</RootNamespace>
+    <IsAotCompatible>true</IsAotCompatible>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Gapo.Core\Gapo.Core.csproj" />
+    <ProjectReference Include="..\..\fixture\Gapo.Sandbox.Contract\Gapo.Sandbox.Contract.csproj" />
+  </ItemGroup>
+</Project>

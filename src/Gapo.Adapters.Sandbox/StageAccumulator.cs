@@ -2,7 +2,7 @@ using Gapo.Core.Diagnosis;
 using Gapo.Core.Statistics;
 using Gapo.Sandbox.Contract;
 
-namespace Gapo.Agent.Measurement;
+namespace Gapo.Adapters.Sandbox;
 
 public sealed class StageAccumulator
 {
@@ -21,7 +21,12 @@ public sealed class StageAccumulator
     private readonly SeriesSummary fog = new(FramesPerAttempt);
     private readonly SeriesSummary sprites = new(FramesPerAttempt);
     private readonly SeriesSummary antiAliasing = new(FramesPerAttempt);
+    private readonly SeriesSummary entityLogic = new(FramesPerAttempt);
+    private readonly SeriesSummary particles = new(FramesPerAttempt);
+    private readonly SeriesSummary entitiesTotal = new(FramesPerAttempt);
     private int renderThreads;
+    private int renderWidth;
+    private int renderHeight;
 
     public void Add(in FrameRecord frame)
     {
@@ -38,7 +43,12 @@ public sealed class StageAccumulator
         fog.Add(frame.FogMs);
         sprites.Add(frame.SpritesMs);
         antiAliasing.Add(frame.PostMs);
+        entityLogic.Add(frame.SimEntitiesMs);
+        particles.Add(frame.SimParticlesMs);
+        entitiesTotal.Add(frame.EntitiesTotal);
         renderThreads = frame.RenderThreads;
+        renderWidth = frame.RenderWidth;
+        renderHeight = frame.RenderHeight;
     }
 
     public StageTimes? ToStageTimes() =>
@@ -53,12 +63,30 @@ public sealed class StageAccumulator
                 (int)entities.Median(),
                 physics.Median(),
                 [
-                    new RenderPass("shadows", shadows.Median()),
-                    new RenderPass("terrain", terrain.Median()),
-                    new RenderPass("water", water.Median()),
-                    new RenderPass("sky and clouds", sky.Median()),
-                    new RenderPass("fog", fog.Median()),
-                    new RenderPass("creatures and particles", sprites.Median()),
-                    new RenderPass("anti-aliasing", antiAliasing.Median()),
-                ]);
+                    new RenderPass(SandboxPasses.Shadows, shadows.Median()),
+                    new RenderPass(SandboxPasses.Terrain, terrain.Median()),
+                    new RenderPass(SandboxPasses.Water, water.Median()),
+                    new RenderPass(SandboxPasses.Sky, sky.Median()),
+                    new RenderPass(SandboxPasses.Fog, fog.Median()),
+                    new RenderPass(SandboxPasses.Sprites, sprites.Median()),
+                    new RenderPass(SandboxPasses.AntiAliasing, antiAliasing.Median()),
+                ])
+            {
+                EntityLogicMs = entityLogic.Median(),
+                ParticlesMs = particles.Median(),
+                EntitiesTotal = (int)entitiesTotal.Median(),
+                RenderWidth = renderWidth,
+                RenderHeight = renderHeight,
+            };
+}
+
+public static class SandboxPasses
+{
+    public const string Shadows = "shadows";
+    public const string Terrain = "terrain";
+    public const string Water = "water";
+    public const string Sky = "sky and clouds";
+    public const string Fog = "fog";
+    public const string Sprites = "creatures and particles";
+    public const string AntiAliasing = "anti-aliasing";
 }

@@ -6,7 +6,11 @@ namespace Gapo.EndToEnd;
 
 public sealed record FixtureResult(string Name, int ExitCode, double AverageFps, double OnePercentLowFps, double MedianWorkMs, int Frames, int WarmupFrames, string PresentPath, string Adapter);
 
-public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor, HardwareResult Hardware, BaselineResult? Baseline, double MeasurementWindowCpuPercent, DiagnosisResult? Diagnosis);
+public sealed record AgentResult(int ExitCode, bool ConnectedToGame, long FramesRead, double RunAverageCpuPercent, double PeakCpuPercent, double PeakPrivateMegabytes, bool WithinBudget, IReadOnlyList<string> Violations, FrameTimingResult FrameTiming, MonitorResult Monitor, HardwareResult Hardware, BaselineResult? Baseline, double MeasurementWindowCpuPercent, DiagnosisResult? Diagnosis, OptimisationResult? Optimisation);
+
+public sealed record ExperimentResult(string Title, string Kind, string Decision, string Reason, double GainPercent, double PredictedSavingMs, double MeasuredSavingMs);
+
+public sealed record OptimisationResult(bool Completed, string Error, double FpsGainPercent, double WorkReductionFactor, int Kept, int RolledBack, double BaselineFps, double FinalFps, double BaselineWorkMs, double FinalWorkMs, double BaselineStuttersPerMinute, double FinalStuttersPerMinute, double NoiseFloorPercent, int MeasurementWindows, double DurationSeconds, string PacingNote, IReadOnlyList<ExperimentResult> Experiments, IReadOnlyList<string> NotTouched, IReadOnlyDictionary<string, string> SettingsAfter);
 
 public sealed record DiagnosisResult(string Primary, string Title, string Summary, string EngineLimitation, IReadOnlyList<string> Evidence, IReadOnlyList<string> SecondaryProblems);
 
@@ -33,6 +37,7 @@ public sealed class TestRig
     private readonly string outputDirectory;
     private readonly string sandboxDataDirectory;
     private const double LongEnoughForABaselineSeconds = 45;
+    private const double LongestOptimisationSeconds = 360;
 
     private double runSeconds;
     private string? fixtureScenario;
@@ -72,6 +77,31 @@ public sealed class TestRig
             runSeconds = configuredSeconds;
             fixtureScenario = null;
         }
+    }
+
+    public string JournalPath => Path.Combine(outputDirectory, "change-journal.json");
+
+    public string SandboxSettingsPath => Path.Combine(sandboxDataDirectory, "sandbox-settings.ini");
+
+    public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithOptimisation(string name)
+    {
+        var configuredSeconds = runSeconds;
+        runSeconds = LongestOptimisationSeconds;
+        try
+        {
+            return RunFixtureWithAgent(name, "--optimise=balanced", "--ask-game-to-close-when-done", "--journal=" + JournalPath);
+        }
+        finally
+        {
+            runSeconds = configuredSeconds;
+        }
+    }
+
+    public int RevertAll()
+    {
+        using var agent = Start(AgentExecutable, ["--revert-all", "--journal=" + JournalPath]);
+        WaitForExit(agent, "agent");
+        return agent.ExitCode;
     }
 
     public (FixtureResult Fixture, AgentResult Agent) RunFixtureWithAgent(string name, params string[] extraAgentArguments)
@@ -165,8 +195,38 @@ public sealed class TestRig
             ReadHardware(root.GetProperty("hardware")),
             root.TryGetProperty("baseline", out var baseline) ? ReadBaseline(baseline) : null,
             root.GetProperty("measurementWindowCpuPercent").GetDouble(),
-            root.TryGetProperty("diagnosis", out var diagnosis) ? ReadDiagnosis(diagnosis) : null);
+            root.TryGetProperty("diagnosis", out var diagnosis) ? ReadDiagnosis(diagnosis) : null,
+            root.TryGetProperty("optimisation", out var optimisation) ? ReadOptimisation(optimisation) : null);
     }
+
+    private static OptimisationResult ReadOptimisation(JsonElement optimisation) =>
+        new(
+            optimisation.GetProperty("completed").GetBoolean(),
+            optimisation.GetProperty("error").GetString() ?? string.Empty,
+            optimisation.GetProperty("fpsGainPercent").GetDouble(),
+            optimisation.GetProperty("workReductionFactor").GetDouble(),
+            optimisation.GetProperty("kept").GetInt32(),
+            optimisation.GetProperty("rolledBack").GetInt32(),
+            optimisation.GetProperty("baseline").GetProperty("averageFps").GetDouble(),
+            optimisation.GetProperty("final").GetProperty("averageFps").GetDouble(),
+            optimisation.GetProperty("baseline").GetProperty("medianBusyMs").GetDouble(),
+            optimisation.GetProperty("final").GetProperty("medianBusyMs").GetDouble(),
+            optimisation.GetProperty("baseline").GetProperty("stuttersPerMinute").GetDouble(),
+            optimisation.GetProperty("final").GetProperty("stuttersPerMinute").GetDouble(),
+            optimisation.GetProperty("noiseFloorPercent").GetDouble(),
+            optimisation.GetProperty("measurementWindows").GetInt32(),
+            optimisation.GetProperty("durationSeconds").GetDouble(),
+            optimisation.GetProperty("pacingNote").GetString() ?? string.Empty,
+            optimisation.GetProperty("experiments").EnumerateArray().Select(experiment => new ExperimentResult(
+                experiment.GetProperty("title").GetString() ?? string.Empty,
+                experiment.GetProperty("kind").GetString() ?? string.Empty,
+                experiment.GetProperty("decision").GetString() ?? string.Empty,
+                experiment.GetProperty("reason").GetString() ?? string.Empty,
+                experiment.GetProperty("gainPercent").GetDouble(),
+                experiment.GetProperty("predictedSavingMs").GetDouble(),
+                experiment.GetProperty("measuredSavingMs").GetDouble())).ToList(),
+            optimisation.GetProperty("notTouched").EnumerateArray().Select(note => note.GetString() ?? string.Empty).ToList(),
+            optimisation.GetProperty("settingsAfter").EnumerateObject().ToDictionary(setting => setting.Name, setting => setting.Value.GetString() ?? string.Empty));
 
     private static DiagnosisResult ReadDiagnosis(JsonElement diagnosis) =>
         new(

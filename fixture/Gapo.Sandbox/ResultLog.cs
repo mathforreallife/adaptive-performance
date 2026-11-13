@@ -5,7 +5,7 @@ namespace Gapo.Sandbox
 {
     public static class ResultLog
     {
-        public static void Write(string path, Game game, string presentPath, string adapterName, bool softwareAdapter, string presentFallbackReason)
+        public static void Write(string path, Game game, string presentPath, string adapterName, bool softwareAdapter, string presentFallbackReason, PresentPathTimes presentTimes)
         {
             var summary = game.Stats.Summarise();
             var directory = Path.GetDirectoryName(Path.GetFullPath(path));
@@ -49,6 +49,15 @@ namespace Gapo.Sandbox
                 json.WriteString("adapter", adapterName ?? string.Empty);
                 json.WriteBoolean("softwareAdapter", softwareAdapter);
                 json.WriteString("presentFallbackReason", presentFallbackReason ?? string.Empty);
+                json.WriteNumber("recentFrameMs", Round(game.Stats.RecentMeanFrameMs));
+                json.WriteNumber("recentComposeMs", Round(presentTimes.MeanComposeMs));
+                json.WriteNumber("recentUploadMs", Round(presentTimes.MeanUploadMs));
+                json.WriteNumber("recentDrawMs", Round(presentTimes.MeanDrawMs));
+                json.WriteNumber("recentPresentCallMs", Round(presentTimes.MeanPresentCallMs));
+                json.WriteNumber("recentWorkMs", Round(game.Stats.RecentMeanWorkMs));
+                json.WriteNumber("recentSimulationMs", Round(game.Stats.RecentMeanSimulationMs));
+                json.WriteNumber("recentRenderMs", Round(game.Stats.RecentMeanRenderMs));
+                json.WriteNumber("recentWaitMs", Round(game.Stats.RecentMeanWaitMs));
                 json.WriteEndObject();
             }
         }

@@ -1,3 +1,4 @@
+using Gapo.Adapters.Sandbox;
 using Gapo.Agent.EngineHook;
 using Gapo.Core.Diagnosis;
 using Gapo.Core.Measurement;

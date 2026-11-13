@@ -69,6 +69,7 @@ public enum SandboxCommand
     BenchmarkCamera = 1,
     RestartBenchmarkPath = 2,
     TriggerWarmup = 3,
+    Quit = 4,
 }
 
 public sealed unsafe class TelemetryChannel : IDisposable

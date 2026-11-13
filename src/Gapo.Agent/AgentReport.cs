@@ -3,8 +3,10 @@ using Gapo.Agent.FrameTiming;
 using Gapo.Agent.Hardware;
 using Gapo.Agent.Measurement;
 using Gapo.Agent.Monitoring;
+using Gapo.Agent.Optimisation;
 using Gapo.Core.Diagnosis;
 using Gapo.Core.Hardware;
+using Gapo.Core.Optimisation;
 using Gapo.Core.Overhead;
 
 namespace Gapo.Agent;
@@ -22,7 +24,9 @@ public sealed record AgentReport(
     MonitorReport Monitor,
     HardwareInventory Hardware,
     BaselineMeasurement? Baseline,
-    BottleneckDiagnosis? Diagnosis)
+    BottleneckDiagnosis? Diagnosis,
+    OptimisationReport? Optimisation,
+    bool RestoredInterruptedTrial)
 {
     private const int DecimalPlaces = 3;
 
@@ -69,6 +73,12 @@ public sealed record AgentReport(
         if (Diagnosis is not null)
         {
             DiagnosisJson.Write(json, Diagnosis);
+        }
+
+        json.WriteBoolean("restoredInterruptedTrial", RestoredInterruptedTrial);
+        if (Optimisation is not null)
+        {
+            OptimisationReportJson.Write(json, Optimisation);
         }
         json.WriteEndObject();
     }
