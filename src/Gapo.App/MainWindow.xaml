@@ -12,10 +12,12 @@
         <ColumnDefinition Width="Auto" />
         <ColumnDefinition Width="*" />
         <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="Auto" />
       </Grid.ColumnDefinitions>
       <TextBlock Text="GAPO" Style="{StaticResource GapoTitleStyle}" VerticalAlignment="Center" />
       <TextBlock x:Name="StatusText" Grid.Column="1" Style="{StaticResource GapoSecondaryStyle}" VerticalAlignment="Center" />
       <TextBlock x:Name="OverheadText" Grid.Column="2" Style="{StaticResource GapoSecondaryStyle}" VerticalAlignment="Center" AutomationProperties.Name="GAPO's own processor and memory use" />
+      <Button x:Name="SettingsButton" Grid.Column="3" Content="Settings" Click="OnSettingsClicked" />
     </Grid>
     <ScrollViewer x:Name="BodyScroller" Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
       <ContentPresenter x:Name="Body" Margin="24,8,24,24" HorizontalAlignment="Stretch" />

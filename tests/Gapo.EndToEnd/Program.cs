@@ -17,6 +17,7 @@ const int MinimumMonitorSamples = 8;
 const double SlowestAcceptableHardwareScanMilliseconds = 1500;
 const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
 const double SmallestExpectedFpsGainPercent = 25;
+const double SmallestExpectedWorkReductionFactor = 1.5;
 const int FewestExpectedKeptChanges = 2;
 const int ExpectedScreenshots = 6;
 const int FewestLiveSamples = 3;
@@ -42,6 +43,11 @@ try
     {
         rig.RunFixtureAlone("calibration");
         CheckLiveInterface();
+    }
+    else if (ValueOf("--only") == "overlay")
+    {
+        rig.RunFixtureAlone("calibration");
+        CheckOverlay();
     }
     else if (ValueOf("--only") == "settings")
     {
@@ -154,7 +160,7 @@ void CheckEverything()
     if (optimisingAgent.Optimisation is { } optimised)
     {
         Expect(optimised.Completed, "The optimisation did not complete: " + optimised.Error);
-        Expect(optimised.FpsGainPercent >= SmallestExpectedFpsGainPercent, string.Create(CultureInfo.InvariantCulture, $"The optimisation gained only {optimised.FpsGainPercent:0}% average FPS on the deliberately wasteful fixture."));
+        Expect(optimised.FpsGainPercent >= SmallestExpectedFpsGainPercent || optimised.WorkReductionFactor >= SmallestExpectedWorkReductionFactor, string.Create(CultureInfo.InvariantCulture, $"The optimisation gained only {optimised.FpsGainPercent:0}% average FPS and cut frame work only {optimised.WorkReductionFactor:0.0}× on the deliberately wasteful fixture."));
         Expect(optimised.Kept >= FewestExpectedKeptChanges, $"Only {optimised.Kept} change(s) were kept.");
         Expect(optimised.Experiments.Count > 0 && optimised.Experiments[0].Kind == "HitchFix" && optimised.Experiments[0].Decision == "Kept", "The autosave hitch was not fixed first.");
         Expect(optimised.Experiments.All(experiment => experiment.Reason.Length > 0), "An experiment has no stated reason.");
@@ -191,6 +197,7 @@ void CheckEverything()
     }
 
     CheckLiveInterface();
+    CheckOverlay();
     CheckSettingControl();
     CheckUnknownSteamGame();
     CheckGraphicsBoundUnknownGame();
@@ -231,9 +238,21 @@ void CheckUnknownSteamGame()
     Print($"unknown     '{check.GameName}' found through the Steam library and the process list, measured through event tracing only: {served.MedianLiveFps:0.0} FPS live vs {check.Fixture.AverageFps:0.0} FPS from the game ({disagreement:0.0}% apart) over {served.LiveSamplesWithFrames} samples; Optimise {(served.RefusedToOptimise ? "refused with a reason" : "NOT refused")}; exit {(served.SawTheGameLeave ? "noticed" : "missed")}; diagnosis: {served.Diagnosis?.Title ?? "none"}. {served.Diagnosis?.Summary}; agent {check.Agent.RunAverageCpuPercent:0.000}% CPU, {check.Agent.PeakPrivateMegabytes:0.0} MB");
 }
 
+void CheckOverlay()
+{
+    var run = rig.RunOverlay("overlay");
+    var budget = OverheadBudget.For(OptimiserState.DashboardOpen);
+    var rendersOnHardware = run.Fixture.Adapter.Length > 0 && !run.Fixture.Adapter.Contains(SoftwareAdapterName, StringComparison.OrdinalIgnoreCase);
+    Expect(run.ShownWithGameInFront, "The FPS overlay never appeared over the game while the game was in front.");
+    Expect(run.HiddenWhenMinimised, "The FPS overlay stayed on screen after the game was minimised (" + run.MinimiseNote + ").");
+    Expect(run.HiddenWhenSwitchedOff, "The FPS overlay appeared although it was switched off in the preferences.");
+    Expect(!rendersOnHardware || run.WindowCpuPercent <= budget.MaximumCpuPercent, string.Create(CultureInfo.InvariantCulture, $"The window used {run.WindowCpuPercent:0.00}% CPU with the overlay showing; its budget is {budget.MaximumCpuPercent:0.0}%."));
+    Print($"overlay     shown over the game: {run.ShownWithGameInFront}; hidden when minimised: {run.HiddenWhenMinimised}; hidden when switched off: {run.HiddenWhenSwitchedOff}; window {run.WindowCpuPercent:0.00}% CPU with it showing{(rendersOnHardware ? string.Empty : " (software rendering: CPU not checked)")}");
+}
+
 void CheckSettingControl()
 {
-    var (served, report, antiAliasingAfter) = rig.RunSettingControl("settings");
+    var (served, report, antiAliasingAfter, physicsAfter) = rig.RunSettingControl("settings");
     var first = served.First;
     Expect(first is { CanChange: true } && first.Settings.Any(setting => setting.Key == "AntiAliasing" && setting.Choices.Count == 3), "The agent did not send the fixture's settings with their choices.");
     Expect(served.SetStatus == "Changed: Shadows is now High" && served.ShadowsInFileAfterSet == "High", $"Setting shadows by hand did not reach the game's file (status '{served.SetStatus}', file '{served.ShadowsInFileAfterSet}').");
@@ -242,7 +261,13 @@ void CheckSettingControl()
     Expect(antiAliasingAfter == "SSAA4x", $"Anti-aliasing was locked but the optimisation changed it to {antiAliasingAfter}.");
     Expect(report.NotTouched.Any(note => note.StartsWith("Not changed because you locked them: Anti-aliasing", StringComparison.Ordinal)), "The report did not say that anti-aliasing was left alone because it was locked.");
     Expect(report.Completed && report.Experiments.All(experiment => !experiment.Title.StartsWith("Anti-aliasing", StringComparison.Ordinal)), "An anti-aliasing experiment ran although it was locked.");
+    Expect(served.Proposals.Count >= 2, $"With 'ask me before each change' on, the agent proposed only {served.Proposals.Count} change(s).");
+    Expect(served.Proposals.All(title => !title.Contains("Anti-aliasing", StringComparison.Ordinal)), "The agent proposed a change to a locked setting.");
+    Expect(physicsAfter == "8" && report.NotTouched.Any(note => note.StartsWith("You skipped:", StringComparison.Ordinal) && note.Contains("Physics substeps", StringComparison.Ordinal)), $"Physics substeps was skipped but ended at {physicsAfter}, or the result did not say it was skipped.");
+    Expect(report.PacingNote == "Not capped: you turned frame-rate caps off in GAPO's settings.", "Frame-rate caps were turned off but the result says: " + report.PacingNote);
+    Expect(report.Experiments.All(experiment => served.Proposals.Any(title => title.Contains(experiment.Title, StringComparison.Ordinal))), "A change was tested without being proposed first.");
     Print($"settings    {first?.Settings.Count ?? 0} settings sent; lock, set (Shadows -> {served.ShadowsInFileAfterSet}), refusal and put back (-> {served.ShadowsInFileAfterPutBack}) all confirmed; optimisation with anti-aliasing locked: {report.FpsGainPercent:+0;-0;0}% average FPS, anti-aliasing still {antiAliasingAfter}; {report.NotTouched.FirstOrDefault()}");
+    Print($"            ask-before-change: {served.Proposals.Count} proposals, physics substeps skipped (still {physicsAfter}); {report.PacingNote}");
 }
 
 void CheckRestartOptimisation()

@@ -60,6 +60,17 @@
           <TextBlock x:Name="DiagnosisBasis" Style="{StaticResource GapoSecondaryStyle}" />
         </StackPanel>
 
+        <Border x:Name="ProposalPanel" Visibility="Collapsed" BorderBrush="{ThemeResource GapoAccentBrush}" BorderThickness="1" CornerRadius="6" Padding="16">
+          <StackPanel Spacing="8">
+            <TextBlock x:Name="ProposalTitle" Style="{StaticResource GapoBodyStyle}" FontWeight="SemiBold" />
+            <TextBlock x:Name="ProposalDetail" Style="{StaticResource GapoSecondaryStyle}" TextWrapping="Wrap" />
+            <StackPanel Orientation="Horizontal" Spacing="8">
+              <Button x:Name="ApproveButton" Content="Try it" Style="{StaticResource AccentButtonStyle}" Click="OnApproveClicked" />
+              <Button x:Name="SkipButton" Content="Skip" Click="OnSkipClicked" />
+            </StackPanel>
+          </StackPanel>
+        </Border>
+
         <StackPanel x:Name="ControlsPanel" Spacing="12" Visibility="Collapsed">
           <StackPanel x:Name="GoalPanel" Spacing="4">
             <TextBlock Text="Goal" Style="{StaticResource GapoSectionLabelStyle}" />

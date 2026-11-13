@@ -53,6 +53,9 @@ public sealed class AgentSession : IDisposable
     private RecognisedGame? recognisedGame;
     private RestartOptimiser? restartOptimiser;
     private SettingLockStore? settingLocks;
+    private GameResultStore? gameResults;
+    private AgentPreferencesCommand agentPreferences = new(false, true, 0, 0);
+    private bool? pendingAnswer;
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -137,6 +140,19 @@ public sealed class AgentSession : IDisposable
         {
             switch (command)
             {
+                case AgentPreferencesCommand preferences:
+                    agentPreferences = preferences;
+                    break;
+                case AnswerProposalCommand answer when restartOptimiser is not null:
+                    if (restartOptimiser.Answer(answer.Approved, clock.Elapsed) is { } answered)
+                    {
+                        restartOptimiser = null;
+                        announcedGame = null;
+                        PublishReport(answered);
+                        finished = answered;
+                    }
+
+                    break;
                 case OptimiseCommand optimise when link.IsConnected:
                     finished = Optimise(optimise.Goal);
                     PublishReport(finished);
@@ -191,8 +207,19 @@ public sealed class AgentSession : IDisposable
         return finished;
     }
 
+    private GameResultStore Results => gameResults ??= new GameResultStore(options.GameResultsPath);
+
+    private string? CurrentGameKey() => link.IsConnected ? SandboxGameKey : SteamGame is { } game ? SteamGameKey(game) : null;
+
+    private GameResult? CurrentResult() => CurrentGameKey() is { } key ? Results.For(key) : null;
+
     private void PublishReport(OptimisationReport optimisation)
     {
+        if (optimisation.Completed && optimisation.Baseline.AverageFps > 0 && optimisation.Final.AverageFps > 0 && CurrentGameKey() is { } resultKey)
+        {
+            Results.Record(resultKey, optimisation.Baseline.AverageFps, optimisation.Final.AverageFps);
+        }
+
         var path = Path.Combine(options.ReportsDirectory, LastReportFileName);
         BuildReport(optimisation).WriteTo(path);
         server?.Send(new StatusMessage(
@@ -306,7 +333,10 @@ public sealed class AgentSession : IDisposable
             meter.PrivateMegabytes,
             judgedCpu > ownBudget.MaximumCpuPercent || meter.PrivateMegabytes > ownBudget.MaximumPrivateMegabytes,
             gameRunning ? liveFrames.ChartPoints() : [],
-            CanOptimise: link.IsConnected || (steam is not null && recognisedGame is { CanBeOptimised: true })));
+            CanOptimise: link.IsConnected || (steam is not null && recognisedGame is { CanBeOptimised: true }),
+            GameProcessId: link.IsConnected ? link.GameProcessId : steam?.ProcessId ?? 0,
+            BeforeFps: CurrentResult()?.BeforeFps ?? 0,
+            AfterFps: CurrentResult()?.AfterFps ?? 0));
     }
 
     private OptimisationReport Optimise(Goal goal)
@@ -314,7 +344,13 @@ public sealed class AgentSession : IDisposable
         stopRequested = false;
         optimisationSession = new SandboxSession(link, monitor, Pump);
         var journal = new FileChangeJournal(options.JournalPath, () => link.SettingsPath);
-        var engine = new OptimisationEngine(optimisationSession, new SandboxKnowledge(), journal, hardware, ReportProgress, Locks.LockedFor(SandboxGameKey));
+        var engine = new OptimisationEngine(optimisationSession, new SandboxKnowledge(), journal, hardware, ReportProgress, new OptimisationControls
+        {
+            LockedSettings = Locks.LockedFor(SandboxGameKey),
+            AllowFrameCap = agentPreferences.AllowFrameCap,
+            TargetFps = agentPreferences.TargetFps,
+            Approve = agentPreferences.AskBeforeEachChange && server is { HasClient: true } ? AskPlayer : null,
+        });
         var report = engine.Run(goal);
         optimisationSession = null;
         if (options.AskGameToCloseWhenDone)
@@ -364,6 +400,15 @@ public sealed class AgentSession : IDisposable
             while (server.TryTakeCommand(out var command))
             {
                 stopRequested |= command is StopCommand;
+                switch (command)
+                {
+                    case AnswerProposalCommand answer:
+                        pendingAnswer = answer.Approved;
+                        break;
+                    case AgentPreferencesCommand preferences:
+                        agentPreferences = preferences;
+                        break;
+                }
             }
         }
 
@@ -503,7 +548,28 @@ public sealed class AgentSession : IDisposable
             clock.Elapsed,
             game.ProcessId,
             GpuBusyTicksSoFar,
-            Locks.LockedFor(SteamGameKey(game)));
+            Locks.LockedFor(SteamGameKey(game)),
+            new RestartControls(agentPreferences.AskBeforeEachChange && server is { HasClient: true }, agentPreferences.TargetFps, agentPreferences.MostRestarts))
+        {
+            Propose = (title, detail) => server?.Send(new ProposalMessage(title, detail)),
+        };
+    }
+
+    private bool AskPlayer(SettingCandidate candidate)
+    {
+        pendingAnswer = null;
+        server?.Send(new ProposalMessage(
+            "Try " + candidate.Title + "?",
+            string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{candidate.Hypothesis} Predicted saving about {candidate.PredictedSavingMs:0.0} ms; visual cost {candidate.VisualLoss:0}/10. GAPO keeps it only if it measurably helps.")));
+        while (pendingAnswer is null)
+        {
+            if (!Pump())
+            {
+                return false;
+            }
+        }
+
+        return pendingAnswer.Value;
     }
 
     private long GpuBusyTicksSoFar() => frameTiming?.GpuBusyTicksOfTrackedProcess ?? 0;

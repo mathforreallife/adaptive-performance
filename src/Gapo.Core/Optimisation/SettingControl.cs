@@ -28,6 +28,17 @@ public sealed record SettingState(string Key, string Label, string Value, string
         new(definition.Key, definition.Label, value, originalValue, locked, definition.Choices);
 }
 
+public sealed record OptimisationControls
+{
+    public IReadOnlySet<string> LockedSettings { get; init; } = new HashSet<string>();
+
+    public bool AllowFrameCap { get; init; } = true;
+
+    public double TargetFps { get; init; }
+
+    public Func<SettingCandidate, bool>? Approve { get; init; }
+}
+
 public static class SettingLocks
 {
     public static bool Touches(SettingCandidate candidate, IReadOnlySet<string> locked) =>

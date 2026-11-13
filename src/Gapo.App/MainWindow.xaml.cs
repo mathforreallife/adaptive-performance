@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
+using Gapo.App.Overlay;
+using Gapo.App.Preferences;
 using Gapo.App.Reports;
 using Gapo.App.Views;
 using Gapo.Core.Overhead;
@@ -32,6 +34,9 @@ public sealed partial class MainWindow : Window
     private readonly AgentLink? link;
     private readonly Notifier? notifier;
     private readonly GameSettingsView gameSettings = new();
+    private readonly SettingsView settingsView = new();
+    private readonly PreferenceStore preferences;
+    private readonly OverlayController? overlay;
     private GameSettingsMessage? latestSettings;
     private bool windowIsActive = true;
     private ReportView report = ReportView.Empty;
@@ -44,7 +49,10 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Title = "GAPO";
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(DefaultWidth, DefaultHeight));
-        Root.RequestedTheme = options.Theme;
+        preferences = new PreferenceStore(options.PreferencesPath ?? PreferenceStore.DefaultPath);
+        Root.RequestedTheme = options.Theme != ElementTheme.Default ? options.Theme : preferences.Current.Theme;
+        settingsView.BackRequested += ShowHome;
+        settingsView.PreferencesChanged += ApplyPreferences;
         Root.Loaded += OnLoaded;
         Activated += (_, args) =>
         {
@@ -55,11 +63,13 @@ public sealed partial class MainWindow : Window
         {
             link?.Dispose();
             notifier?.Dispose();
+            overlay?.Dispose();
         };
         home.OptimiseRequested += goal => link?.Send(new OptimiseCommand(goal));
         home.StopRequested += () => link?.Send(new StopCommand());
         home.RevertAllRequested += () => link?.Send(new RevertAllCommand());
         home.GameSettingsRequested += ShowGameSettings;
+        home.ProposalAnswered += approved => link?.Send(new AnswerProposalCommand(approved));
         gameSettings.BackRequested += ShowHome;
         gameSettings.ValueChosen += (key, value) => link?.Send(new SetSettingCommand(key, value));
         gameSettings.LockChanged += (key, locked) => link?.Send(new LockSettingCommand(key, locked));
@@ -77,9 +87,18 @@ public sealed partial class MainWindow : Window
                 notifier.Invoked += BringToFront;
             }
 
+            overlay = new OverlayController();
+            ApplyPreferences(preferences.Current);
             link = new AgentLink(options.PipeName, DispatcherQueue);
             link.MessageReceived += OnAgentMessage;
-            link.ConnectionChanged += connected => StatusText.Text = connected ? "Connected to the GAPO agent" : "Waiting for the GAPO agent";
+            link.ConnectionChanged += connected =>
+            {
+                StatusText.Text = connected ? "Connected to the GAPO agent" : "Waiting for the GAPO agent";
+                if (connected)
+                {
+                    SendAgentPreferences(preferences.Current);
+                }
+            };
             StatusText.Text = "Waiting for the GAPO agent";
             DispatcherQueue.TryEnqueue(StartAgentIfNeededAsync);
         }
@@ -106,6 +125,39 @@ public sealed partial class MainWindow : Window
     }
 
     private void ShowHome() => Show(home, StatusText.Text);
+
+    public void ShowSettings()
+    {
+        settingsView.Show(preferences.Current, overlay?.Status ?? "The overlay is available while GAPO is connected to its agent.");
+        Show(settingsView, "Settings");
+    }
+
+    private void OnSettingsClicked(object sender, RoutedEventArgs e) => ShowSettings();
+
+    private void ApplyPreferences(AppPreferences chosen)
+    {
+        if (!ReferenceEquals(chosen, preferences.Current))
+        {
+            preferences.Save(chosen);
+        }
+
+        if (options.Theme == ElementTheme.Default)
+        {
+            Root.RequestedTheme = chosen.Theme;
+        }
+
+        SendAgentPreferences(chosen);
+        if (overlay is not null)
+        {
+            overlay.Enabled = chosen.OverlayEnabled;
+            overlay.Corner = chosen.OverlayCorner;
+            overlay.ShowsBeforeAndAfter = chosen.OverlayShowsBeforeAndAfter;
+            if (!chosen.OverlayEnabled)
+            {
+                overlay.Hide();
+            }
+        }
+    }
 
     public bool HasGameSettings => latestSettings is not null;
 
@@ -146,6 +198,15 @@ public sealed partial class MainWindow : Window
                 break;
             case LiveSampleMessage sample:
                 MeasureOwnUse();
+                if (overlay is not null)
+                {
+                    overlay.Update(sample);
+                    if (ReferenceEquals(Body.Content, settingsView))
+                    {
+                        settingsView.ShowOverlayState(overlay.Status);
+                    }
+                }
+
                 if (!sample.GameConnected && latestSettings is not null)
                 {
                     latestSettings = null;
@@ -163,6 +224,10 @@ public sealed partial class MainWindow : Window
                     samplesRendered += sample.GameConnected ? 1 : 0;
                 }
 
+                break;
+            case ProposalMessage proposal:
+                home.ShowProposal(proposal);
+                NotifyWhenAway(new StatusMessage(AgentState.Optimising, proposal.Title, "GAPO waits for your answer before it changes anything."), always: true);
                 break;
             case GameSettingsMessage settings:
                 latestSettings = settings;
@@ -216,7 +281,7 @@ public sealed partial class MainWindow : Window
     private async void StartAgentIfNeededAsync()
     {
         await Task.Delay(StartAgentAfterMilliseconds);
-        if (link is null || link.IsConnected || options.AgentPath is null)
+        if (link is null || link.IsConnected || options.AgentPath is null || !preferences.Current.StartAgentAutomatically)
         {
             return;
         }
@@ -235,16 +300,26 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void NotifyWhenAway(StatusMessage status)
+    private void SendAgentPreferences(AppPreferences chosen) =>
+        link?.Send(new AgentPreferencesCommand(chosen.AskBeforeEachChange, chosen.AllowFrameCap, chosen.TargetFps, chosen.MostRestarts));
+
+    private void NotifyWhenAway(StatusMessage status, bool always = false)
     {
-        var worthInterrupting = status.Title.StartsWith(RestartRequestPrefix, StringComparison.Ordinal) || status.State is AgentState.Finished or AgentState.Failed;
+        var worthInterrupting = always || status.Title.StartsWith(RestartRequestPrefix, StringComparison.Ordinal) || status.State is AgentState.Finished or AgentState.Failed;
         if (windowIsActive || !worthInterrupting || options.ScreenshotDirectory is not null)
         {
             return;
         }
 
-        TaskbarFlash.UntilActivated(WinRT.Interop.WindowNative.GetWindowHandle(this));
-        notifier?.Show(status.Title, FirstSentence(status.Detail));
+        if (preferences.Current.FlashTaskbarWhenAway)
+        {
+            TaskbarFlash.UntilActivated(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        }
+
+        if (preferences.Current.NotifyWhenAway)
+        {
+            notifier?.Show(status.Title, FirstSentence(status.Detail));
+        }
     }
 
     private static string FirstSentence(string text)

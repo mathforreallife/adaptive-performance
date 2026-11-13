@@ -17,7 +17,8 @@ public sealed record SettingControlRun(
     bool PutBackAppeared,
     string ShadowsInFileAfterPutBack,
     bool RefusedAnUnknownValue,
-    string ReportPath);
+    string ReportPath,
+    IReadOnlyList<string> Proposals);
 
 public sealed record ServedRestartRun(bool OfferedToOptimise, int RestartsAsked, IReadOnlyList<string> StatusTitles, string ReportPath);
 
@@ -195,9 +196,20 @@ public sealed class InterfaceClient : IDisposable
         writer.WriteLine(WireFormat.Encode(new RevertSettingCommand("Shadows")));
         WaitFor(message => message is GameSettingsMessage settings && settings.Settings.Any(setting => setting.Key == "Shadows" && !setting.ChangedFromOriginal), TimeSpan.FromSeconds(10), Ignore, "Putting shadows back was not confirmed.");
         var afterPutBack = readSettingFile("Shadows");
+        writer.WriteLine(WireFormat.Encode(new AgentPreferencesCommand(AskBeforeEachChange: true, AllowFrameCap: false, TargetFps: 0, MostRestarts: 6)));
         writer.WriteLine(WireFormat.Encode(new OptimiseCommand(Goal.Balanced)));
-        var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, OptimisationTimeout, Ignore, "The agent never announced a finished report after the setting tests.");
-        return new SettingControlRun(first, locked is not null, true, setStatus, afterSet, true, afterPutBack, refused, report.Path);
+        var proposals = new List<string>();
+        void Answer(AgentMessage message)
+        {
+            if (message is ProposalMessage proposal)
+            {
+                proposals.Add(proposal.Title);
+                writer.WriteLine(WireFormat.Encode(new AnswerProposalCommand(!proposal.Title.Contains("Physics substeps", StringComparison.Ordinal))));
+            }
+        }
+
+        var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, OptimisationTimeout, Answer, "The agent never announced a finished report after the setting tests.");
+        return new SettingControlRun(first, locked is not null, true, setStatus, afterSet, true, afterPutBack, refused, report.Path, proposals);
     }
 
     public void Dispose()

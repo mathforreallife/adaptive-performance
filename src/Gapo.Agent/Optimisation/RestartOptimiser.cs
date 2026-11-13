@@ -12,6 +12,8 @@ using Gapo.Windows.Games;
 
 namespace Gapo.Agent.Optimisation;
 
+public sealed record RestartControls(bool AskFirst = false, double TargetFps = 0, int MostRestarts = 0);
+
 public sealed class RestartOptimiser
 {
     public const int MostRestartsPerRun = 6;
@@ -32,9 +34,18 @@ public sealed class RestartOptimiser
     private readonly AgentMonitor monitor;
     private readonly HardwareInventory hardware;
     private readonly Action<AgentState, string, string> report;
+    private Action<string, string> propose = (_, _) => { };
+
+    public Action<string, string> Propose
+    {
+        set => propose = value;
+    }
     private readonly TimeSpan startedAt;
     private readonly Func<long>? gpuBusyTicksSoFar;
     private readonly IReadOnlySet<string> lockedSettings;
+    private readonly RestartControls controls;
+    private readonly List<string> skippedByPlayer = [];
+    private UnrealCandidate? awaitingAnswer;
     private readonly List<ExperimentRecord> experiments = [];
     private readonly List<string> notTouched = [];
     private Queue<UnrealCandidate> candidates = new();
@@ -65,8 +76,10 @@ public sealed class RestartOptimiser
         TimeSpan now,
         int processId,
         Func<long>? gpuBusyTicksSoFar = null,
-        IReadOnlySet<string>? lockedSettings = null)
+        IReadOnlySet<string>? lockedSettings = null,
+        RestartControls? controls = null)
     {
+        this.controls = controls ?? new RestartControls();
         this.lockedSettings = lockedSettings ?? new HashSet<string>();
         this.gpuBusyTicksSoFar = gpuBusyTicksSoFar;
         this.gameName = gameName;
@@ -79,7 +92,7 @@ public sealed class RestartOptimiser
         this.hardware = hardware;
         this.report = report;
         startedAt = now;
-        targetFps = goal == Goal.MaximumFps ? 0 : Math.Min(hardware.Display.EffectiveRefreshHz, 144);
+        targetFps = this.controls.TargetFps > 0 ? this.controls.TargetFps : goal == Goal.MaximumFps ? 0 : Math.Min(hardware.Display.EffectiveRefreshHz, 144);
         journal.Begin(settingsPath);
         StartObserving(now, processId);
         report(AgentState.Optimising, "Measuring the baseline", Text($"GAPO watches {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s of play on your current settings once the game has settled. Keep playing as you normally would."));
@@ -91,13 +104,14 @@ public sealed class RestartOptimiser
         WaitingForRestart,
         Measuring,
         Finished,
+        WaitingForApproval,
     }
 
     public void OnFrame(in PresentedFrame frame) => observation?.OnFrame(frame);
 
     public OptimisationReport? Advance(TimeSpan now, int runningProcessId)
     {
-        if (phase == Phase.Finished)
+        if (phase is Phase.Finished or Phase.WaitingForApproval)
         {
             return null;
         }
@@ -237,14 +251,46 @@ public sealed class RestartOptimiser
         return ProposeNextOrFinish(now);
     }
 
+    public OptimisationReport? Answer(bool approved, TimeSpan now)
+    {
+        if (phase != Phase.WaitingForApproval || awaitingAnswer is not { } candidate)
+        {
+            return null;
+        }
+
+        awaitingAnswer = null;
+        if (!approved)
+        {
+            skippedByPlayer.Add(candidate.Title);
+            phase = Phase.Measuring;
+            return ProposeNextOrFinish(now);
+        }
+
+        return Apply(candidate, now);
+    }
+
     private OptimisationReport? ProposeNextOrFinish(TimeSpan now)
     {
-        if (candidates.Count == 0 || experiments.Count >= MostRestartsPerRun)
+        var mostRestarts = controls.MostRestarts > 0 ? controls.MostRestarts : MostRestartsPerRun;
+        if (candidates.Count == 0 || experiments.Count >= mostRestarts)
         {
-            return Finish(now, completed: true, null, candidates.Count == 0 ? "Every setting worth testing has been tested." : Text($"Stopped after {MostRestartsPerRun} restarts so the session does not drag on; optimise again to continue."));
+            return Finish(now, completed: true, null, candidates.Count == 0 ? "Every setting worth testing has been tested." : Text($"Stopped after {mostRestarts} restarts, the most you allowed per run; optimise again to continue."));
         }
 
         var candidate = candidates.Dequeue();
+        if (controls.AskFirst)
+        {
+            awaitingAnswer = candidate;
+            phase = Phase.WaitingForApproval;
+            propose("Try " + candidate.Title + "?", Text($"{candidate.Why} It needs a restart of the game to take effect, and GAPO keeps it only if each frame takes measurably less work. Visual cost {candidate.VisualLoss * 10:0}/10."));
+            return null;
+        }
+
+        return Apply(candidate, now);
+    }
+
+    private OptimisationReport? Apply(UnrealCandidate candidate, TimeSpan now)
+    {
         var key = new IniKey(candidate.Setting.Section, candidate.Setting.Key);
         journal.TrialStarted(key, candidate.From, candidate.To);
         if (!IniSettingsFile.Change(settingsPath, document => document.Set(key.Section, key.Key, candidate.To)))
@@ -303,6 +349,11 @@ public sealed class RestartOptimiser
         if (note is not null)
         {
             notTouched.Insert(0, note);
+        }
+
+        if (skippedByPlayer.Count > 0)
+        {
+            notTouched.Insert(0, "You skipped: " + string.Join(", ", skippedByPlayer) + ".");
         }
 
         if (lastChangeWaitsForRestart)
