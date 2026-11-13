@@ -55,6 +55,20 @@ public sealed unsafe class EtwPresentSession : IDisposable
 
     public uint LastErrorCode { get; private set; }
 
+    public int FocusedProcessId { get; private set; }
+
+    public bool FocusOn(int processId)
+    {
+        if (sessionHandle == 0)
+        {
+            return false;
+        }
+
+        var focused = Enable(DxgiProvider, DxgiPresentEvents, processId) & Enable(Direct3D9Provider, Direct3D9PresentEvents, processId);
+        FocusedProcessId = focused ? processId : 0;
+        return focused;
+    }
+
     public static EtwPresentSession? TryStart(IPresentEventSink sink, out FrameTimingAvailability availability, string sessionName = DefaultSessionName)
     {
         var session = new EtwPresentSession(sessionName, sink);
@@ -134,7 +148,7 @@ public sealed unsafe class EtwPresentSession : IDisposable
             return status == EtwNative.AccessDenied ? FrameTimingAvailability.AccessDenied : FrameTimingAvailability.Failed;
         }
 
-        if (!Enable(DxgiProvider, DxgiPresentEvents) || !Enable(Direct3D9Provider, Direct3D9PresentEvents) || !OpenForConsumption())
+        if (!Enable(DxgiProvider, DxgiPresentEvents, 0) || !Enable(Direct3D9Provider, Direct3D9PresentEvents, 0) || !OpenForConsumption())
         {
             return FrameTimingAvailability.Failed;
         }
@@ -159,7 +173,7 @@ public sealed unsafe class EtwPresentSession : IDisposable
         return allocated;
     }
 
-    private bool Enable(in Guid provider, ReadOnlySpan<ushort> wantedEventIds)
+    private bool Enable(in Guid provider, ReadOnlySpan<ushort> wantedEventIds, int processId)
     {
         const int FilterHeaderBytes = 4;
         const byte IncludeListedEvents = 1;
@@ -170,14 +184,31 @@ public sealed unsafe class EtwPresentSession : IDisposable
         *(ushort*)(filter + 2) = (ushort)wantedEventIds.Length;
         wantedEventIds.CopyTo(new Span<ushort>(filter + FilterHeaderBytes, wantedEventIds.Length));
 
-        var descriptor = new EtwNative.EventFilterDescriptor { Pointer = (ulong)filter, Size = (uint)filterBytes, Type = EtwNative.EventIdFilterType };
-        var parameters = new EtwNative.EnableParameters { Version = EtwNative.EnableParametersVersion, FilterDescriptors = &descriptor, FilterDescriptorCount = 1 };
+        var processIds = stackalloc uint[1];
+        processIds[0] = (uint)processId;
+        var descriptors = stackalloc EtwNative.EventFilterDescriptor[2];
+        descriptors[0] = new EtwNative.EventFilterDescriptor { Pointer = (ulong)filter, Size = (uint)filterBytes, Type = EtwNative.EventIdFilterType };
+        descriptors[1] = new EtwNative.EventFilterDescriptor { Pointer = (ulong)processIds, Size = sizeof(uint), Type = EtwNative.ProcessIdFilterType };
+        var parameters = new EtwNative.EnableParameters { Version = EtwNative.EnableParametersVersion, FilterDescriptors = descriptors, FilterDescriptorCount = processId > 0 ? 2u : 1u };
         var status = EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, &parameters);
-        if (status != EtwNative.Success)
+        LastErrorCode = status;
+        if (status == EtwNative.Success)
         {
-            status = EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, null);
+            return true;
         }
 
+        if (processId > 0)
+        {
+            parameters.FilterDescriptorCount = 1;
+            if (EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, &parameters) != EtwNative.Success)
+            {
+                EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, null);
+            }
+
+            return false;
+        }
+
+        status = EtwNative.EnableTraceEx2(sessionHandle, provider, EtwNative.EnableProvider, EtwNative.InformationLevel, 0, 0, 0, null);
         LastErrorCode = status;
         return status == EtwNative.Success;
     }

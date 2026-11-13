@@ -29,8 +29,10 @@ public sealed record HardwareResult(double ScanMilliseconds, string Class, strin
 
 public sealed record MonitorResult(int Samples, double MeanGameProcessorsUsed, double MeanMachineLoadPercent, double MeanBusiestProcessorPercent, double MeanBackgroundPercent, double MedianBusiestGameThreadPercent, double PeakGameWriteMegabytesPerSecond, double GamePrivateMegabytes);
 
-public sealed record FrameTimingResult(string Availability, long EventsSeen, long EventsLost, int PresentedFrames, double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs, int HookFrames, double HookMedianFrameMs)
+public sealed record FrameTimingResult(string Availability, long EventsSeen, long EventsLost, int PresentedFrames, double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs, int HookFrames, double HookMedianFrameMs, bool OnlyTheGamesEvents = false)
 {
+    public double EventsPerPresentedFrame => PresentedFrames <= 0 ? 0 : (double)EventsSeen / PresentedFrames;
+
     private const double PercentScale = 100.0;
 
     public double MedianDifferencePercent => HookMedianFrameMs <= 0 ? PercentScale : Math.Abs(MedianFrameMs - HookMedianFrameMs) / HookMedianFrameMs * PercentScale;
@@ -652,7 +654,8 @@ public sealed class TestRig
             frameTiming.GetProperty("medianCpuBusyMs").GetDouble(),
             frameTiming.GetProperty("medianInPresentMs").GetDouble(),
             frameTiming.GetProperty("hookFrames").GetInt32(),
-            frameTiming.GetProperty("hookMedianFrameMs").GetDouble());
+            frameTiming.GetProperty("hookMedianFrameMs").GetDouble(),
+            frameTiming.TryGetProperty("onlyTheGamesEventsWereDelivered", out var focused) && focused.GetBoolean());
 
     private void WaitForExit(Process process, string description)
     {

@@ -24,6 +24,7 @@ internal static unsafe partial class EtwNative
     internal const ushort ThirtyTwoBitHeaderFlag = 0x0020;
     internal const uint EnableParametersVersion = 2;
     internal const uint EventIdFilterType = 0x80000200;
+    internal const uint ProcessIdFilterType = 0x80000004;
 
     [StructLayout(LayoutKind.Explicit, Size = SizeInBytes)]
     internal struct EnableParameters

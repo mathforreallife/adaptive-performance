@@ -37,6 +37,8 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
 
     public long EventsSeen => session?.EventsSeen ?? 0;
 
+    public bool OnlyTheGamesEventsWereDelivered { get; private set; }
+
     public uint EventsLost => session?.ReadEventsLost() ?? 0;
 
     public void Track(int processId)
@@ -44,6 +46,7 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
         TrackedProcessId = processId;
         if (session is not null)
         {
+            OnlyTheGamesEventsWereDelivered = session.FocusOn(processId);
             tracker = new PresentTracker(processId, EtwPresentSession.TimestampTicksPerSecond, queue.Enqueue);
         }
     }
@@ -52,6 +55,7 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     {
         tracker = null;
         TrackedProcessId = 0;
+        session?.FocusOn(0);
     }
 
     public int Collect()

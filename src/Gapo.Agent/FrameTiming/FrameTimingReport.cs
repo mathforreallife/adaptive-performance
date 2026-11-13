@@ -17,7 +17,8 @@ public sealed record FrameTimingReport(
     double HookMeanFrameMs,
     double HookMedianFrameMs,
     double HookMedianWorkMs,
-    double HookMedianPresentMs)
+    double HookMedianPresentMs,
+    bool OnlyTheGamesEventsWereDelivered = false)
 {
     private const int DecimalPlaces = 3;
 
@@ -35,7 +36,8 @@ public sealed record FrameTimingReport(
             hookFrameMs.Mean,
             hookFrameMs.Median(),
             hookWorkMs.Median(),
-            hookPresentMs.Median());
+            hookPresentMs.Median(),
+            probe.OnlyTheGamesEventsWereDelivered);
 
     public void WriteTo(Utf8JsonWriter json)
     {
@@ -43,6 +45,7 @@ public sealed record FrameTimingReport(
         json.WriteString("availability", Availability.ToString());
         json.WriteNumber("eventsSeen", EventsSeen);
         json.WriteNumber("eventsLost", EventsLost);
+        json.WriteBoolean("onlyTheGamesEventsWereDelivered", OnlyTheGamesEventsWereDelivered);
         json.WriteNumber("presentedFrames", PresentedFrames);
         json.WriteNumber("meanFrameMs", Round(MeanFrameMs));
         json.WriteNumber("medianFrameMs", Round(MedianFrameMs));
