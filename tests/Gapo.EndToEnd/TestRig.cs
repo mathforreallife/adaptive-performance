@@ -17,7 +17,10 @@ public sealed record UnknownGameCheck(FixtureResult Fixture, UnknownGameRun Serv
     public bool SettingsUntouched { get; init; }
 }
 
-public sealed record RestartOptimisationCheck(ServedRestartRun Served, OptimisationResult Report, string OriginalSettings, string OptimisedSettings, string RevertedSettings, int Restarts);
+public sealed record RestartOptimisationCheck(ServedRestartRun Served, OptimisationResult Report, string OriginalSettings, string OptimisedSettings, string RevertedSettings, int Restarts)
+{
+    public IReadOnlyList<double> SessionFps { get; init; } = [];
+}
 
 public sealed record InterfaceRun(FixtureResult Fixture, double CpuPercent, double TypicalCpuPercent, double PeakPrivateMegabytes, double MeasuredSeconds, IReadOnlyList<string> Screenshots, int AgentsStarted, bool AgentsExitedWithTheInterface);
 
@@ -177,6 +180,8 @@ public sealed class TestRig
         "[Internationalization]\r\n" +
         "Culture=en\r\n";
 
+    private const double FirstLaunchSeconds = 8;
+
     private sealed record UnrealInstall(string SteamRoot, string LocalAppData, string Documents, string ShippingExecutable, string SettingsPath);
 
     private UnrealInstall BuildUnrealInstall(string name, bool withAntiCheat)
@@ -215,6 +220,11 @@ public sealed class TestRig
         File.Move(Path.Combine(binaries, Path.GetFileName(SandboxExecutable)), shippingExecutable);
         var settingsPath = Path.Combine(settingsFolder, "GameUserSettings.ini");
         File.WriteAllText(settingsPath, OriginalUnrealSettings);
+        using (var firstLaunch = Start(shippingExecutable, ["--data-dir=" + Path.Combine(root, "first-launch"), "--no-telemetry", "--autotest=" + Seconds(FirstLaunchSeconds), "--unreal-settings=" + settingsPath]))
+        {
+            WaitForExit(firstLaunch, "first launch of the copied game");
+        }
+
         var escapedRoot = steamRoot.Replace(@"\", @"\\", StringComparison.Ordinal);
         File.WriteAllText(Path.Combine(apps, "libraryfolders.vdf"), $"\"libraryfolders\"\n{{\n\t\"0\"\n\t{{\n\t\t\"path\"\t\t\"{escapedRoot}\"\n\t}}\n}}\n");
         File.WriteAllText(Path.Combine(apps, $"appmanifest_{AppId}.acf"), $"\"AppState\"\n{{\n\t\"appid\"\t\t\"{AppId}\"\n\t\"name\"\t\t\"{UnrealGameName}\"\n\t\"StateFlags\"\t\t\"4\"\n\t\"installdir\"\t\t\"{GameFolder}\"\n}}\n");
@@ -333,7 +343,7 @@ public sealed class TestRig
             var reverted = File.ReadAllText(install.SettingsPath);
             using var document = JsonDocument.Parse(File.ReadAllText(served.ReportPath));
             var report = ReadOptimisation(document.RootElement.GetProperty("optimisation"));
-            return new RestartOptimisationCheck(served, report, OriginalUnrealSettings, optimised, reverted, session - 1);
+            return new RestartOptimisationCheck(served, report, OriginalUnrealSettings, optimised, reverted, session - 1) { SessionFps = fixtureFps };
         }
         finally
         {
@@ -344,6 +354,11 @@ public sealed class TestRig
     private double ReadFixtureFps(string name)
     {
         var path = ResultPath(name);
+        if (!File.Exists(path))
+        {
+            path += ".partial.json";
+        }
+
         if (!File.Exists(path))
         {
             return 0;

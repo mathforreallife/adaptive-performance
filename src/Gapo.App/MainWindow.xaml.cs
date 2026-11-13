@@ -17,6 +17,8 @@ public sealed partial class MainWindow : Window
     private const int DefaultHeight = 720;
     private const int StartAgentAfterMilliseconds = 3000;
     private const int SamplesBeforeLiveScreenshot = 4;
+    private const int NotificationSettleMilliseconds = 1500;
+    private const string RestartRequestPrefix = "Restart the game to test";
 
     private static readonly TimeSpan OwnUseSpan = TimeSpan.FromSeconds(30);
     private static readonly OverheadBudget WindowBudget = OverheadBudget.For(OptimiserState.DashboardOpen);
@@ -28,6 +30,8 @@ public sealed partial class MainWindow : Window
     private readonly AppOptions options;
     private readonly HomeView home = new();
     private readonly AgentLink? link;
+    private readonly Notifier? notifier;
+    private bool windowIsActive = true;
     private ReportView report = ReportView.Empty;
     private bool rendersLiveData = true;
     private int samplesRendered;
@@ -40,8 +44,16 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new global::Windows.Graphics.SizeInt32(DefaultWidth, DefaultHeight));
         Root.RequestedTheme = options.Theme;
         Root.Loaded += OnLoaded;
-        Activated += (_, args) => rendersLiveData = args.WindowActivationState != WindowActivationState.Deactivated || options.ScreenshotDirectory is not null;
-        Closed += (_, _) => link?.Dispose();
+        Activated += (_, args) =>
+        {
+            windowIsActive = args.WindowActivationState != WindowActivationState.Deactivated;
+            rendersLiveData = windowIsActive || options.ScreenshotDirectory is not null;
+        };
+        Closed += (_, _) =>
+        {
+            link?.Dispose();
+            notifier?.Dispose();
+        };
         home.OptimiseRequested += goal => link?.Send(new OptimiseCommand(goal));
         home.StopRequested += () => link?.Send(new StopCommand());
         home.RevertAllRequested += () => link?.Send(new RevertAllCommand());
@@ -52,6 +64,12 @@ public sealed partial class MainWindow : Window
         else
         {
             ShowHome();
+            if (options.ScreenshotDirectory is null && options.NotificationTestPath is null)
+            {
+                notifier = new Notifier(DispatcherQueue);
+                notifier.Invoked += BringToFront;
+            }
+
             link = new AgentLink(options.PipeName, DispatcherQueue);
             link.MessageReceived += OnAgentMessage;
             link.ConnectionChanged += connected => StatusText.Text = connected ? "Connected to the GAPO agent" : "Waiting for the GAPO agent";
@@ -104,6 +122,7 @@ public sealed partial class MainWindow : Window
             case StatusMessage status:
                 StatusText.Text = status.Title;
                 home.ShowStatus(status);
+                NotifyWhenAway(status);
                 break;
             case LiveSampleMessage sample:
                 MeasureOwnUse();
@@ -177,8 +196,53 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void NotifyWhenAway(StatusMessage status)
+    {
+        var worthInterrupting = status.Title.StartsWith(RestartRequestPrefix, StringComparison.Ordinal) || status.State is AgentState.Finished or AgentState.Failed;
+        if (windowIsActive || !worthInterrupting || options.ScreenshotDirectory is not null)
+        {
+            return;
+        }
+
+        TaskbarFlash.UntilActivated(WinRT.Interop.WindowNative.GetWindowHandle(this));
+        notifier?.Show(status.Title, FirstSentence(status.Detail));
+    }
+
+    private static string FirstSentence(string text)
+    {
+        var end = text.IndexOf(". ", StringComparison.Ordinal);
+        return end < 0 ? text : text[..(end + 1)];
+    }
+
+    private void BringToFront()
+    {
+        AppWindow.Show();
+        Activate();
+    }
+
+    private async Task RunNotificationTestAsync(string resultPath)
+    {
+        await File.WriteAllTextAsync(resultPath, "registering;");
+        using var test = new Notifier(DispatcherQueue);
+        await File.AppendAllTextAsync(resultPath, string.Create(CultureInfo.InvariantCulture, $"available={test.IsAvailable};"));
+        var shown = test.Show("GAPO notification test", "If you can read this, GAPO can tell you when to restart a game.");
+        await File.AppendAllTextAsync(resultPath, string.Create(CultureInfo.InvariantCulture, $"shown={shown};"));
+        await Task.Delay(NotificationSettleMilliseconds);
+        var inActionCentre = await test.CountShownAsync();
+        await File.AppendAllTextAsync(resultPath, string.Create(CultureInfo.InvariantCulture, $"inActionCentre={inActionCentre};"));
+        await test.RemoveAllAsync();
+        await File.AppendAllTextAsync(resultPath, "removed");
+    }
+
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
+        if (options.NotificationTestPath is { } resultPath)
+        {
+            await RunNotificationTestAsync(resultPath);
+            Close();
+            return;
+        }
+
         if (options.ScreenshotDirectory is not { } directory)
         {
             return;

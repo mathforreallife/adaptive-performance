@@ -2,7 +2,14 @@ using Gapo.Core.Measurement;
 
 namespace Gapo.Core.Optimisation;
 
-public sealed record RestartVerdict(bool Keep, double GainPercent, double NoiseFloorPercent, string Reason);
+public sealed record RestartVerdict(bool Keep, double GainPercent, double NoiseFloorPercent, string Reason)
+{
+    private const double NoEffectShareOfFloor = 0.5;
+
+    public bool ShowedNoEffect => !Keep && GainPercent <= NoiseFloorPercent * NoEffectShareOfFloor;
+
+    public bool LooksDisturbed => GainPercent < -NoiseFloorPercent;
+}
 
 public static class RestartJudgement
 {
