@@ -221,6 +221,54 @@ public sealed class DiagnosticianTests
     }
 
     [Fact]
+    public void AGraphicsCardBusyForMostOfEachFrameIsTheLimitAndTheTargetIsNotMet()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 8, monitor: Monitor(gameProcessors: 0.5, busiestThread: 40), logicalProcessors: 4,
+            frames: Frames(8, medianFrameMs: 33), presents: new PresentTiming(33, 8, 24, GpuBusyMs: 31)));
+
+        Assert.Equal(Bottleneck.GraphicsCard, diagnosis.Primary);
+        Assert.Contains("busy 31.0 ms of each 33.0 ms frame, while the game's busiest processor thread is busy only 40% of the time", diagnosis.Summary, StringComparison.Ordinal);
+        Assert.Contains(diagnosis.Stages, stage => stage.Name == "Graphics card busy");
+    }
+
+    [Fact]
+    public void AFairlyBusyGraphicsCardDoesNotHideAPeggedProcessorThread()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 40, monitor: Monitor(loads: [40, 35, 30, 38], gameProcessors: 1.05, busiestThread: 98), logicalProcessors: 4,
+            presents: new PresentTiming(40.2, 40.0, 0.2, GpuBusyMs: 34.0)));
+
+        Assert.Equal(Bottleneck.CpuOneThreadLimit, diagnosis.Primary);
+    }
+
+    [Fact]
+    public void ASaturatedGraphicsCardIsTheLimitEvenWhenAThreadLooksBusy()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 35, monitor: Monitor(loads: [40, 35, 30, 38], gameProcessors: 1.0, busiestThread: 100), logicalProcessors: 4,
+            frames: Frames(35, medianFrameMs: 36), presents: new PresentTiming(36.0, 35.0, 0.3, GpuBusyMs: 35.6)));
+
+        Assert.Equal(Bottleneck.GraphicsCard, diagnosis.Primary);
+        Assert.Contains("also shows 100% busy, which can be the graphics driver waiting for the card", diagnosis.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void GpuTimeAboveTheFrameTimeIsNotPrintedAsMoreThanTheFrame()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 30, monitor: Monitor(gameProcessors: 0.6, busiestThread: 60), logicalProcessors: 4,
+            frames: Frames(30, medianFrameMs: 53.0), presents: new PresentTiming(53.0, 30, 20, GpuBusyMs: 53.5)));
+
+        Assert.StartsWith("The graphics card is busy for practically all of each 53.0 ms frame", diagnosis.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ALightlyUsedGraphicsCardDoesNotHideACpuLimit()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 40, monitor: Monitor(loads: [40, 35, 30, 38], gameProcessors: 1.05, busiestThread: 98), logicalProcessors: 4,
+            presents: new PresentTiming(40.2, 40.0, 0.2, GpuBusyMs: 1.0)));
+
+        Assert.Equal(Bottleneck.CpuOneThreadLimit, diagnosis.Primary);
+    }
+
+    [Fact]
     public void WithoutAGameHookWaitingInsidePresentPointsAwayFromTheProcessor()
     {
         var diagnosis = Diagnostician.Diagnose(Input(busyMs: 6, monitor: Monitor(gameProcessors: 0.5, busiestThread: 40), logicalProcessors: 4,

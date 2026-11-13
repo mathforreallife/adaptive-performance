@@ -11,6 +11,7 @@ public enum Bottleneck
     CpuAllProcessors,
     WaitingInPresent,
     TargetMet,
+    GraphicsCard,
 }
 
 public enum ProblemCategory

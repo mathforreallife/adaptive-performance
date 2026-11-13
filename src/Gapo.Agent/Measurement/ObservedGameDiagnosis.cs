@@ -21,10 +21,16 @@ public sealed class ObservedGameDiagnosis
     private Phase phase = Phase.WaitingForWarmup;
     private TimeSpan phaseStartedAt;
 
-    public ObservedGameDiagnosis(TimeSpan now)
+    private readonly Func<long> gpuBusyTicksSoFar;
+    private long gpuBusyTicksAtStart;
+
+    public ObservedGameDiagnosis(TimeSpan now, Func<long>? gpuBusyTicksSoFar = null)
     {
         phaseStartedAt = now;
+        this.gpuBusyTicksSoFar = gpuBusyTicksSoFar ?? (() => 0);
     }
+
+    public double? GpuBusyMsPerFrame { get; private set; }
 
     private enum Phase
     {
@@ -65,6 +71,7 @@ public sealed class ObservedGameDiagnosis
         {
             case Phase.WaitingForWarmup when warmup.IsWarm || now - phaseStartedAt >= WarmupDetector.LongestWait:
                 monitor.ResetSummaries();
+                gpuBusyTicksAtStart = gpuBusyTicksSoFar();
                 phase = Phase.Observing;
                 phaseStartedAt = now;
                 return false;
@@ -87,6 +94,8 @@ public sealed class ObservedGameDiagnosis
             return;
         }
 
+        var gpuTicks = gpuBusyTicksSoFar() - gpuBusyTicksAtStart;
+        GpuBusyMsPerFrame = gpuTicks > 0 ? gpuTicks * 1000.0 / System.Diagnostics.Stopwatch.Frequency / frames.Count : null;
         var all = System.Runtime.InteropServices.CollectionsMarshal.AsSpan(frames);
         var statistics = FrameStatistics.From(all);
         Statistics = statistics;
@@ -98,7 +107,7 @@ public sealed class ObservedGameDiagnosis
             TargetFps = Math.Min(hardware.Display.EffectiveRefreshHz, HighestDefaultTargetFps),
             Monitor = monitor.SummariseForDiagnosis(),
             Processor = new ProcessorLimits(hardware.Cpu.LogicalProcessors, hardware.Cpu.MaximumMegahertz, hardware.Cpu.LimitMegahertz),
-            Presents = new PresentTiming(statistics.MedianFrameMs, statistics.MedianBusyMs, inPresentMs.Median()),
+            Presents = new PresentTiming(statistics.MedianFrameMs, statistics.MedianBusyMs, inPresentMs.Median(), GpuBusyMsPerFrame),
             HitchObservation = statistics,
         });
     }

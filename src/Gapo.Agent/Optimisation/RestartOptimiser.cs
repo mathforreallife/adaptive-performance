@@ -33,6 +33,7 @@ public sealed class RestartOptimiser
     private readonly HardwareInventory hardware;
     private readonly Action<AgentState, string, string> report;
     private readonly TimeSpan startedAt;
+    private readonly Func<long>? gpuBusyTicksSoFar;
     private readonly List<ExperimentRecord> experiments = [];
     private readonly List<string> notTouched = [];
     private Queue<UnrealCandidate> candidates = new();
@@ -60,8 +61,10 @@ public sealed class RestartOptimiser
         HardwareInventory hardware,
         Action<AgentState, string, string> report,
         TimeSpan now,
-        int processId)
+        int processId,
+        Func<long>? gpuBusyTicksSoFar = null)
     {
+        this.gpuBusyTicksSoFar = gpuBusyTicksSoFar;
         this.gameName = gameName;
         this.settingsPath = settingsPath;
         values = new Dictionary<string, string>(currentValues, StringComparer.Ordinal);
@@ -249,7 +252,7 @@ public sealed class RestartOptimiser
     private void StartObserving(TimeSpan now, int processId)
     {
         observedProcessId = processId;
-        observation = processId == 0 || phase == Phase.WaitingForRestart ? null : new ObservedGameDiagnosis(now);
+        observation = processId == 0 || phase == Phase.WaitingForRestart ? null : new ObservedGameDiagnosis(now, gpuBusyTicksSoFar);
     }
 
     private ExperimentRecord Record(UnrealCandidate candidate, FrameStatistics? after, double gainPercent, Decision decision, string reason) =>

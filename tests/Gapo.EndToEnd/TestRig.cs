@@ -29,7 +29,7 @@ public sealed record HardwareResult(double ScanMilliseconds, string Class, strin
 
 public sealed record MonitorResult(int Samples, double MeanGameProcessorsUsed, double MeanMachineLoadPercent, double MeanBusiestProcessorPercent, double MeanBackgroundPercent, double MedianBusiestGameThreadPercent, double PeakGameWriteMegabytesPerSecond, double GamePrivateMegabytes);
 
-public sealed record FrameTimingResult(string Availability, long EventsSeen, long EventsLost, int PresentedFrames, double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs, int HookFrames, double HookMedianFrameMs, bool OnlyTheGamesEvents = false)
+public sealed record FrameTimingResult(string Availability, long EventsSeen, long EventsLost, int PresentedFrames, double MedianFrameMs, double MedianCpuBusyMs, double MedianInPresentMs, int HookFrames, double HookMedianFrameMs, bool OnlyTheGamesEvents = false, bool MeasuresGpuBusy = false, double GpuBusyMsPerFrame = 0)
 {
     public double EventsPerPresentedFrame => PresentedFrames <= 0 ? 0 : (double)EventsSeen / PresentedFrames;
 
@@ -243,7 +243,7 @@ public sealed class TestRig
         return Start(AgentExecutable, arguments);
     }
 
-    private Process StartUnrealFixture(string name, UnrealInstall install, double seconds, int session) =>
+    private Process StartUnrealFixture(string name, UnrealInstall install, double seconds, int session, IEnumerable<string>? extraArguments = null) =>
         Start(install.ShippingExecutable,
         [
             "--data-dir=" + Path.Combine(outputDirectory, name + "-data"),
@@ -251,9 +251,10 @@ public sealed class TestRig
             "--autotest=" + Seconds(seconds),
             "--log=" + ResultPath(name + "-session-" + session.ToString(CultureInfo.InvariantCulture)),
             "--unreal-settings=" + install.SettingsPath,
+            .. extraArguments ?? [],
         ]);
 
-    public UnknownGameCheck RunUnknownSteamGame(string name)
+    public UnknownGameCheck RunUnknownSteamGame(string name, IEnumerable<string>? extraGameArguments = null)
     {
         const double GameSeconds = 85;
         var configuredSeconds = runSeconds;
@@ -264,7 +265,7 @@ public sealed class TestRig
             var pipeName = "GAPO.Rig." + Guid.NewGuid().ToString("N");
             using var agent = StartServingAgent(name, install, pipeName, GameSeconds + 45);
             using var client = InterfaceClient.Connect(pipeName);
-            using var game = StartUnrealFixture(name, install, GameSeconds, 1);
+            using var game = StartUnrealFixture(name, install, GameSeconds, 1, extraGameArguments);
             var served = client.WatchAnUnknownGame(UnrealGameName, TimeSpan.FromSeconds(45), TimeSpan.FromSeconds(GameSeconds + 20));
             var fixture = Collect(name + "-session-1", game);
             WaitForExit(agent, "agent");
@@ -655,7 +656,9 @@ public sealed class TestRig
             frameTiming.GetProperty("medianInPresentMs").GetDouble(),
             frameTiming.GetProperty("hookFrames").GetInt32(),
             frameTiming.GetProperty("hookMedianFrameMs").GetDouble(),
-            frameTiming.TryGetProperty("onlyTheGamesEventsWereDelivered", out var focused) && focused.GetBoolean());
+            frameTiming.TryGetProperty("onlyTheGamesEventsWereDelivered", out var focused) && focused.GetBoolean(),
+            frameTiming.TryGetProperty("measuresGpuBusy", out var measuresGpu) && measuresGpu.GetBoolean(),
+            frameTiming.TryGetProperty("gpuBusyMsPerFrame", out var gpuBusy) ? gpuBusy.GetDouble() : 0);
 
     private void WaitForExit(Process process, string description)
     {

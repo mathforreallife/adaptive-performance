@@ -52,6 +52,7 @@ try
     {
         rig.RunFixtureAlone("calibration");
         CheckUnknownSteamGame();
+        CheckGraphicsBoundUnknownGame();
     }
     else
     {
@@ -111,6 +112,7 @@ void CheckEverything()
     var frameTiming = agent.FrameTiming;
     Expect(frameTiming.Availability == FrameTimingAvailable, $"Frame timing through event tracing was not available: {frameTiming.Availability}.");
     Expect(frameTiming.EventsLost == 0, $"Event tracing lost {frameTiming.EventsLost} events.");
+    var rendersOnHardware = attached.Adapter.Length > 0 && !attached.Adapter.Contains(SoftwareAdapterName, StringComparison.OrdinalIgnoreCase);
     Expect(frameTiming.OnlyTheGamesEvents && frameTiming.EventsPerPresentedFrame <= MostEventsPerPresentedFrame, string.Create(CultureInfo.InvariantCulture, $"Event tracing delivered {frameTiming.EventsPerPresentedFrame:0.0} events per presented frame (process filter {(frameTiming.OnlyTheGamesEvents ? "on" : "off")}); only the game's own present events should reach the agent."));
     Expect(frameTiming.ShareOfHookFramesSeen >= MinimumShareOfFramesSeenByEventTracing, $"Event tracing saw {frameTiming.PresentedFrames} presented frames while the game reported {frameTiming.HookFrames}.");
     Expect(frameTiming.MedianDifferencePercent <= MaximumFrameTimeDisagreementPercent, string.Create(CultureInfo.InvariantCulture, $"Event tracing measured a median frame time of {frameTiming.MedianFrameMs:0.00} ms; the game itself reported {frameTiming.HookMedianFrameMs:0.00} ms."));
@@ -185,12 +187,22 @@ void CheckEverything()
 
     CheckLiveInterface();
     CheckUnknownSteamGame();
+    CheckGraphicsBoundUnknownGame();
     CheckRestartOptimisation();
     var (_, simulationAgent) = rig.RunFixtureWithBaselineMeasurement("simulation-bound", scenario: "simulation-bound");
     ExpectDiagnosis(simulationAgent.Diagnosis, "CpuMainThread", "the simulation-bound fixture");
     Expect(simulationAgent.Diagnosis is null || simulationAgent.Diagnosis.EngineLimitation.Length > 0, "The simulation-bound diagnosis did not explain the engine limitation.");
 
     WriteSummary(firstBaseline, attached, secondBaseline, agent, comparison);
+}
+
+void CheckGraphicsBoundUnknownGame()
+{
+    var check = rig.RunUnknownSteamGame("unknown-gpu-game", ["--gpu-load=900", "--workload=160,300,0.45"]);
+    var rendersOnHardware = check.Fixture.Adapter.Length > 0 && !check.Fixture.Adapter.Contains(SoftwareAdapterName, StringComparison.OrdinalIgnoreCase);
+    var diagnosis = check.Served.Diagnosis;
+    Expect(!rendersOnHardware || diagnosis is { Bottleneck: "GraphicsCard" } && diagnosis.Summary.Contains("The graphics card is busy", StringComparison.Ordinal), $"The hook-less fixture with heavy graphics load should be diagnosed as limited by the graphics card on {check.Fixture.Adapter}; the agent said: {diagnosis?.Title ?? "nothing"}. {diagnosis?.Summary}");
+    Print($"unknown gpu {check.Fixture.AverageFps:0.0} FPS on {check.Fixture.Adapter}; diagnosis: {diagnosis?.Title ?? "none"}. {diagnosis?.Summary}{(rendersOnHardware ? string.Empty : " (software rendering: not checked)")}");
 }
 
 void CheckUnknownSteamGame()

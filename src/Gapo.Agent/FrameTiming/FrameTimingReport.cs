@@ -18,7 +18,10 @@ public sealed record FrameTimingReport(
     double HookMedianFrameMs,
     double HookMedianWorkMs,
     double HookMedianPresentMs,
-    bool OnlyTheGamesEventsWereDelivered = false)
+    bool OnlyTheGamesEventsWereDelivered = false,
+    bool MeasuresGpuBusy = false,
+    double GpuBusyMsPerFrame = 0,
+    long GpuPacketsSeen = 0)
 {
     private const int DecimalPlaces = 3;
 
@@ -37,7 +40,10 @@ public sealed record FrameTimingReport(
             hookFrameMs.Median(),
             hookWorkMs.Median(),
             hookPresentMs.Median(),
-            probe.OnlyTheGamesEventsWereDelivered);
+            probe.OnlyTheGamesEventsWereDelivered,
+            probe.MeasuresGpuBusy,
+            probe.GpuBusyMsPerFrame,
+            probe.GpuPacketsSeen);
 
     public void WriteTo(Utf8JsonWriter json)
     {
@@ -46,6 +52,9 @@ public sealed record FrameTimingReport(
         json.WriteNumber("eventsSeen", EventsSeen);
         json.WriteNumber("eventsLost", EventsLost);
         json.WriteBoolean("onlyTheGamesEventsWereDelivered", OnlyTheGamesEventsWereDelivered);
+        json.WriteBoolean("measuresGpuBusy", MeasuresGpuBusy);
+        json.WriteNumber("gpuBusyMsPerFrame", Round(GpuBusyMsPerFrame));
+        json.WriteNumber("gpuPacketsSeen", GpuPacketsSeen);
         json.WriteNumber("presentedFrames", PresentedFrames);
         json.WriteNumber("meanFrameMs", Round(MeanFrameMs));
         json.WriteNumber("medianFrameMs", Round(MedianFrameMs));

@@ -11,6 +11,9 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     private readonly PresentedFrameQueue queue = new();
     private readonly PresentedFrame[] drained = new PresentedFrame[DrainBatch];
     private readonly EtwPresentSession? session;
+    private EtwGpuSession? gpu;
+    private long gpuBusyTicksBeforeTracking;
+    private long gpuBusyTicksOfEarlierGames;
     private readonly bool keepsSummaries;
     private volatile PresentTracker? tracker;
 
@@ -37,6 +40,25 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
 
     public long EventsSeen => session?.EventsSeen ?? 0;
 
+    public bool MeasuresGpuBusy => gpu is not null;
+
+    public void StartGpuTiming()
+    {
+        if (session is null || gpu is not null)
+        {
+            return;
+        }
+
+        gpu = EtwGpuSession.TryStart(out _);
+        gpuBusyTicksBeforeTracking = GpuBusyTicksOfTrackedProcess;
+    }
+
+    public long GpuPacketsSeen => gpu?.PacketsSeen ?? 0;
+
+    public long GpuBusyTicksOfTrackedProcess => gpu is null || TrackedProcessId == 0 ? 0 : gpu.BusyTicks(TrackedProcessId);
+
+    public double GpuBusyMsPerFrame => FrameMs.Count == 0 ? 0 : (gpuBusyTicksOfEarlierGames + Math.Max(0, GpuBusyTicksOfTrackedProcess - gpuBusyTicksBeforeTracking)) * 1000.0 / EtwPresentSession.TimestampTicksPerSecond / FrameMs.Count;
+
     public bool OnlyTheGamesEventsWereDelivered { get; private set; }
 
     public uint EventsLost => session?.ReadEventsLost() ?? 0;
@@ -44,6 +66,7 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     public void Track(int processId)
     {
         TrackedProcessId = processId;
+        gpuBusyTicksBeforeTracking = GpuBusyTicksOfTrackedProcess;
         if (session is not null)
         {
             OnlyTheGamesEventsWereDelivered = session.FocusOn(processId);
@@ -54,6 +77,7 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     public void StopTracking()
     {
         tracker = null;
+        gpuBusyTicksOfEarlierGames += Math.Max(0, GpuBusyTicksOfTrackedProcess - gpuBusyTicksBeforeTracking);
         TrackedProcessId = 0;
         session?.FocusOn(0);
     }
@@ -77,6 +101,7 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
                 FrameObserver?.Invoke(drained[index]);
             }
 
+
             total += count;
         }
         while (count == drained.Length);
@@ -90,5 +115,9 @@ public sealed class FrameTimingProbe : IPresentEventSink, IDisposable
     public void PresentStopped(int eventProcessId, int threadId, long timestampTicks) =>
         tracker?.PresentStopped(eventProcessId, threadId, timestampTicks);
 
-    public void Dispose() => session?.Dispose();
+    public void Dispose()
+    {
+        gpu?.Dispose();
+        session?.Dispose();
+    }
 }

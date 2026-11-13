@@ -157,7 +157,7 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 1. Make sure the `step-7-live-link` PR is merged and its CI run is green (on the GPU-less runner the interface CPU budget is reported, not enforced; the quarter-of-a-processor ceiling and the 80 MB limit are).
 2. Remaining UI: frame-budget bar, running / warm-up / error states with phase progress, Save report, tray icon, notifications, high-contrast and 150 % / 200 % screenshots, Tips content.
 3. Real games, continued: run the Unreal adapter against a real Unreal Engine game on a PC with Steam; frame-rate cap/VSync tuning for restart-based games; second engine family (Unity's `prefs` in the registry, or a JSON-config game); a tray notification when GAPO waits for a restart.
-4. Leftovers: GPU busy time (DxgKrnl events; PresentMon reports about 1.0 ms per frame for the fixture, use it as the reference), hitch-period observation, ADRs for frame timing and for the engine/adapter interfaces, README refresh.
+4. Leftovers: GPU busy for hardware-scheduled GPUs (HAGS: `HwQueue`/`QueuePacket` path, needs a HAGS-capable PC), hitch-period observation, ADR for the engine/adapter interfaces, README refresh. (GPU busy time for DMA-packet GPUs is done: ADR 0005.)
 5. Then steps 8-12 of the build order.
 
 ## Task list (build order, spec III.4)

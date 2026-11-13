@@ -24,6 +24,8 @@ public static class Diagnostician
     private const double OneThreadProcessorsUsed = 1.6;
     private const double AllProcessorsShare = 0.8;
     private const double WaitingInPresentShare = 0.4;
+    private const double GraphicsCardShareOfFrame = 0.8;
+    private const double GraphicsCardSaturatedShare = 0.95;
     private const int MostExpensivePassesNamed = 3;
 
     public static BottleneckDiagnosis Diagnose(DiagnosisInput input)
@@ -60,7 +62,7 @@ public static class Diagnostician
             input.TargetFps,
             budget,
             work);
-        var waitsBeyondTheBudget = primary.Bottleneck == Bottleneck.WaitingInPresent && input.Presents is { } presents && presents.MedianFrameMs > budget;
+        var waitsBeyondTheBudget = primary.Bottleneck is Bottleneck.WaitingInPresent or Bottleneck.GraphicsCard && input.Presents is { } presents && presents.MedianFrameMs > budget;
         if (work <= budget * TargetMetShareOfBudget && hitches.StorageHitches == 0 && !waitsBeyondTheBudget)
         {
             return diagnosis with
@@ -113,6 +115,26 @@ public static class Diagnostician
     {
         var monitor = input.Monitor;
         var logical = Math.Max(1, input.Processor.LogicalProcessors);
+        var busiestThread = monitor.BusiestGameThreadPercent;
+        if (input.Presents is { GpuBusyMs: { } gpu } timing && timing.MedianFrameMs > 0
+            && (gpu >= timing.MedianFrameMs * GraphicsCardSaturatedShare || (gpu >= timing.MedianFrameMs * GraphicsCardShareOfFrame && busiestThread is not >= BusyThreadPercent)))
+        {
+            var processorNote = busiestThread switch
+            {
+                >= BusyThreadPercent => Text($". The game's busiest processor thread also shows {busiestThread:0}% busy, which can be the graphics driver waiting for the card"),
+                { } thread => Text($", while the game's busiest processor thread is busy only {thread:0}% of the time"),
+                _ => string.Empty,
+            };
+            return new Finding(
+                Bottleneck.GraphicsCard,
+                "The graphics card is the limit",
+                (gpu >= timing.MedianFrameMs
+                    ? Text($"The graphics card is busy for practically all of each {timing.MedianFrameMs:0.0} ms frame")
+                    : Text($"The graphics card is busy {gpu:0.0} ms of each {timing.MedianFrameMs:0.0} ms frame")) + processorNote + ". Lower resolution, anti-aliasing, shadows or post-processing help; a faster processor would not.",
+                ProblemCategory.GameSetting,
+                null);
+        }
+
         if (input.Presents is { } presents && presents.MedianFrameMs > 0 && presents.MedianInPresentMs >= presents.MedianFrameMs * WaitingInPresentShare)
         {
             return new Finding(
@@ -170,6 +192,10 @@ public static class Diagnostician
         {
             Add("CPU work", presents.MedianCpuBusyMs);
             Add("Waiting to present", presents.MedianInPresentMs);
+            if (presents.GpuBusyMs is { } gpuBusy)
+            {
+                Add("Graphics card busy", gpuBusy);
+            }
         }
 
         return shares;
