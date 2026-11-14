@@ -38,7 +38,7 @@
 
 ## Install
 
-1. Download `GAPO-0.9.0-win-x64.zip` from [Releases](../../releases) and unzip it.
+1. Download `GAPO-0.9.0-win-x64.zip` from the [0.9.0-beta release](https://github.com/mathforreallife/adaptive-performance/releases/tag/v0.9.0-beta) and unzip it.
 2. Double-click **Install.cmd**. GAPO is installed for your account only: no administrator rights are needed to install. It goes to the Start menu and the desktop, and appears under **Settings → Apps** for uninstalling.
 3. When the installer offers to add your account to **Performance Log Users**, say **Y**, then sign out of Windows and back in once. Windows allows reading frame times to that group, so GAPO can then run without administrator rights.
 
