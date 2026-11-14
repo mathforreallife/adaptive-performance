@@ -1,4 +1,5 @@
 using Gapo.App.Reports;
+using Gapo.Core.Tips;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -22,6 +23,14 @@ public sealed partial class DetailsView : UserControl
     public ReportView Report { get; }
 
     private void OnBackClicked(object sender, RoutedEventArgs e) => BackRequested?.Invoke(this, EventArgs.Empty);
+
+    private async void OnOpenSettingsClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { Tag: string page } && TipAdvisor.IsKnownSettingsPage(page))
+        {
+            await global::Windows.System.Launcher.LaunchUriAsync(new Uri(page));
+        }
+    }
 
     private void OnTabChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
     {

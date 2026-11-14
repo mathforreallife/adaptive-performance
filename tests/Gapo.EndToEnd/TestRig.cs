@@ -210,6 +210,12 @@ public sealed class TestRig
         return Directory.Exists(directory) ? Directory.GetFiles(directory).Select(file => Path.GetFileName(file)).Order(StringComparer.Ordinal).ToList() : [];
     }
 
+    public IReadOnlyList<string> SavedReports(string theme)
+    {
+        var directory = Path.Combine(outputDirectory, "ui-" + theme, "saved");
+        return Directory.Exists(directory) ? Directory.GetFiles(directory).Order(StringComparer.Ordinal).ToList() : [];
+    }
+
     public const string UnrealGameName = "Fixture Without Its Hook";
     public const string OriginalUnrealSettings =
         "[/Script/Engine.GameUserSettings]\r\n" +

@@ -44,6 +44,11 @@
           <Button x:Name="MoreOptionsButton" Content="Show more options" Style="{StaticResource AccentButtonStyle}" Click="OnMoreOptionsClicked" />
           <Button Content="Revert all" Visibility="{x:Bind CanAct}" Click="OnRevertAllClicked" />
           <Button Content="Optimise again" Visibility="{x:Bind CanAct}" Click="OnOptimiseAgainClicked" />
+          <Button Content="Save report" Click="OnSaveClicked" />
+        </StackPanel>
+        <StackPanel x:Name="SavedPanel" Orientation="Horizontal" Spacing="12" Visibility="Collapsed">
+          <TextBlock x:Name="SavedText" Style="{StaticResource GapoBodyStyle}" VerticalAlignment="Center" TextWrapping="Wrap" />
+          <Button x:Name="ShowSavedButton" Content="Show in folder" Click="OnShowSavedClicked" />
         </StackPanel>
         <TextBlock Text="{x:Bind Report.MeasurementQuality}" Style="{StaticResource GapoSecondaryStyle}" />
       </StackPanel>

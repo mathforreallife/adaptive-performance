@@ -58,4 +58,4 @@ GAPO **never** injects into games, reads game memory, installs drivers, changes 
 
 ## Report a problem
 
-Send the game's name, a screenshot of GAPO, and the files in `%LOCALAPPDATA%\GAPO\reports`.
+After an optimisation, press **Save report**: GAPO writes a readable report and its measurements to `Documents\GAPO` and shows them with **Show in folder**. Send those two files, the game's name and a screenshot of GAPO. Without a finished optimisation, send the files in `%LOCALAPPDATA%\GAPO\reports` instead.
