@@ -10,6 +10,7 @@ public sealed class ScreenshotRun
 {
     private const int LayoutSettleMilliseconds = 400;
     private const int DetailTabs = 5;
+    public const string SavedFolderName = "saved";
     private const double DefaultDotsPerInch = 96;
     private const int PlanWaitSteps = 25;
     private const int PlanWaitMilliseconds = 200;
@@ -62,6 +63,10 @@ public sealed class ScreenshotRun
 
             window.ShowResults();
             await CaptureAsync("results");
+            if (window.SaveReport(Path.Combine(directory, SavedFolderName)) is not null)
+            {
+                await CaptureAsync("results-saved");
+            }
             for (var tab = 0; tab < DetailTabs; tab++)
             {
                 window.ShowDetails(tab);

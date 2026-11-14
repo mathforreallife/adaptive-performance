@@ -65,6 +65,7 @@ public sealed record AgentReport(
         FrameTiming?.WriteTo(json);
         Monitor.WriteTo(json);
         HardwareInventoryJson.Write(json, Hardware);
+        TipsJson.Write(json, TipsJson.For(Hardware, Monitor, Baseline));
         if (Baseline is not null)
         {
             BaselineReportJson.Write(json, Baseline);

@@ -19,7 +19,7 @@ const double LargestCpuInsideMeasurementWindowsPercent = 0.3;
 const double SmallestExpectedFpsGainPercent = 25;
 const double SmallestExpectedWorkReductionFactor = 1.5;
 const int FewestExpectedKeptChanges = 2;
-const int ExpectedScreenshots = 6;
+const int ExpectedScreenshots = 7;
 const int FewestLiveSamples = 3;
 const double LowestProcessorsASingleThreadedGameUses = 0.6;
 const double HighestProcessorsASingleThreadedGameUses = 1.6;
@@ -182,8 +182,12 @@ void CheckEverything()
         foreach (var theme in new[] { "light", "dark" })
         {
             var screenshots = rig.CaptureUserInterface("optimise-agent.json", theme);
-            Expect(screenshots.Count(file => file.EndsWith(".png", StringComparison.Ordinal)) == ExpectedScreenshots, $"The user interface produced {string.Join(", ", screenshots)} in the {theme} theme; expected the result view and five detail tabs.");
-            Print($"interface   {theme} theme: {string.Join(", ", screenshots)}");
+            Expect(screenshots.Count(file => file.EndsWith(".png", StringComparison.Ordinal)) == ExpectedScreenshots, $"The user interface produced {string.Join(", ", screenshots)} in the {theme} theme; expected the result view, the result after Save report and five detail tabs.");
+            var saved = rig.SavedReports(theme);
+            Expect(saved.Count(file => file.EndsWith(".txt", StringComparison.Ordinal)) == 1 && saved.Count(file => file.EndsWith(".json", StringComparison.Ordinal)) == 1, $"Save report wrote {string.Join(", ", saved)} in the {theme} theme; expected one text report and one copy of the agent's report.");
+            var savedText = saved.Where(file => file.EndsWith(".txt", StringComparison.Ordinal)).Select(File.ReadAllText).FirstOrDefault() ?? string.Empty;
+            Expect(savedText.Contains("What GAPO changed", StringComparison.Ordinal) && savedText.Contains("Tips", StringComparison.Ordinal) && savedText.Contains("Your PC", StringComparison.Ordinal), "The saved text report lacks the result, tips or hardware sections.");
+            Print($"interface   {theme} theme: {string.Join(", ", screenshots)}; saved {string.Join(", ", saved.Select(Path.GetFileName))}");
         }
 
         Expect(rig.RevertAll() == 0, "Revert all failed.");

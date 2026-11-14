@@ -40,6 +40,8 @@ public sealed partial class MainWindow : Window
     private GameSettingsMessage? latestSettings;
     private bool windowIsActive = true;
     private ReportView report = ReportView.Empty;
+    private string? reportPath;
+    private ResultsView? currentResults;
     private bool rendersLiveData = true;
     private int samplesRendered;
 
@@ -109,7 +111,9 @@ public sealed partial class MainWindow : Window
     public void ShowResults()
     {
         var view = new ResultsView(report, canAct: link is not null);
+        currentResults = view;
         view.MoreOptionsRequested += (_, _) => ShowDetails();
+        view.SaveRequested += (_, _) => SaveReport(view, ReportText.DefaultFolder());
         view.OptimiseAgainRequested += (_, _) => ShowHome();
         view.RevertAllRequested += (_, _) =>
         {
@@ -189,8 +193,26 @@ public sealed partial class MainWindow : Window
         Show(gameSettings, "Game settings");
     }
 
+    public string? SaveReport(string folder) => currentResults is { } view ? SaveReport(view, folder) : null;
+
+    private string? SaveReport(ResultsView view, string folder)
+    {
+        try
+        {
+            var saved = ReportText.Save(report, reportPath, folder, DateTimeOffset.Now);
+            view.ShowSaved(saved);
+            return saved;
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            view.ShowSaveFailed(exception.Message);
+            return null;
+        }
+    }
+
     private void ShowReport(string path)
     {
+        reportPath = path;
         report = ReportView.Load(path);
         OverheadText.Text = report.OverheadText;
         SetOverheadWarning(report.OverBudget);

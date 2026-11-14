@@ -118,6 +118,26 @@
     </StackPanel>
 
     <StackPanel x:Name="TipsPanel" Spacing="16" Visibility="Collapsed">
+      <ItemsRepeater ItemsSource="{x:Bind Report.Tips}">
+        <ItemsRepeater.Layout>
+          <StackLayout Spacing="16" />
+        </ItemsRepeater.Layout>
+        <ItemsRepeater.ItemTemplate>
+          <DataTemplate x:DataType="reports:TipCard">
+            <Border Style="{StaticResource GapoCardStyle}">
+              <StackPanel Spacing="8">
+                <TextBlock Text="{x:Bind KindLabel}" Style="{StaticResource GapoSectionLabelStyle}" />
+                <TextBlock Text="{x:Bind Title}" Style="{StaticResource GapoBodyStyle}" FontWeight="SemiBold" FontSize="16" />
+                <TextBlock Text="{x:Bind Reason}" Style="{StaticResource GapoBodyStyle}" />
+                <Button Content="{x:Bind ButtonText}" Tag="{x:Bind SettingsPage}" Visibility="{x:Bind HasButton}" Click="OnOpenSettingsClicked" Margin="0,4,0,0" />
+              </StackPanel>
+            </Border>
+          </DataTemplate>
+        </ItemsRepeater.ItemTemplate>
+      </ItemsRepeater>
+      <Border Style="{StaticResource GapoCardStyle}" Visibility="{x:Bind Report.HasNoTips}">
+        <TextBlock Style="{StaticResource GapoBodyStyle}" Text="GAPO found nothing outside the game worth changing on this PC." />
+      </Border>
       <Border Style="{StaticResource GapoCardStyle}">
         <StackPanel Spacing="12">
           <TextBlock Text="Other things GAPO noticed" Style="{StaticResource GapoSectionLabelStyle}" />

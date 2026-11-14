@@ -23,6 +23,11 @@ public sealed record ExperimentCard(
 
 public sealed record FactLine(string Label, string Value);
 
+public sealed record TipCard(string Title, string Reason, string KindLabel, string SettingsPage, string ButtonText)
+{
+    public bool HasButton => SettingsPage.Length > 0;
+}
+
 public sealed class ReportView
 {
     private const string Arrow = " → ";
@@ -69,6 +74,10 @@ public sealed class ReportView
 
     public IReadOnlyList<FactLine> Live { get; private init; } = [];
 
+    public IReadOnlyList<TipCard> Tips { get; private init; } = [];
+
+    public bool HasNoTips => Tips.Count == 0;
+
     public static ReportView Empty { get; } = new();
 
     public static ReportView Load(string path)
@@ -77,7 +86,7 @@ public sealed class ReportView
         var root = document.RootElement;
         if (!root.TryGetProperty("optimisation", out var optimisation) || !optimisation.GetProperty("completed").GetBoolean())
         {
-            return new ReportView { OverheadText = Overhead(root), Hardware = HardwareFacts(root) };
+            return new ReportView { OverheadText = Overhead(root), Hardware = HardwareFacts(root), Tips = TipCards(root) };
         }
 
         var baseline = optimisation.GetProperty("baseline");
@@ -115,6 +124,7 @@ public sealed class ReportView
             PcClass = PcClassLine(root),
             CouldNotBeRead = root.TryGetProperty("hardware", out var hardware) ? Strings(hardware.GetProperty("couldNotBeRead")) : [],
             Live = LiveFacts(root),
+            Tips = TipCards(root),
         };
     }
 
@@ -234,6 +244,26 @@ public sealed class ReportView
         "HardDisk" => "Hard disk",
         _ => "Drive",
     };
+
+    public static IReadOnlyList<TipCard> TipCards(JsonElement root)
+    {
+        if (!root.TryGetProperty("tips", out var tips) || tips.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        return tips.EnumerateArray().Select(tip => new TipCard(
+            String(tip, "title"),
+            String(tip, "reason"),
+            String(tip, "kind") switch
+            {
+                "HardwareUpgrade" => "Hardware upgrade",
+                "WindowsSetting" => "Windows setting",
+                _ => "What you can do",
+            },
+            String(tip, "settingsPage"),
+            String(tip, "buttonText"))).ToList();
+    }
 
     private static IReadOnlyList<string> Strings(JsonElement array) =>
         array.EnumerateArray().Select(item => item.GetString() ?? string.Empty).Where(text => text.Length > 0).ToList();

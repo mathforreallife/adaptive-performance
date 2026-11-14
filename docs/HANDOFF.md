@@ -2,7 +2,7 @@
 
 Read this first when resuming. It says where the build is, what was decided, and exactly what to do next. Keep it current: update it at the end of every working step and before any long-running operation.
 
-Last updated: 2026-11-12 (Europe/Madrid), build-order step 0 in CI.
+Last updated: 2026-11-14 (Europe/Madrid). Read "State on 2026-11-14" and "Next actions" first.
 
 ## The job
 
@@ -175,10 +175,17 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 4. Knowledge base (build-order step 8) so GAPO knows per game which settings matter.
 5. Privacy note for the reports folder before any telemetry upload is added (none exists today).
 
+## State on 2026-11-14
+
+- PR #18 and PR #20 (release 0.9 beta, which carried #19's commits) are merged; #19 was closed as superseded. Default branch tip `f3ec0a9`, CI green.
+- Fixed a CI flake: the hook-less fixture on a 2-thread runner with 33 % background load was diagnosed "no single limit stands out"; the one-thread rule now allows for background apps holding the thread back (`Diagnostician.IsHeldBackByBackgroundApps`).
+- **Publishing the release is blocked by the permission system**: pushing the tag `v0.9.0-beta` (which starts `.github/workflows/release.yml`) was refused as an outward-facing action. No tag exists locally or remotely. The user has to push it (`git tag -a v0.9.0-beta f3ec0a9 -m "GAPO 0.9 beta"; git push origin v0.9.0-beta`) or allow it. Do not work around it.
+- Branch `step-7-tips-and-save`: Tips content (`src/Gapo.Core/Tips/TipAdvisor.cs`, agent `TipsJson.cs` writes `tips` into the report, Tips tab cards with buttons that open only whitelisted `ms-settings:` pages) and Save report (`src/Gapo.App/Reports/ReportText.cs`, text + JSON copy into `Documents\GAPO`, "Show in folder"; no file picker because pickers fail in elevated processes). Screenshot mode saves into `<screenshots>/saved` and captures `results-saved.png`; the rig expects 7 PNGs and checks the saved files.
+
 ## Next actions, in order
 
-1. Merge PR #18 and PR #19 when CI is green; publish the 0.9.0 pre-release from the default branch.
-2. Remaining UI: frame-budget bar, warm-up / error states, Save report, tray icon, high-contrast and 150 % / 200 % screenshots, Tips content.
+1. Finish `step-7-tips-and-save`: full rig green, PR, merge when CI is green. Ask the user to push the `v0.9.0-beta` tag (or to allow it).
+2. Remaining UI: frame-budget bar, warm-up / error states, tray icon, high-contrast and 150 % / 200 % screenshots.
 3. Real games, continued: run the Unreal adapter against a real Unreal Engine game on a PC with Steam; frame-rate cap/VSync tuning for restart-based games; second engine family (Unity's `prefs` in the registry, or a JSON-config game); a tray notification when GAPO waits for a restart.
 4. Leftovers: GPU busy for hardware-scheduled GPUs (HAGS: `HwQueue`/`QueuePacket` path, needs a HAGS-capable PC), hitch-period observation, ADR for the engine/adapter interfaces, README refresh. (GPU busy time for DMA-packet GPUs is done: ADR 0005.)
 5. Then steps 8-12 of the build order.
