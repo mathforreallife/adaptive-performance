@@ -184,7 +184,7 @@ Research workflows failed twice on the usage limit and cost a lot; do not re-run
 
 ## Next actions, in order
 
-1. The user still has to push the `v0.9.0-beta` tag (or allow it). If tips and Save report should be in the first beta, tag `d478e2c` instead of `f3ec0a9`.
+1. **GAPO 0.9.0-beta is published** (2026-11-14) as a GitHub pre-release from tag `v0.9.0-beta` on `d478e2c` (the owner pushed the tag; release workflow run 43573589045 green). Asset `GAPO-0.9.0-win-x64.zip` (124 MB, SHA-256 `aba9edbc…2485`, checked after download). Next: collect beta feedback (Performance Log Users path, real Unreal games).
 2. Remaining UI (branch `step-7-ui-states`): frame-budget bar, warm-up / error states, tray icon, high-contrast and 150 % / 200 % screenshots.
 3. Real games, continued: run the Unreal adapter against a real Unreal Engine game on a PC with Steam; frame-rate cap/VSync tuning for restart-based games; second engine family (Unity's `prefs` in the registry, or a JSON-config game); a tray notification when GAPO waits for a restart.
 4. Leftovers: GPU busy for hardware-scheduled GPUs (HAGS: `HwQueue`/`QueuePacket` path, needs a HAGS-capable PC), hitch-period observation, ADR for the engine/adapter interfaces, README refresh. (GPU busy time for DMA-packet GPUs is done: ADR 0005.)
