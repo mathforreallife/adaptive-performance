@@ -27,6 +27,10 @@ public sealed record AppPreferences
     public int TargetFps { get; init; }
 
     public int MostRestarts { get; init; } = 6;
+
+    public bool OptimiserEnabled { get; init; } = true;
+
+    public bool DiagnoseAutomatically { get; init; } = true;
 }
 
 public sealed class PreferenceStore
@@ -66,6 +70,8 @@ public sealed class PreferenceStore
                 json.WriteBoolean("allowFrameCap", preferences.AllowFrameCap);
                 json.WriteNumber("targetFps", preferences.TargetFps);
                 json.WriteNumber("mostRestarts", preferences.MostRestarts);
+                json.WriteBoolean("optimiserEnabled", preferences.OptimiserEnabled);
+                json.WriteBoolean("diagnoseAutomatically", preferences.DiagnoseAutomatically);
                 json.WriteEndObject();
             }
 
@@ -101,6 +107,8 @@ public sealed class PreferenceStore
                 AllowFrameCap = Flag(root, "allowFrameCap", defaults.AllowFrameCap),
                 TargetFps = Whole(root, "targetFps", defaults.TargetFps),
                 MostRestarts = Whole(root, "mostRestarts", defaults.MostRestarts),
+                OptimiserEnabled = Flag(root, "optimiserEnabled", defaults.OptimiserEnabled),
+                DiagnoseAutomatically = Flag(root, "diagnoseAutomatically", defaults.DiagnoseAutomatically),
             };
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)

@@ -21,7 +21,7 @@ public sealed class RestartOptimiser
 
     private const double PercentScale = 100.0;
     private const double MillisecondsPerSecond = 1000.0;
-    private const double QualityGoalLargestVisualLoss = 0.3;
+    public const double QualityGoalLargestVisualLoss = 0.3;
     private const string UnlimitedTargetReason = "Maximum FPS mode: no target, every candidate is tested.";
 
     private readonly string gameName;
@@ -108,6 +108,22 @@ public sealed class RestartOptimiser
     }
 
     public void OnFrame(in PresentedFrame frame) => observation?.OnFrame(frame);
+
+    public int StepsDone => phase == Phase.Baseline ? 0 : 1 + experiments.Count;
+
+    public int StepsExpected
+    {
+        get
+        {
+            var testsLeft = Math.Max(0, MostRestarts - experiments.Count);
+            var waiting = (underTest is null ? 0 : 1) + (awaitingAnswer is null ? 0 : 1);
+            return phase == Phase.Baseline
+                ? 1 + MostRestarts
+                : StepsDone + Math.Min(candidates.Count + waiting, testsLeft);
+        }
+    }
+
+    private int MostRestarts => controls.MostRestarts > 0 ? controls.MostRestarts : MostRestartsPerRun;
 
     public OptimisationReport? Advance(TimeSpan now, int runningProcessId)
     {
@@ -271,7 +287,7 @@ public sealed class RestartOptimiser
 
     private OptimisationReport? ProposeNextOrFinish(TimeSpan now)
     {
-        var mostRestarts = controls.MostRestarts > 0 ? controls.MostRestarts : MostRestartsPerRun;
+        var mostRestarts = MostRestarts;
         if (candidates.Count == 0 || experiments.Count >= mostRestarts)
         {
             return Finish(now, completed: true, null, candidates.Count == 0 ? "Every setting worth testing has been tested." : Text($"Stopped after {mostRestarts} restarts, the most you allowed per run; optimise again to continue."));

@@ -11,6 +11,6 @@
     <ArtifactsPath>$(MSBuildThisFileDirectory)artifacts</ArtifactsPath>
     <Company>Adaptive Performance</Company>
     <Product>GAPO</Product>
-    <Version>0.1.0</Version>
+    <Version>0.9.0</Version>
   </PropertyGroup>
 </Project>

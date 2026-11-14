@@ -39,6 +39,10 @@ public sealed record GameSettingsMessage(string GameName, bool CanChange, bool A
 
 public sealed record ProposalMessage(string Title, string Detail) : AgentMessage;
 
+public sealed record PlanMessage(string GameName, bool CanStart, string Summary, IReadOnlyList<string> Steps, int SecondsLow, int SecondsHigh, int Restarts) : AgentMessage;
+
+public sealed record ProgressMessage(string Phase, int StepsDone, int StepsExpected, int ElapsedSeconds, int RemainingSecondsLow, int RemainingSecondsHigh) : AgentMessage;
+
 public sealed record DiagnosisMessage(string GameName, string Bottleneck, string Title, string Summary, IReadOnlyList<string> AlsoNoticed, string Basis) : AgentMessage;
 
 public abstract record UiCommand;
@@ -57,4 +61,8 @@ public sealed record RevertSettingCommand(string Key) : UiCommand;
 
 public sealed record AnswerProposalCommand(bool Approved) : UiCommand;
 
-public sealed record AgentPreferencesCommand(bool AskBeforeEachChange, bool AllowFrameCap, int TargetFps, int MostRestarts) : UiCommand;
+public sealed record AgentPreferencesCommand(bool AskBeforeEachChange, bool AllowFrameCap, int TargetFps, int MostRestarts, bool OptimiserEnabled = true, bool DiagnoseAutomatically = true) : UiCommand;
+
+public sealed record PlanCommand(Goal Goal) : UiCommand;
+
+public sealed record DiagnoseCommand : UiCommand;

@@ -18,9 +18,18 @@ public sealed record SettingControlRun(
     string ShadowsInFileAfterPutBack,
     bool RefusedAnUnknownValue,
     string ReportPath,
-    IReadOnlyList<string> Proposals);
+    IReadOnlyList<string> Proposals,
+    PlanRun Plan);
 
-public sealed record ServedRestartRun(bool OfferedToOptimise, int RestartsAsked, IReadOnlyList<string> StatusTitles, string ReportPath);
+public sealed record PlanRun(PlanMessage? WhileSwitchedOff, bool OptimiseRefusedWhileSwitchedOff, PlanMessage Plan, IReadOnlyList<ProgressMessage> Progress, double ActualSeconds)
+{
+    public bool ProgressOnlyMovesForward =>
+        Progress.Count > 0 && Progress.Zip(Progress.Skip(1)).All(pair => pair.Second.StepsDone >= pair.First.StepsDone && pair.Second.ElapsedSeconds >= pair.First.ElapsedSeconds) && Progress.All(entry => entry.StepsExpected >= entry.StepsDone);
+
+    public bool EstimateCovered => ActualSeconds <= Plan.SecondsHigh && ActualSeconds >= Plan.SecondsLow / 2.0;
+}
+
+public sealed record ServedRestartRun(bool OfferedToOptimise, int RestartsAsked, IReadOnlyList<string> StatusTitles, string ReportPath, PlanRun Plan);
 
 public sealed record ServedRun(int LiveSamples, double FirstLiveFps, int ChartPoints, IReadOnlyList<string> StatusTitles, bool SawWatching, bool SawOptimising, bool SawFinished, string ReportPath);
 
@@ -28,6 +37,7 @@ public sealed class InterfaceClient : IDisposable
 {
     private static readonly TimeSpan ConnectTimeout = TimeSpan.FromSeconds(60);
     private static readonly TimeSpan GameTimeout = TimeSpan.FromSeconds(150);
+    private static readonly TimeSpan PlanTimeout = TimeSpan.FromSeconds(15);
     private static readonly TimeSpan OptimisationTimeout = TimeSpan.FromSeconds(330);
     private static readonly TimeSpan RestartOptimisationTimeout = TimeSpan.FromMinutes(12);
 
@@ -165,9 +175,20 @@ public sealed class InterfaceClient : IDisposable
         }
 
         WaitFor(message => message is LiveSampleMessage { GameConnected: true, CanOptimise: true, AverageFps: > 0 } sample && sample.GameName == expectedName, GameTimeout, Observe, $"The agent never offered to optimise '{expectedName}'.");
+        writer.WriteLine(WireFormat.Encode(new PlanCommand(goal)));
+        var plan = (PlanMessage)WaitFor(message => message is PlanMessage, PlanTimeout, Observe, "The agent never sent a plan for the restart-based optimisation.");
+        var progress = new List<ProgressMessage>();
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         writer.WriteLine(WireFormat.Encode(new OptimiseCommand(goal)));
-        var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, RestartOptimisationTimeout, Observe, "The agent never finished the restart-based optimisation.");
-        return new ServedRestartRun(offered, restarts, titles, report.Path);
+        var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, RestartOptimisationTimeout, message =>
+        {
+            Observe(message);
+            if (message is ProgressMessage step)
+            {
+                progress.Add(step);
+            }
+        }, "The agent never finished the restart-based optimisation.");
+        return new ServedRestartRun(offered, restarts, titles, report.Path, new PlanRun(null, false, plan, progress, clock.Elapsed.TotalSeconds));
     }
 
     public SettingControlRun ExerciseSettingControl(Func<string, string> readSettingFile)
@@ -196,9 +217,18 @@ public sealed class InterfaceClient : IDisposable
         writer.WriteLine(WireFormat.Encode(new RevertSettingCommand("Shadows")));
         WaitFor(message => message is GameSettingsMessage settings && settings.Settings.Any(setting => setting.Key == "Shadows" && !setting.ChangedFromOriginal), TimeSpan.FromSeconds(10), Ignore, "Putting shadows back was not confirmed.");
         var afterPutBack = readSettingFile("Shadows");
+        writer.WriteLine(WireFormat.Encode(new AgentPreferencesCommand(AskBeforeEachChange: true, AllowFrameCap: false, TargetFps: 0, MostRestarts: 6, OptimiserEnabled: false)));
+        writer.WriteLine(WireFormat.Encode(new PlanCommand(Goal.Balanced)));
+        var switchedOffPlan = WaitFor(message => message is PlanMessage, PlanTimeout, Ignore, "The agent sent no plan while the optimiser was switched off.") as PlanMessage;
+        writer.WriteLine(WireFormat.Encode(new OptimiseCommand(Goal.Balanced)));
+        var refusedWhileOff = WaitFor(message => message is StatusMessage { Title: "The optimiser is switched off" } or ProgressMessage or ProposalMessage, PlanTimeout, Ignore, "The agent did not answer Optimise while the optimiser was switched off.") is StatusMessage;
         writer.WriteLine(WireFormat.Encode(new AgentPreferencesCommand(AskBeforeEachChange: true, AllowFrameCap: false, TargetFps: 0, MostRestarts: 6)));
+        writer.WriteLine(WireFormat.Encode(new PlanCommand(Goal.Balanced)));
+        var plan = (PlanMessage)WaitFor(message => message is PlanMessage, PlanTimeout, Ignore, "The agent never sent a plan.");
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         writer.WriteLine(WireFormat.Encode(new OptimiseCommand(Goal.Balanced)));
         var proposals = new List<string>();
+        var progress = new List<ProgressMessage>();
         void Answer(AgentMessage message)
         {
             if (message is ProposalMessage proposal)
@@ -206,10 +236,14 @@ public sealed class InterfaceClient : IDisposable
                 proposals.Add(proposal.Title);
                 writer.WriteLine(WireFormat.Encode(new AnswerProposalCommand(!proposal.Title.Contains("Physics substeps", StringComparison.Ordinal))));
             }
+            else if (message is ProgressMessage step)
+            {
+                progress.Add(step);
+            }
         }
 
         var report = (ReportReadyMessage)WaitFor(message => message is ReportReadyMessage, OptimisationTimeout, Answer, "The agent never announced a finished report after the setting tests.");
-        return new SettingControlRun(first, locked is not null, true, setStatus, afterSet, true, afterPutBack, refused, report.Path, proposals);
+        return new SettingControlRun(first, locked is not null, true, setStatus, afterSet, true, afterPutBack, refused, report.Path, proposals, new PlanRun(switchedOffPlan, refusedWhileOff, plan, progress, clock.Elapsed.TotalSeconds));
     }
 
     public void Dispose()

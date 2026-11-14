@@ -11,6 +11,8 @@ public sealed class ScreenshotRun
     private const int LayoutSettleMilliseconds = 400;
     private const int DetailTabs = 5;
     private const double DefaultDotsPerInch = 96;
+    private const int PlanWaitSteps = 25;
+    private const int PlanWaitMilliseconds = 200;
 
     private readonly MainWindow window;
     private readonly FrameworkElement root;
@@ -33,6 +35,19 @@ public sealed class ScreenshotRun
             if (!hasResult)
             {
                 await CaptureAsync("home");
+                if (window.RequestPlan())
+                {
+                    for (var step = 0; step < PlanWaitSteps && !window.HasPlan; step++)
+                    {
+                        await Task.Delay(PlanWaitMilliseconds);
+                    }
+
+                    if (window.HasPlan)
+                    {
+                        await CaptureAsync("plan");
+                    }
+                }
+
                 if (window.HasGameSettings)
                 {
                     window.ShowGameSettings();

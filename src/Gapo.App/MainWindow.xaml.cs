@@ -66,6 +66,8 @@ public sealed partial class MainWindow : Window
             overlay?.Dispose();
         };
         home.OptimiseRequested += goal => link?.Send(new OptimiseCommand(goal));
+        home.PlanRequested += goal => link?.Send(new PlanCommand(goal));
+        home.DiagnoseRequested += () => link?.Send(new DiagnoseCommand());
         home.StopRequested += () => link?.Send(new StopCommand());
         home.RevertAllRequested += () => link?.Send(new RevertAllCommand());
         home.GameSettingsRequested += ShowGameSettings;
@@ -147,6 +149,7 @@ public sealed partial class MainWindow : Window
         }
 
         SendAgentPreferences(chosen);
+        home.ShowOptimiserChoices(chosen.OptimiserEnabled, chosen.DiagnoseAutomatically);
         if (overlay is not null)
         {
             overlay.Enabled = chosen.OverlayEnabled;
@@ -160,6 +163,20 @@ public sealed partial class MainWindow : Window
     }
 
     public bool HasGameSettings => latestSettings is not null;
+
+    public bool HasPlan { get; private set; }
+
+    public bool RequestPlan()
+    {
+        if (link is not { IsConnected: true })
+        {
+            return false;
+        }
+
+        ShowHome();
+        link.Send(new PlanCommand(home.SelectedGoal));
+        return true;
+    }
 
     public void ShowGameSettings()
     {
@@ -224,6 +241,13 @@ public sealed partial class MainWindow : Window
                     samplesRendered += sample.GameConnected ? 1 : 0;
                 }
 
+                break;
+            case PlanMessage plan:
+                HasPlan = true;
+                home.ShowPlan(plan);
+                break;
+            case ProgressMessage progress:
+                home.ShowProgress(progress);
                 break;
             case ProposalMessage proposal:
                 home.ShowProposal(proposal);
@@ -301,7 +325,7 @@ public sealed partial class MainWindow : Window
     }
 
     private void SendAgentPreferences(AppPreferences chosen) =>
-        link?.Send(new AgentPreferencesCommand(chosen.AskBeforeEachChange, chosen.AllowFrameCap, chosen.TargetFps, chosen.MostRestarts));
+        link?.Send(new AgentPreferencesCommand(chosen.AskBeforeEachChange, chosen.AllowFrameCap, chosen.TargetFps, chosen.MostRestarts, chosen.OptimiserEnabled, chosen.DiagnoseAutomatically));
 
     private void NotifyWhenAway(StatusMessage status, bool always = false)
     {

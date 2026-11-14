@@ -78,10 +78,22 @@ public sealed class ProtocolTests
     [Fact]
     public void SettingCommandsSurviveTheWire()
     {
-        UiCommand[] sent = [new LockSettingCommand("Shadows", true), new SetSettingCommand("sg.ShadowQuality", "2"), new RevertSettingCommand("Fog"), new AnswerProposalCommand(true), new AnswerProposalCommand(false), new AgentPreferencesCommand(true, false, 90, 3)];
+        UiCommand[] sent = [new LockSettingCommand("Shadows", true), new SetSettingCommand("sg.ShadowQuality", "2"), new RevertSettingCommand("Fog"), new AnswerProposalCommand(true), new AnswerProposalCommand(false), new AgentPreferencesCommand(true, false, 90, 3), new AgentPreferencesCommand(false, true, 0, 6, OptimiserEnabled: false, DiagnoseAutomatically: false), new PlanCommand(Goal.Quality), new DiagnoseCommand()];
 
         Assert.Equal(sent, sent.Select(command => WireFormat.DecodeCommand(WireFormat.Encode(command))));
         Assert.Null(WireFormat.DecodeCommand("{\"type\":\"set\",\"value\":\"2\"}"));
+    }
+
+    [Fact]
+    public void APlanAndProgressSurviveTheWire()
+    {
+        var plan = new PlanMessage("Some game", true, "GAPO tests up to 7 settings.", ["Wait until the game has settled", "Measure the baseline twice"], 40, 95, 0);
+        var progress = new ProgressMessage("Testing: Shadows", 3, 9, 14, 20, 34);
+
+        var receivedPlan = Assert.IsType<PlanMessage>(WireFormat.DecodeMessage(WireFormat.Encode(plan)));
+        Assert.Equal(plan with { Steps = [] }, receivedPlan with { Steps = [] });
+        Assert.Equal(plan.Steps, receivedPlan.Steps);
+        Assert.Equal(progress, WireFormat.DecodeMessage(WireFormat.Encode(progress)));
     }
 
     [Fact]

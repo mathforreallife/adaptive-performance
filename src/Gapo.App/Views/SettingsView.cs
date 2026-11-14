@@ -33,6 +33,8 @@ public sealed class SettingsView : UserControl
     private readonly ToggleSwitch flash = Switch("Flash GAPO in the taskbar when it needs you");
     private readonly ToggleSwitch startAgent = Switch("Start GAPO's measuring agent automatically");
     private readonly ComboBox theme = Picker("Theme", Themes.Select(entry => entry.Label));
+    private readonly ToggleSwitch optimiser = Switch("Optimiser: GAPO may change a game's settings when I press Optimise and start the plan");
+    private readonly ToggleSwitch diagnose = Switch("Find out what limits a game automatically when it starts (measures only, changes nothing)");
     private readonly ToggleSwitch ask = Switch("Ask me before each change");
     private readonly ToggleSwitch allowCap = Switch("GAPO may cap the frame rate");
     private readonly ComboBox target = Picker("Frame-rate target", Targets.Select(entry => entry.Label));
@@ -63,14 +65,14 @@ public sealed class SettingsView : UserControl
             Children =
             {
                 Card("FPS overlay", "A small box over the game with its live frames per second and, after an optimisation, the frame rate before and after. It is a separate GAPO window on top of the game, never injected into it.", overlay, corner, beforeAfter, overlayStatus),
-                Card("Optimisation", "How far GAPO may go on its own. Locks for single settings are under Game settings on the home page.", ask, allowCap, target, restarts),
+                Card("Optimisation", "GAPO never optimises on its own. Optimise shows a plan with the estimated time first, and nothing changes until you press Start. Locks for single settings are under Game settings on the home page.", optimiser, diagnose, ask, allowCap, target, restarts),
                 Card("When GAPO needs you", "For example when it asks you to restart the game during an optimisation.", notify, flash),
                 Card("Agent", "The agent measures your games in the background. Without it GAPO shows nothing live.", startAgent),
                 Card("Appearance", string.Empty, theme),
                 back,
             },
         };
-        foreach (var control in new Control[] { overlay, beforeAfter, notify, flash, startAgent, ask, allowCap })
+        foreach (var control in new Control[] { overlay, beforeAfter, notify, flash, startAgent, optimiser, diagnose, ask, allowCap })
         {
             ((ToggleSwitch)control).Toggled += (_, _) => Changed();
         }
@@ -99,6 +101,9 @@ public sealed class SettingsView : UserControl
         allowCap.IsOn = preferences.AllowFrameCap;
         target.SelectedIndex = Math.Max(0, Array.FindIndex(Targets, entry => entry.Fps == preferences.TargetFps));
         restarts.SelectedIndex = Math.Max(0, Array.IndexOf(RestartChoices, preferences.MostRestarts));
+        optimiser.IsOn = preferences.OptimiserEnabled;
+        diagnose.IsOn = preferences.DiagnoseAutomatically;
+        EnableOptimiserOptions(preferences.OptimiserEnabled);
         overlayStatus.Text = overlayState;
         corner.IsEnabled = beforeAfter.IsEnabled = preferences.OverlayEnabled;
         updating = false;
@@ -114,6 +119,7 @@ public sealed class SettingsView : UserControl
         }
 
         corner.IsEnabled = beforeAfter.IsEnabled = overlay.IsOn;
+        EnableOptimiserOptions(optimiser.IsOn);
         PreferencesChanged?.Invoke(new AppPreferences
         {
             OverlayEnabled = overlay.IsOn,
@@ -127,8 +133,13 @@ public sealed class SettingsView : UserControl
             AllowFrameCap = allowCap.IsOn,
             TargetFps = Targets[Math.Max(0, target.SelectedIndex)].Fps,
             MostRestarts = RestartChoices[Math.Max(0, restarts.SelectedIndex)],
+            OptimiserEnabled = optimiser.IsOn,
+            DiagnoseAutomatically = diagnose.IsOn,
         });
     }
+
+    private void EnableOptimiserOptions(bool enabled) =>
+        ask.IsEnabled = allowCap.IsEnabled = target.IsEnabled = restarts.IsEnabled = enabled;
 
     private static Border Card(string title, string explanation, params FrameworkElement[] controls)
     {

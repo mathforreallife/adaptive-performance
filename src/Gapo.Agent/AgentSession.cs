@@ -56,6 +56,9 @@ public sealed class AgentSession : IDisposable
     private GameResultStore? gameResults;
     private AgentPreferencesCommand agentPreferences = new(false, true, 0, 0);
     private bool? pendingAnswer;
+    private TimeSpan optimisationStartedAt;
+    private string progressPhase = string.Empty;
+    private (int Done, int Expected) lastRestartProgress = (-1, -1);
     private readonly AgentMonitor monitor = new();
     private readonly BaselineMeasurement? baseline;
     private readonly AgentPipeServer? server;
@@ -141,7 +144,20 @@ public sealed class AgentSession : IDisposable
             switch (command)
             {
                 case AgentPreferencesCommand preferences:
-                    agentPreferences = preferences;
+                    ApplyPreferences(preferences);
+                    break;
+                case PlanCommand plan:
+                    server.Send(Plan(plan.Goal));
+                    break;
+                case DiagnoseCommand when SteamGame is { } diagnosed && restartOptimiser is null:
+                    StartObservedDiagnosis();
+                    server.Send(new StatusMessage(AgentState.Watching, "Finding out what limits " + diagnosed.Game.Name, string.Create(System.Globalization.CultureInfo.InvariantCulture, $"GAPO watches {ObservedGameDiagnosis.ObservationLength.TotalSeconds:0} s of play once the game has settled, without changing anything.")));
+                    break;
+                case DiagnoseCommand when link.IsConnected:
+                    server.Send(new StatusMessage(AgentState.Watching, "Watching " + SandboxKnowledge.GameName, "GAPO finds out what limits this game as the first step of optimising it."));
+                    break;
+                case OptimiseCommand when !agentPreferences.OptimiserEnabled && restartOptimiser is null:
+                    server.Send(new StatusMessage(AgentState.Watching, "The optimiser is switched off", "GAPO only measures. Switch the optimiser on under Settings → Optimisation to change a game's settings."));
                     break;
                 case AnswerProposalCommand answer when restartOptimiser is not null:
                     if (restartOptimiser.Answer(answer.Approved, clock.Elapsed) is { } answered)
@@ -275,8 +291,69 @@ public sealed class AgentSession : IDisposable
         SendGameSettings();
     }
 
+    private void ApplyPreferences(AgentPreferencesCommand preferences)
+    {
+        agentPreferences = preferences;
+        if (!preferences.DiagnoseAutomatically && observedDiagnosis is { IsFinished: false })
+        {
+            observedDiagnosis = null;
+        }
+    }
+
+    private PlanMessage Plan(Goal goal)
+    {
+        var gameName = link.IsConnected ? SandboxKnowledge.GameName : SteamGame?.Game.Name ?? string.Empty;
+        if (optimisationSession is not null || restartOptimiser is not null)
+        {
+            return OptimisationPlanner.NotPossible(gameName, "GAPO is already optimising this game.");
+        }
+
+        if (gameName.Length == 0)
+        {
+            return OptimisationPlanner.NotPossible(gameName, "Start a game first; GAPO measures the game while it runs.");
+        }
+
+        if (!agentPreferences.OptimiserEnabled)
+        {
+            return OptimisationPlanner.SwitchedOff(gameName);
+        }
+
+        if (link.IsConnected)
+        {
+            var settings = SettingsControl()?.Read(Locks.LockedFor(SandboxGameKey)) ?? [];
+            return OptimisationPlanner.ForLiveGame(gameName, settings, goal, liveFrames.Summarise().AverageFps, agentPreferences);
+        }
+
+        if (SteamGame is { } game && recognisedGame is { CanBeOptimised: true, SettingsPath: { } settingsPath })
+        {
+            if (IniSettingsFile.Read(settingsPath) is not var (document, _))
+            {
+                return OptimisationPlanner.NotPossible(gameName, "The game's settings file could not be read: " + settingsPath);
+            }
+
+            var known = latestDiagnosis is { } diagnosis && diagnosis.GameName == gameName && Enum.TryParse<Bottleneck>(diagnosis.Bottleneck, out var bottleneck) ? bottleneck : (Bottleneck?)null;
+            return OptimisationPlanner.ForRestartGame(gameName, Gapo.Core.Games.Unreal.UnrealSettings.Read(document), known, goal, Locks.LockedFor(SteamGameKey(game)), agentPreferences);
+        }
+
+        return OptimisationPlanner.NotPossible(gameName, GameRecognition.Explain(recognisedGame, NotSupportedYet));
+    }
+
+    private void SendProgress(int done, int expected)
+    {
+        var elapsed = clock.Elapsed - optimisationStartedAt;
+        var remaining = OptimisationEstimate.Remaining(done, expected, elapsed);
+        server?.Send(new ProgressMessage(
+            progressPhase,
+            done,
+            expected,
+            (int)elapsed.TotalSeconds,
+            (int)Math.Round(remaining.Low.TotalSeconds),
+            (int)Math.Round(remaining.High.TotalSeconds)));
+    }
+
     private void ReportProgress(string title, string detail)
     {
+        progressPhase = title;
         Console.WriteLine($"{title} | {detail}");
         server?.Send(new StatusMessage(AgentState.Optimising, title, detail));
     }
@@ -342,6 +419,8 @@ public sealed class AgentSession : IDisposable
     private OptimisationReport Optimise(Goal goal)
     {
         stopRequested = false;
+        optimisationStartedAt = clock.Elapsed;
+        progressPhase = "Starting";
         optimisationSession = new SandboxSession(link, monitor, Pump);
         var journal = new FileChangeJournal(options.JournalPath, () => link.SettingsPath);
         var engine = new OptimisationEngine(optimisationSession, new SandboxKnowledge(), journal, hardware, ReportProgress, new OptimisationControls
@@ -351,6 +430,8 @@ public sealed class AgentSession : IDisposable
             TargetFps = agentPreferences.TargetFps,
             Approve = agentPreferences.AskBeforeEachChange && server is { HasClient: true } ? AskPlayer : null,
         });
+        engine.WindowMeasured = SendProgress;
+        SendProgress(0, 0);
         var report = engine.Run(goal);
         optimisationSession = null;
         if (options.AskGameToCloseWhenDone)
@@ -406,7 +487,7 @@ public sealed class AgentSession : IDisposable
                         pendingAnswer = answer.Approved;
                         break;
                     case AgentPreferencesCommand preferences:
-                        agentPreferences = preferences;
+                        ApplyPreferences(preferences);
                         break;
                 }
             }
@@ -458,14 +539,21 @@ public sealed class AgentSession : IDisposable
         {
             liveFrames.Clear();
             latestDiagnosis = null;
-            observedDiagnosis = steamGames.Current is null ? null : new ObservedGameDiagnosis(clock.Elapsed, GpuBusyTicksSoFar);
+            observedDiagnosis = null;
             recognisedGame = steamGames.Current is { } found ? GameRecognition.Recognise(found.Game, options.LocalAppDataFolder, options.DocumentsFolder) : null;
             ReconcileFrameTiming();
-            if (observedDiagnosis is not null)
+            if (steamGames.Current is not null && agentPreferences.DiagnoseAutomatically)
             {
-                StartGpuTimingOnRealHardware();
+                StartObservedDiagnosis();
             }
         }
+    }
+
+    private void StartObservedDiagnosis()
+    {
+        latestDiagnosis = null;
+        observedDiagnosis = new ObservedGameDiagnosis(clock.Elapsed, GpuBusyTicksSoFar);
+        StartGpuTimingOnRealHardware();
     }
 
     private void AdvanceObservedDiagnosis()
@@ -536,6 +624,8 @@ public sealed class AgentSession : IDisposable
         }
 
         StartGpuTimingOnRealHardware();
+        optimisationStartedAt = clock.Elapsed;
+        lastRestartProgress = (-1, -1);
         restartOptimiser = new RestartOptimiser(
             game.Game.Name,
             settingsPath,
@@ -594,11 +684,20 @@ public sealed class AgentSession : IDisposable
             restartOptimiser = null;
             announcedGame = null;
             PublishReport(finished);
+            return;
+        }
+
+        var progress = (restartOptimiser.StepsDone, restartOptimiser.StepsExpected);
+        if (progress != lastRestartProgress)
+        {
+            lastRestartProgress = progress;
+            SendProgress(progress.StepsDone, progress.StepsExpected);
         }
     }
 
     private void ReportProgressAs(AgentState state, string title, string detail)
     {
+        progressPhase = title;
         Console.WriteLine($"{title} | {detail}");
         server?.Send(new StatusMessage(state, title, detail));
     }

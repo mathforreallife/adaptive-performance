@@ -22,6 +22,9 @@ public static class Diagnostician
     private const double ClockLimitShare = 0.8;
     private const double BusyThreadPercent = 85;
     private const double OneThreadProcessorsUsed = 1.6;
+    private const double LowestContendedThreadPercent = 50;
+    private const double HardlyWaitingInPresentShare = 0.1;
+    private const double BusyShareOfFrame = 0.9;
     private const double AllProcessorsShare = 0.8;
     private const double WaitingInPresentShare = 0.4;
     private const double GraphicsCardShareOfFrame = 0.8;
@@ -145,14 +148,27 @@ public static class Diagnostician
                 null);
         }
 
-        if (monitor.BusiestGameThreadPercent is { } busiest && busiest >= BusyThreadPercent && monitor.GameProcessorsUsed < OneThreadProcessorsUsed && logical > 1)
+        if (monitor.BusiestGameThreadPercent is { } busiest && monitor.GameProcessorsUsed < OneThreadProcessorsUsed && logical > 1)
         {
-            return new Finding(
-                Bottleneck.CpuOneThreadLimit,
-                "The game is limited by one CPU thread",
-                Text($"The game's busiest thread uses {busiest:0}% of one processor while the whole game uses {monitor.GameProcessorsUsed:0.0} of your {logical} CPU threads. More processors cannot help work that runs on one thread."),
-                ProblemCategory.EngineLimitation,
-                null);
+            if (busiest >= BusyThreadPercent)
+            {
+                return new Finding(
+                    Bottleneck.CpuOneThreadLimit,
+                    "The game is limited by one CPU thread",
+                    Text($"The game's busiest thread uses {busiest:0}% of one processor while the whole game uses {monitor.GameProcessorsUsed:0.0} of your {logical} CPU threads. More processors cannot help work that runs on one thread."),
+                    ProblemCategory.EngineLimitation,
+                    null);
+            }
+
+            if (IsHeldBackByBackgroundApps(busiest, monitor, input.Presents))
+            {
+                return new Finding(
+                    Bottleneck.CpuOneThreadLimit,
+                    "The game is limited by one CPU thread",
+                    Text($"The game's busiest thread uses {busiest:0}% of one processor and the game hardly waits for anything else, while background apps take {monitor.BackgroundPercent:0}% of the CPU from it. Closing background apps helps; more processors cannot help work that runs on one thread."),
+                    ProblemCategory.EngineLimitation,
+                    null);
+            }
         }
 
         if (monitor.GameProcessorsUsed >= logical * AllProcessorsShare)
@@ -171,6 +187,20 @@ public static class Diagnostician
             Text($"Each frame takes {work:0.0} ms of work. GAPO needs more detail from this game to name the stage that costs the most."),
             ProblemCategory.Unclassified,
             null);
+    }
+
+    private static bool IsHeldBackByBackgroundApps(double busiestThread, MonitorSummary monitor, PresentTiming? presents)
+    {
+        if (monitor.BackgroundPercent < BackgroundThatCompetesPercent || presents is not { MedianFrameMs: > 0 } timing)
+        {
+            return false;
+        }
+
+        var hardlyWaits = timing.MedianInPresentMs <= timing.MedianFrameMs * HardlyWaitingInPresentShare
+            && timing.MedianCpuBusyMs >= timing.MedianFrameMs * BusyShareOfFrame
+            && (timing.GpuBusyMs is not { } gpu || gpu < timing.MedianFrameMs * GraphicsCardShareOfFrame);
+        var expected = Math.Max(LowestContendedThreadPercent, BusyThreadPercent * (1 - monitor.BackgroundPercent / 100));
+        return hardlyWaits && busiestThread >= expected;
     }
 
     private static IReadOnlyList<StageShare> StagesOf(DiagnosisInput input, double work)

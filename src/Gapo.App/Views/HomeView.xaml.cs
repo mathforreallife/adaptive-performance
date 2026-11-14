@@ -22,6 +22,13 @@ public sealed partial class HomeView : UserControl
     private bool optimising;
     private bool canOptimise = true;
     private string shownGame = string.Empty;
+    private bool optimiserEnabled = true;
+    private bool diagnoseAutomatically = true;
+    private bool gameConnected;
+    private bool planShowing;
+    private Goal plannedGoal = Goal.Balanced;
+    private PlanMessage? plan;
+    private const int SecondsPerMinute = 60;
 
     public HomeView()
     {
@@ -39,6 +46,54 @@ public sealed partial class HomeView : UserControl
 
     public event Action<bool>? ProposalAnswered;
 
+    public event Action<Goal>? PlanRequested;
+
+    public event Action? DiagnoseRequested;
+
+    public void ShowOptimiserChoices(bool enabled, bool diagnosesAutomatically)
+    {
+        optimiserEnabled = enabled;
+        diagnoseAutomatically = diagnosesAutomatically;
+        if (!enabled)
+        {
+            HidePlan();
+        }
+
+        UpdateControls(gameConnected);
+    }
+
+    public void ShowPlan(PlanMessage received)
+    {
+        plan = received;
+        planShowing = true;
+        PlanTitle.Text = received.CanStart ? "Plan for " + received.GameName : received.GameName.Length > 0 ? received.GameName + " cannot be optimised now" : "Nothing to optimise";
+        PlanSummary.Text = received.Summary;
+        PlanSteps.Text = string.Join(Environment.NewLine, received.Steps.Select((step, index) => string.Create(CultureInfo.InvariantCulture, $"{index + 1}. {step}")));
+        PlanSteps.Visibility = received.Steps.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
+        StartButton.Visibility = received.CanStart ? Visibility.Visible : Visibility.Collapsed;
+        CancelPlanButton.Content = received.CanStart ? "Cancel" : "Close";
+        PlanPanel.Visibility = Visibility.Visible;
+        UpdateControls(gameConnected);
+    }
+
+    public void ShowProgress(ProgressMessage progress)
+    {
+        if (!optimising)
+        {
+            return;
+        }
+
+        ProgressPanel.Visibility = Visibility.Visible;
+        ProgressPhase.Text = progress.Phase;
+        var known = progress.StepsExpected > 0;
+        ProgressMeter.IsIndeterminate = !known;
+        ProgressMeter.Value = known ? Math.Clamp((double)progress.StepsDone / progress.StepsExpected, 0, 1) : 0;
+        var left = RemainingText(progress);
+        ProgressLine.Text = known
+            ? string.Create(CultureInfo.InvariantCulture, $"Step {progress.StepsDone} of about {progress.StepsExpected} · {Clock(progress.ElapsedSeconds)} so far · {left}")
+            : string.Create(CultureInfo.InvariantCulture, $"Getting ready · {Clock(progress.ElapsedSeconds)} so far · {left}");
+    }
+
     public void ShowProposal(ProposalMessage proposal)
     {
         ProposalTitle.Text = proposal.Title;
@@ -54,6 +109,15 @@ public sealed partial class HomeView : UserControl
     public void ShowStatus(StatusMessage status)
     {
         optimising = status.State == AgentState.Optimising;
+        if (optimising)
+        {
+            HidePlan();
+        }
+        else
+        {
+            ProgressPanel.Visibility = Visibility.Collapsed;
+        }
+
         if (status.State is AgentState.NoGame or AgentState.Optimising or AgentState.Failed)
         {
             GameTitle.Text = status.Title;
@@ -67,6 +131,11 @@ public sealed partial class HomeView : UserControl
     {
         LivePanel.Visibility = sample.GameConnected ? Visibility.Visible : Visibility.Collapsed;
         canOptimise = sample.CanOptimise;
+        gameConnected = sample.GameConnected;
+        if (!sample.GameConnected && planShowing)
+        {
+            HidePlan();
+        }
         UpdateControls(sample.GameConnected);
         if (sample.GameName != shownGame)
         {
@@ -107,17 +176,53 @@ public sealed partial class HomeView : UserControl
         DiagnosisBasis.Text = diagnosis.Basis;
         shownGame = diagnosis.GameName;
         DiagnosisPanel.Visibility = Visibility.Visible;
+        UpdateControls(gameConnected);
     }
 
-    private void UpdateControls(bool gameConnected)
+    private void UpdateControls(bool connected)
     {
-        ControlsPanel.Visibility = gameConnected || optimising ? Visibility.Visible : Visibility.Collapsed;
-        OptimiseButton.Visibility = optimising || !canOptimise ? Visibility.Collapsed : Visibility.Visible;
-        GoalPanel.Visibility = canOptimise || optimising ? Visibility.Visible : Visibility.Collapsed;
+        ControlsPanel.Visibility = connected || optimising ? Visibility.Visible : Visibility.Collapsed;
+        OptimiseButton.Visibility = optimising || !canOptimise || !optimiserEnabled ? Visibility.Collapsed : Visibility.Visible;
+        OptimiseButton.IsEnabled = !planShowing;
+        OptimiserOffNote.Visibility = !optimiserEnabled && !optimising && connected ? Visibility.Visible : Visibility.Collapsed;
+        DiagnoseButton.Visibility = !diagnoseAutomatically && connected && !optimising && DiagnosisPanel.Visibility == Visibility.Collapsed ? Visibility.Visible : Visibility.Collapsed;
+        GoalPanel.Visibility = (canOptimise && optimiserEnabled) || optimising ? Visibility.Visible : Visibility.Collapsed;
         StopButton.Visibility = optimising ? Visibility.Visible : Visibility.Collapsed;
         RevertButton.IsEnabled = !optimising;
-        GoalSelector.IsEnabled = !optimising;
+        GoalSelector.IsEnabled = !optimising && !planShowing;
     }
+
+    private void HidePlan()
+    {
+        planShowing = false;
+        PlanPanel.Visibility = Visibility.Collapsed;
+        UpdateControls(gameConnected);
+    }
+
+    private string RemainingText(ProgressMessage progress)
+    {
+        if (progress.StepsDone > 0 && progress.RemainingSecondsHigh > 0)
+        {
+            return new TimeRange(TimeSpan.FromSeconds(progress.RemainingSecondsLow), TimeSpan.FromSeconds(progress.RemainingSecondsHigh)).Describe() + " left";
+        }
+
+        if (progress.StepsDone > 0 && progress.StepsDone >= progress.StepsExpected)
+        {
+            return "almost done";
+        }
+
+        if (plan is { CanStart: true, SecondsHigh: > 0 } planned)
+        {
+            var low = Math.Max(0, planned.SecondsLow - progress.ElapsedSeconds);
+            var high = Math.Max(low, planned.SecondsHigh - progress.ElapsedSeconds);
+            return new TimeRange(TimeSpan.FromSeconds(low), TimeSpan.FromSeconds(high)).Describe() + " left, as planned";
+        }
+
+        return "working out the time left";
+    }
+
+    private static string Clock(int seconds) =>
+        string.Create(CultureInfo.InvariantCulture, $"{seconds / SecondsPerMinute}:{seconds % SecondsPerMinute:00}");
 
     private void DrawChart()
     {
@@ -162,7 +267,29 @@ public sealed partial class HomeView : UserControl
             _ => "Favours steady frame times; caps the frame rate when that helps.",
         };
 
-    private void OnOptimiseClicked(object sender, RoutedEventArgs e) => OptimiseRequested?.Invoke(SelectedGoal);
+    private void OnOptimiseClicked(object sender, RoutedEventArgs e)
+    {
+        plannedGoal = SelectedGoal;
+        PlanRequested?.Invoke(plannedGoal);
+    }
+
+    private void OnStartClicked(object sender, RoutedEventArgs e)
+    {
+        HidePlan();
+        OptimiseRequested?.Invoke(plannedGoal);
+    }
+
+    private void OnCancelPlanClicked(object sender, RoutedEventArgs e)
+    {
+        plan = null;
+        HidePlan();
+    }
+
+    private void OnDiagnoseClicked(object sender, RoutedEventArgs e)
+    {
+        DiagnoseButton.Visibility = Visibility.Collapsed;
+        DiagnoseRequested?.Invoke();
+    }
 
     private void OnStopClicked(object sender, RoutedEventArgs e) => StopRequested?.Invoke();
 

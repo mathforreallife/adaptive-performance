@@ -59,6 +59,14 @@ public sealed class OptimisationEngine
     private double targetFps;
     private double budgetMs;
     private int windows;
+    private int windowsStillExpected = InitialWindowsExpected;
+    private const int InitialWindowsExpected = 10;
+    private const int WindowsAfterTheLastTest = 2;
+    private const int ValidationWindows = 2;
+    private const double DriftNoiseMultiple = 3;
+    private const double SmallestDrift = 0.15;
+
+    public Action<int, int>? WindowMeasured { get; set; }
     private int changesWithoutEffect;
 
     public OptimisationEngine(IGameSession session, IGameKnowledge knowledge, IChangeJournal journal, HardwareInventory hardware, Action<string, string>? report = null, OptimisationControls? controls = null)
@@ -156,7 +164,14 @@ public sealed class OptimisationEngine
 
             var pacingNote = TunePacing(goal, refresh);
             report("Validating the result", "Measuring the final configuration on the same scene as the baseline.");
+            windowsStillExpected = ValidationWindows;
             var final = WindowResult.Combine(Measure(), Measure());
+            var comparedBaseline = baseline.Statistics;
+            if (EndedSlowerThanItStarted(baseline.Statistics, final.Statistics))
+            {
+                (comparedBaseline, final) = CheckTheEndAgainstTheOriginal(baseline.Statistics, final);
+            }
+
             VerifyHitchFix(hitchFixClock, hitches);
             reference = final;
             var after = Diagnose(session.Monitor(), session.ObserveHitches(hitchFixClock?.Elapsed ?? HitchObservationSpan));
@@ -164,6 +179,7 @@ public sealed class OptimisationEngine
             journal.Finished();
             return result with
             {
+                Baseline = comparedBaseline,
                 Final = final.Statistics,
                 DiagnosisAfter = after,
                 FinalSettings = current,
@@ -192,6 +208,29 @@ public sealed class OptimisationEngine
                 Duration = clock.Elapsed,
             };
         }
+    }
+
+    private bool EndedSlowerThanItStarted(FrameStatistics start, FrameStatistics end) =>
+        start.MedianBusyMs > 0 && end.MedianBusyMs > start.MedianBusyMs * (1 + Math.Max(noise.FloorFraction * DriftNoiseMultiple, SmallestDrift));
+
+    private (FrameStatistics Baseline, WindowResult Final) CheckTheEndAgainstTheOriginal(FrameStatistics start, WindowResult final)
+    {
+        var finalSettings = current;
+        report("Checking the result", "The game ran slower at the end than at the start, so GAPO measures your original settings again to tell its own changes apart from the PC slowing down.");
+        windowsStillExpected = ValidationWindows;
+        current = session.Apply(original!, "original settings, measured again");
+        var originalNow = WindowResult.Combine(Measure(), Measure());
+        if (EndedSlowerThanItStarted(originalNow.Statistics, final.Statistics))
+        {
+            notTouched.Insert(0, Text($"The kept changes together made frames slower ({originalNow.Statistics.MedianBusyMs:0.0} → {final.Statistics.MedianBusyMs:0.0} ms of work on the same scene), although each helped on its own, so GAPO put every setting back to your original."));
+            journal.TrialEnded(current);
+            return (originalNow.Statistics, originalNow);
+        }
+
+        current = session.Apply(finalSettings, "optimised settings");
+        journal.TrialEnded(current);
+        notTouched.Insert(0, Text($"The PC slowed down during the optimisation: your original settings needed {start.MedianBusyMs:0.0} ms of work per frame at the start and {originalNow.Statistics.MedianBusyMs:0.0} ms at the end, so something other than GAPO was using the PC. Before and after are therefore both measured at the end of the run."));
+        return (originalNow.Statistics, final);
     }
 
     public void RevertAll()
@@ -224,7 +263,10 @@ public sealed class OptimisationEngine
     private WindowResult Measure()
     {
         windows++;
-        return session.Measure(current.Revision);
+        windowsStillExpected = Math.Max(0, windowsStillExpected - 1);
+        var result = session.Measure(current.Revision);
+        WindowMeasured?.Invoke(windows, windows + windowsStillExpected);
+        return result;
     }
 
     private BottleneckDiagnosis Diagnose(MonitorSummary monitor, FrameStatistics hitches) =>
@@ -291,6 +333,7 @@ public sealed class OptimisationEngine
                 .Where(candidate => candidate.Kind == ChangeKind.MemoryRelief || candidate.PredictedSavingMs >= smallestWorthTesting)
                 .OrderByDescending(candidate => candidate.Value)
                 .ToList();
+            windowsStillExpected = candidates.Count + WindowsAfterTheLastTest;
             if (candidates.Count == 0)
             {
                 return;
@@ -392,6 +435,11 @@ public sealed class OptimisationEngine
         if (candidate.Kind == ChangeKind.MemoryRelief)
         {
             return (Decision.Kept, "Kept: relieves memory pressure.");
+        }
+
+        if (gain < -noise.FloorFraction)
+        {
+            return (Decision.RolledBack, Text($"Rolled back: frames took {-gainPercent:0}% more work after this change, beyond the ±{noisePercent:0.0}% measurement noise."));
         }
 
         if (gain <= noise.FloorFraction)

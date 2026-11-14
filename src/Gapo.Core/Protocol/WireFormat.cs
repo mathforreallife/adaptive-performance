@@ -20,6 +20,10 @@ public static class WireFormat
     private const string ProposalType = "proposal";
     private const string AnswerType = "answer";
     private const string PreferencesType = "preferences";
+    private const string PlanType = "plan";
+    private const string ProgressType = "progress";
+    private const string PlanRequestType = "planRequest";
+    private const string DiagnoseType = "diagnose";
     private const string OptimiseType = "optimise";
     private const string RevertAllType = "revertAll";
     private const string StopType = "stop";
@@ -96,6 +100,31 @@ public static class WireFormat
 
                 json.WriteEndArray();
                 break;
+            case PlanMessage plan:
+                json.WriteString(TypeProperty, PlanType);
+                json.WriteString("gameName", plan.GameName);
+                json.WriteBoolean("canStart", plan.CanStart);
+                json.WriteString("summary", plan.Summary);
+                json.WriteStartArray("steps");
+                foreach (var step in plan.Steps)
+                {
+                    json.WriteStringValue(step);
+                }
+
+                json.WriteEndArray();
+                json.WriteNumber("secondsLow", plan.SecondsLow);
+                json.WriteNumber("secondsHigh", plan.SecondsHigh);
+                json.WriteNumber("restarts", plan.Restarts);
+                break;
+            case ProgressMessage progress:
+                json.WriteString(TypeProperty, ProgressType);
+                json.WriteString("phase", progress.Phase);
+                json.WriteNumber("stepsDone", progress.StepsDone);
+                json.WriteNumber("stepsExpected", progress.StepsExpected);
+                json.WriteNumber("elapsedSeconds", progress.ElapsedSeconds);
+                json.WriteNumber("remainingSecondsLow", progress.RemainingSecondsLow);
+                json.WriteNumber("remainingSecondsHigh", progress.RemainingSecondsHigh);
+                break;
             case ProposalMessage proposal:
                 json.WriteString(TypeProperty, ProposalType);
                 json.WriteString("title", proposal.Title);
@@ -159,6 +188,15 @@ public static class WireFormat
                 json.WriteBoolean("allowFrameCap", preferences.AllowFrameCap);
                 json.WriteNumber("targetFps", preferences.TargetFps);
                 json.WriteNumber("mostRestarts", preferences.MostRestarts);
+                json.WriteBoolean("optimiserEnabled", preferences.OptimiserEnabled);
+                json.WriteBoolean("diagnoseAutomatically", preferences.DiagnoseAutomatically);
+                break;
+            case DiagnoseCommand:
+                json.WriteString(TypeProperty, DiagnoseType);
+                break;
+            case PlanCommand planRequest:
+                json.WriteString(TypeProperty, PlanRequestType);
+                json.WriteString("goal", planRequest.Goal.ToString());
                 break;
             default:
                 throw new ArgumentOutOfRangeException(nameof(command), command, "Unknown command.");
@@ -207,6 +245,21 @@ public static class WireFormat
                     ? list.EnumerateArray().Select(ReadSetting).ToArray()
                     : []),
             ProposalType => new ProposalMessage(Text(root, "title"), Text(root, "detail")),
+            PlanType => new PlanMessage(
+                Text(root, "gameName"),
+                Flag(root, "canStart"),
+                Text(root, "summary"),
+                root.TryGetProperty("steps", out var steps) && steps.ValueKind == JsonValueKind.Array ? steps.EnumerateArray().Select(step => step.GetString() ?? string.Empty).ToArray() : [],
+                (int)Number(root, "secondsLow"),
+                (int)Number(root, "secondsHigh"),
+                (int)Number(root, "restarts")),
+            ProgressType => new ProgressMessage(
+                Text(root, "phase"),
+                (int)Number(root, "stepsDone"),
+                (int)Number(root, "stepsExpected"),
+                (int)Number(root, "elapsedSeconds"),
+                (int)Number(root, "remainingSecondsLow"),
+                (int)Number(root, "remainingSecondsHigh")),
             DiagnosisType => new DiagnosisMessage(
                 Text(root, "gameName"),
                 Text(root, "bottleneck"),
@@ -238,7 +291,9 @@ public static class WireFormat
             SetType when Text(root, "key").Length > 0 => new SetSettingCommand(Text(root, "key"), Text(root, "value")),
             RevertSettingType when Text(root, "key").Length > 0 => new RevertSettingCommand(Text(root, "key")),
             AnswerType => new AnswerProposalCommand(Flag(root, "approved")),
-            PreferencesType => new AgentPreferencesCommand(Flag(root, "askBeforeEachChange"), !root.TryGetProperty("allowFrameCap", out var cap) || cap.ValueKind != JsonValueKind.False, (int)Number(root, "targetFps"), (int)Number(root, "mostRestarts")),
+            PreferencesType => new AgentPreferencesCommand(Flag(root, "askBeforeEachChange"), FlagOrTrue(root, "allowFrameCap"), (int)Number(root, "targetFps"), (int)Number(root, "mostRestarts"), FlagOrTrue(root, "optimiserEnabled"), FlagOrTrue(root, "diagnoseAutomatically")),
+            DiagnoseType => new DiagnoseCommand(),
+            PlanRequestType => new PlanCommand(Enum.TryParse<Goal>(Text(root, "goal"), out var planGoal) ? planGoal : Goal.Balanced),
             _ => null,
         };
     }
@@ -270,6 +325,9 @@ public static class WireFormat
 
     private static string Text(JsonElement root, string property) =>
         root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() ?? string.Empty : string.Empty;
+
+    private static bool FlagOrTrue(JsonElement root, string property) =>
+        !root.TryGetProperty(property, out var value) || value.ValueKind != JsonValueKind.False;
 
     private static bool Flag(JsonElement root, string property) =>
         root.TryGetProperty(property, out var value) && value.ValueKind == JsonValueKind.True;
