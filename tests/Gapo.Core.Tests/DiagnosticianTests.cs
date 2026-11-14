@@ -221,6 +221,28 @@ public sealed class DiagnosticianTests
     }
 
     [Fact]
+    public void AThreadHeldBackByBackgroundAppsIsStillTheOneThreadLimit()
+    {
+        var diagnosis = Diagnostician.Diagnose(Input(busyMs: 30, monitor: Monitor(loads: [90, 70], gameProcessors: 0.92, busiestThread: 78, background: 33), logicalProcessors: 2,
+            frames: Frames(30, medianFrameMs: 30), presents: new PresentTiming(30.0, 29.6, 0.4)));
+
+        Assert.Equal(Bottleneck.CpuOneThreadLimit, diagnosis.Primary);
+        Assert.Contains("background apps take 33% of the CPU from it", diagnosis.Summary, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AModeratelyBusyThreadWithoutBackgroundLoadIsNotCalledTheLimit()
+    {
+        var calm = Diagnostician.Diagnose(Input(busyMs: 30, monitor: Monitor(loads: [70, 20], gameProcessors: 0.92, busiestThread: 78, background: 5), logicalProcessors: 2,
+            frames: Frames(30, medianFrameMs: 30), presents: new PresentTiming(30.0, 29.6, 0.4)));
+        var waiting = Diagnostician.Diagnose(Input(busyMs: 30, monitor: Monitor(loads: [90, 70], gameProcessors: 0.92, busiestThread: 78, background: 33), logicalProcessors: 2,
+            frames: Frames(30, medianFrameMs: 30), presents: new PresentTiming(30.0, 15.0, 15.0)));
+
+        Assert.NotEqual(Bottleneck.CpuOneThreadLimit, calm.Primary);
+        Assert.NotEqual(Bottleneck.CpuOneThreadLimit, waiting.Primary);
+    }
+
+    [Fact]
     public void AGraphicsCardBusyForMostOfEachFrameIsTheLimitAndTheTargetIsNotMet()
     {
         var diagnosis = Diagnostician.Diagnose(Input(busyMs: 8, monitor: Monitor(gameProcessors: 0.5, busiestThread: 40), logicalProcessors: 4,
